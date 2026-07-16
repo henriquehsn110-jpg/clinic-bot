@@ -1,0 +1,34 @@
+# render.yaml — Configuração do serviço para Render.com
+services:
+  - type: web
+    name: clinicabot-backend
+    runtime: node
+    region: oregon  # Região mais próxima do Brasil com plano gratuito
+    plan: free
+    buildCommand: npm ci --only=production
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: WHATSAPP_TOKEN
+        sync: false  # Preencher manualmente no painel do Render
+      - key: WHATSAPP_PHONE_ID
+        sync: false
+      - key: VERIFY_TOKEN
+        sync: false
+      - key: APP_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CPF_ENCRYPTION_KEY
+        sync: false
+      - key: ADMIN_DASHBOARD_URL
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true

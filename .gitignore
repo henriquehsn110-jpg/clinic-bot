@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Environment variables (NUNCA subir para o Git!)
+.env
+.env.local
+.env.production
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Scripts de desenvolvimento/teste (contêm credenciais ou são utilitários locais)
+migrate_cpf.js
+reset_db.js
+check_cpf_presence.js
+check_db_status.js
+check_schema.js
+clear_session.js
+test_ai.js
+test_ai2.js
+test_bot.js
+test_convo.js
+test_cpf.js
+test_direct_send.js
+test_fake_webhook.js
+test_suite.js
+test_template_send.js
+
+# Versões antigas de arquivos (duplicatas na raiz - as versões reais estão em controllers/ e services/)
+/aiService.js
+/calendarService.js
+/conversationController.js
+/whatsappService.js
