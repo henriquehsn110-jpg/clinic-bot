@@ -168,6 +168,7 @@ const patients = {
                 .maybeSingle(); // retorna null se não encontrar (sem erro)
 
             if (error) throw new Error(`patients.findByPhone: ${error.message}`);
+            if (data && data.cpf) data.cpf = decryptData(data.cpf);
             return data;
         });
     }
@@ -502,18 +503,15 @@ const webhooks = {
     },
 
     /**
-     * Busca os próximos itens pendentes na fila (C7)
+     * Busca os próximos itens pendentes na fila (C7) de forma atômica
      */
     async fetchPending(limit = 10) {
-        const staleThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-        const { data, error } = await supabase
-            .from('webhook_inbox')
-            .select('*')
-            .or(`status.eq.pending,and(status.eq.processing,created_at.lt.${staleThreshold})`)
-            .order('created_at', { ascending: true })
-            .limit(limit);
-        
-        if (error) throw new Error(`Falha ao buscar pendentes na fila: ${error.message}`);
+        const { data, error } = await supabase.rpc('claim_webhook_inbox', { p_limit: limit });
+        if (error) {
+            // Se o RPC falhar, loga o erro mas não quebra a aplicação inteira
+            logger.error('DATABASE', `Falha ao tentar usar atomic claim_webhook_inbox: ${error.message}`);
+            return [];
+        }
         return data || [];
     },
 
