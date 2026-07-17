@@ -145,6 +145,15 @@ class ConversationController {
             // Carrega ou inicializa o rascunho de agendamento estruturado da sessão
             let draft = await db.sessions.getDraft(phone) || {};
 
+            // ── RECONHECIMENTO DE PACIENTE CADASTRADO ────────────────────────────
+            // Se o paciente já tem nome e CPF salvos, pré-popula o rascunho e
+            // injeta o marcador para a IA pular a coleta de dados (Passo 4).
+            if (patient.name && patient.cpf) {
+                if (!draft.name) {
+                    draft.name = patient.name;
+                    await db.sessions.setDraft(phone, { name: patient.name });
+                }
+            }
             // ── VERIFICAÇÃO DE HANDOFF HUMANO PERSISTIDO ─────────────────────────
             // Fica ANTES de qualquer lógica automática (inclusive confirmação de
             // agendamento): enquanto o paciente está com um atendente humano, nenhuma
@@ -470,7 +479,12 @@ class ConversationController {
                     requireDescription: false
                 };
             } else {
-                aiResponse = await aiService.generateResponse(processedText, history);
+                // Injeta marcador de paciente conhecido para a IA pular o Passo 4
+                let aiInput = processedText;
+                if (patient.name && patient.cpf && !processedText.includes('[SISTEMA:')) {
+                    aiInput = `${processedText}\n[SISTEMA: paciente_conhecido, nome=${patient.name}, cpf=SIM]`;
+                }
+                aiResponse = await aiService.generateResponse(aiInput, history);
             }
 
             history.push({ role: 'user', parts: [{ text: processedText }] });

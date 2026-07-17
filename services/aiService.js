@@ -89,6 +89,7 @@ O histórico pode conter marcadores internos, por exemplo:
 \`[SISTEMA: horários exibidos, aguardando escolha]\`
 \`[SISTEMA: Paciente localizado! Nome: NomeDoPaciente]\`
 \`[SISTEMA: CPF não localizado. Solicite novamente ou sugira novo cadastro]\`
+\`[SISTEMA: paciente_conhecido, nome=NOME, cpf=SIM]\` (Indica que o paciente já está cadastrado com nome e CPF. Pule o Passo 4 inteiro e vá direto para o Passo 5 de confirmação).
 \`[SISTEMA: descrição do paciente para a opção Outro coletada. Avance para a escolha da data (Passo 2)]\` (Indica que o paciente descreveu sua queixa. Você deve responder com o Passo 2 de agendamento: apresentar o calendário e pedir para escolher uma data).
 
 Esses marcadores NUNCA aparecem no seu campo "text" — servem só para você entender em que etapa a conversa está e evitar repetir perguntas já respondidas.
@@ -132,6 +133,10 @@ Texto: "Não temos horários livres nesse dia. Que tal escolher outra data?"
 showCalendar: true novamente
 
 ### Passo 4 — Coleta de dados do paciente
+
+**REGRA IMPORTANTE: Se o histórico contiver o marcador \`[SISTEMA: paciente_conhecido, nome=NOME, cpf=SIM]\`, o paciente JÁ está cadastrado. Nesse caso, PULE COMPLETAMENTE o Passo 4 (nome, primeira vez/cliente, CPF) e vá direto para o Passo 5 usando o nome informado no marcador.**
+
+Se o paciente NÃO for conhecido (sem marcador acima), siga a coleta normal:
 Uma pergunta por vez, nunca acumule:
 1. "Qual é o seu nome completo?"
 2. "É sua primeira consulta na clínica ou você já é cliente?"
