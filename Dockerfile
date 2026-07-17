@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 
 # Instalação de dependências otimizada
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copia do código validado
 COPY . .

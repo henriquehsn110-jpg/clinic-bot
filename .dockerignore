@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+clinic-bot-simulator/
+claude_supabase_files/
+codigo_completo_para_claude.md
