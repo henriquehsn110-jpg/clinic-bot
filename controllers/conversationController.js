@@ -145,15 +145,6 @@ class ConversationController {
             // Carrega ou inicializa o rascunho de agendamento estruturado da sessão
             let draft = await db.sessions.getDraft(phone) || {};
 
-            // ── RECONHECIMENTO DE PACIENTE CADASTRADO ────────────────────────────
-            // Se o paciente já tem nome e CPF salvos, pré-popula o rascunho e
-            // injeta o marcador para a IA pular a coleta de dados (Passo 4).
-            if (patient.name && patient.cpf) {
-                if (!draft.name) {
-                    draft.name = patient.name;
-                    await db.sessions.setDraft(phone, { name: patient.name });
-                }
-            }
             // ── VERIFICAÇÃO DE HANDOFF HUMANO PERSISTIDO ─────────────────────────
             // Fica ANTES de qualquer lógica automática (inclusive confirmação de
             // agendamento): enquanto o paciente está com um atendente humano, nenhuma
@@ -336,8 +327,12 @@ class ConversationController {
                 }
             }
             if (wasNameRequested && sanitizedText.length > 2 && !sanitizedText.includes('CPF') && !sanitizedText.includes('Selecionei')) {
-                draft.name = sanitizedText;
-                await db.sessions.setDraft(phone, { name: draft.name });
+                // Bloqueia saudações e frases curtas genéricas de serem salvas como nome
+                const greetingBlocklist = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|obrigad[oa]|sim|não|nao|ok|beleza|valeu|tchau|confirmar|cancelar|remarcar|alterar|agendar|menu)$/i;
+                if (!greetingBlocklist.test(sanitizedText.trim())) {
+                    draft.name = sanitizedText;
+                    await db.sessions.setDraft(phone, { name: draft.name });
+                }
             }
 
             // 4. Extração da descrição livre quando o paciente escolheu "Outro" no Passo 1.
@@ -479,12 +474,7 @@ class ConversationController {
                     requireDescription: false
                 };
             } else {
-                // Injeta marcador de paciente conhecido para a IA pular o Passo 4
-                let aiInput = processedText;
-                if (patient.name && patient.cpf && !processedText.includes('[SISTEMA:')) {
-                    aiInput = `${processedText}\n[SISTEMA: paciente_conhecido, nome=${patient.name}, cpf=SIM]`;
-                }
-                aiResponse = await aiService.generateResponse(aiInput, history);
+                aiResponse = await aiService.generateResponse(processedText, history);
             }
 
             history.push({ role: 'user', parts: [{ text: processedText }] });
