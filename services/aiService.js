@@ -5,7 +5,7 @@ class AIService {
     constructor() {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         this.model = this.genAI.getGenerativeModel({ 
-            model: 'gemini-3.1-flash-lite',
+            model: 'gemini-2.5-flash',
             safetySettings: [
                 {
                     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
