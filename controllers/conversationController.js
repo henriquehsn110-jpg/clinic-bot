@@ -342,8 +342,8 @@ class ConversationController {
                     const modelText = history[i].parts?.[0]?.text || '';
                     if (modelText.includes('[SISTEMA: aguardando_descricao]')) {
                         wasOtherDescriptionRequested = true;
-                        break;
                     }
+                    break;
                 }
             }
             if (wasOtherDescriptionRequested && sanitizedText.length > 2 && !sanitizedText.includes('Selecionei')) {
@@ -461,21 +461,7 @@ class ConversationController {
                 }
             }
 
-            let aiResponse;
-            if (wasOtherDescriptionRequested && sanitizedText.length > 2 && !sanitizedText.includes('Selecionei')) {
-                aiResponse = {
-                    text: "Perfeito! Escolha a melhor data para sua consulta.",
-                    buttons: [],
-                    showCalendar: true,
-                    showTimeSlots: false,
-                    showProceduresList: false,
-                    requireCpf: false,
-                    transferToHuman: false,
-                    requireDescription: false
-                };
-            } else {
-                aiResponse = await aiService.generateResponse(processedText, history);
-            }
+            let aiResponse = await aiService.generateResponse(processedText, history);
 
             history.push({ role: 'user', parts: [{ text: processedText }] });
 
