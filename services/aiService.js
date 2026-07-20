@@ -4,9 +4,20 @@ const logger = require('./logger');
 class AIService {
     constructor() {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        this.modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+        this.candidateModels = [
+            process.env.GEMINI_MODEL,
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-1.5-pro'
+        ].filter(Boolean);
+        this.modelIndex = 0;
+        this.initModel();
+    }
+
+    initModel() {
+        const modelName = this.candidateModels[this.modelIndex] || 'gemini-2.0-flash';
         this.model = this.genAI.getGenerativeModel({ 
-            model: this.modelName,
+            model: modelName,
             safetySettings: [
                 {
                     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -320,6 +331,11 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
 
             } catch (error) {
                 lastError = error;
+                if (error.message && (error.message.includes('404') || error.message.includes('not found'))) {
+                    this.modelIndex = (this.modelIndex + 1) % this.candidateModels.length;
+                    this.initModel();
+                    logger.warn('GEMINI_API', `Modelo anterior indisponível (404). Alternando para modelo fallback: ${this.candidateModels[this.modelIndex]}`);
+                }
                 if (attempt <= maxRetries) {
                     const delayMs = attempt * 300 + Math.floor(Math.random() * 200);
                     logger.warn('GEMINI_API', `Tentativa ${attempt} falhou (${error.message}). Retentando em ${delayMs}ms...`);
