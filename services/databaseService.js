@@ -45,12 +45,17 @@ function decryptData(encryptedData) {
     if (!encryptedData) return null;
     const parts = encryptedData.split(':');
     if (parts.length !== 3) return encryptedData; // Fallback caso seja CPF antigo plano
-    const [ivHex, authTagHex, encryptedHex] = parts;
-    const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_SECRET, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    try {
+        const [ivHex, authTagHex, encryptedHex] = parts;
+        const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_SECRET, Buffer.from(ivHex, 'hex'));
+        decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+        let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (err) {
+        logger.warn('DECRYPTION', `Falha ao descriptografar dado com a chave atual. O registro pode ter sido cifrado com uma chave anterior.`);
+        return null;
+    }
 }
 
 function hashForSearch(text) {
