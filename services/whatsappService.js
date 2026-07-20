@@ -35,8 +35,9 @@ class WhatsAppService {
     }
 
     async sendButtonMessage(to, bodyText, buttons) {
-        const validButtons = buttons.slice(0, 3);
-        if (validButtons.length === 0) return this.sendTextMessage(to, bodyText);
+        const validButtons = (buttons || []).slice(0, 3);
+        const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
+        if (validButtons.length === 0) return this.sendTextMessage(to, safeBodyText);
 
         try {
             await axios.post(this.apiUrl, {
@@ -45,7 +46,7 @@ class WhatsAppService {
                 type: 'interactive',
                 interactive: {
                     type: 'button',
-                    body: { text: bodyText },
+                    body: { text: safeBodyText },
                     action: {
                         buttons: validButtons.map((btn, i) => ({
                             type: 'reply',

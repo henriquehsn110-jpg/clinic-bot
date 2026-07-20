@@ -41,3 +41,8 @@ test_template_send.js
 /calendarService.js
 /conversationController.js
 /whatsappService.js
+
+# Temporary Portable Git
+mingit/
+mingit.zip
+

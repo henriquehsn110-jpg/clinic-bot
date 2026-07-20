@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-const db = require('./services/databaseService');
+const db = require('../services/databaseService');
 const crypto = require('crypto');
 
 const runId = `qa_${Date.now()}_${crypto.randomUUID().slice(0,8)}`;

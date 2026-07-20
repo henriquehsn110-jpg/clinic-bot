@@ -221,7 +221,7 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
 1. Uma pergunta por mensagem. Nunca acumule.
 2. Textos curtos — 2 a 3 linhas no máximo.
 3. Nunca invente horários, preços de tratamento ou disponibilidade — vêm sempre do sistema.
-4. Sempre reporte os 5 campos do schema em toda resposta, mesmo vazios/false.
+4. Sempre reporte os 8 campos do schema em toda resposta, mesmo vazios/false.
 5. showCalendar e showTimeSlots nunca true ao mesmo tempo.
 6. Máximo 1 emoji por mensagem, e só em boas-vindas ou confirmação final.
 7. Nunca mencione preço específico de tratamento, nem faça diagnóstico (seção 2 tem prioridade absoluta).
@@ -230,102 +230,114 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
     }
 
     async generateResponse(userMessage, conversationHistory = []) {
-        try {
-            const chat = this.model.startChat({
-                history: conversationHistory,
-                systemInstruction: {
-                    parts: [{ text: this.systemPrompt }]
-                },
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: 'object',
-                        properties: {
-                            text:               { type: 'string' },
-                            buttons:            { type: 'array', items: { type: 'string' }, maxItems: 3 },
-                            showCalendar:       { type: 'boolean' },
-                            showTimeSlots:      { type: 'boolean' },
-                            showProceduresList: { type: 'boolean' },
-                            requireCpf:         { type: 'boolean' },
-                            transferToHuman:    { type: 'boolean' },
-                            requireDescription: { type: 'boolean' }
-                        },
-                        required: ['text', 'buttons', 'showCalendar', 'showTimeSlots', 'showProceduresList', 'requireCpf', 'transferToHuman', 'requireDescription']
-                    }
-                }
-            });
+        const maxRetries = 2;
+        let lastError = null;
 
-            const result       = await chat.sendMessage(userMessage);
-            const responseText = result.response.text();
-            let parsed;
+        for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
-                parsed = JSON.parse(responseText);
-            } catch (jsonErr) {
-                logger.error('GEMINI_API', 'Falha ao fazer parse do JSON do Gemini', jsonErr.message);
-                parsed = {}; // Fallback seguro
-            }
+                const chat = this.model.startChat({
+                    history: conversationHistory,
+                    systemInstruction: {
+                        parts: [{ text: this.systemPrompt }]
+                    },
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: 'object',
+                            properties: {
+                                text:               { type: 'string' },
+                                buttons:            { type: 'array', items: { type: 'string' }, maxItems: 3 },
+                                showCalendar:       { type: 'boolean' },
+                                showTimeSlots:      { type: 'boolean' },
+                                showProceduresList: { type: 'boolean' },
+                                requireCpf:         { type: 'boolean' },
+                                transferToHuman:    { type: 'boolean' },
+                                requireDescription: { type: 'boolean' }
+                            },
+                            required: ['text', 'buttons', 'showCalendar', 'showTimeSlots', 'showProceduresList', 'requireCpf', 'transferToHuman', 'requireDescription']
+                        }
+                    }
+                });
 
-            // Normalização de tipos (garante booleano ou false)
-            let text = typeof parsed.text === 'string' ? parsed.text : 'Desculpe, não entendi. Pode repetir?';
-            let buttons = Array.isArray(parsed.buttons) ? parsed.buttons.slice(0, 3).map(String) : [];
-            let showProceduresList = parsed.showProceduresList === true;
-            let showCalendar = parsed.showCalendar === true;
-            let showTimeSlots = parsed.showTimeSlots === true;
-            let requireCpf = parsed.requireCpf === true;
-            let transferToHuman = parsed.transferToHuman === true;
-            let requireDescription = parsed.requireDescription === true;
+                const result       = await chat.sendMessage(userMessage);
+                const responseText = result.response.text();
+                let parsed;
+                try {
+                    parsed = JSON.parse(responseText);
+                } catch (jsonErr) {
+                    logger.error('GEMINI_API', 'Falha ao fazer parse do JSON do Gemini', jsonErr.message);
+                    parsed = {}; // Fallback seguro
+                }
 
-            // Validação de Exclusividade Mútua (apenas um componente visual/ação especial ativo por vez)
-            const flags = [
-                { name: 'transferToHuman', value: transferToHuman },
-                { name: 'requireCpf', value: requireCpf },
-                { name: 'showProceduresList', value: showProceduresList },
-                { name: 'requireDescription', value: requireDescription },
-                { name: 'showCalendar', value: showCalendar },
-                { name: 'showTimeSlots', value: showTimeSlots }
-            ];
+                // Normalização de tipos (garante booleano ou false)
+                let text = typeof parsed.text === 'string' ? parsed.text : 'Desculpe, não entendi. Pode repetir?';
+                let buttons = Array.isArray(parsed.buttons) ? parsed.buttons.slice(0, 3).map(String) : [];
+                let showProceduresList = parsed.showProceduresList === true;
+                let showCalendar = parsed.showCalendar === true;
+                let showTimeSlots = parsed.showTimeSlots === true;
+                let requireCpf = parsed.requireCpf === true;
+                let transferToHuman = parsed.transferToHuman === true;
+                let requireDescription = parsed.requireDescription === true;
 
-            const activeFlags = flags.filter(f => f.value);
-            
-            if (activeFlags.length > 1) {
-                logger.warn('GEMINI_API', `Gemini retornou múltiplas flags exclusivas como true: ${activeFlags.map(f => f.name).join(', ')}. Forçando prioridade.`);
-                // Reseta todas para false
-                transferToHuman = requireCpf = showProceduresList = requireDescription = showCalendar = showTimeSlots = false;
+                // Validação de Exclusividade Mútua (apenas um componente visual/ação especial ativo por vez)
+                const flags = [
+                    { name: 'transferToHuman', value: transferToHuman },
+                    { name: 'requireCpf', value: requireCpf },
+                    { name: 'showProceduresList', value: showProceduresList },
+                    { name: 'requireDescription', value: requireDescription },
+                    { name: 'showCalendar', value: showCalendar },
+                    { name: 'showTimeSlots', value: showTimeSlots }
+                ];
+
+                const activeFlags = flags.filter(f => f.value);
                 
-                // Ativa apenas a de maior prioridade (o primeiro da lista acima)
-                const priorityFlag = activeFlags[0].name;
-                if (priorityFlag === 'transferToHuman') transferToHuman = true;
-                else if (priorityFlag === 'requireCpf') requireCpf = true;
-                else if (priorityFlag === 'showProceduresList') showProceduresList = true;
-                else if (priorityFlag === 'requireDescription') requireDescription = true;
-                else if (priorityFlag === 'showCalendar') showCalendar = true;
-                else if (priorityFlag === 'showTimeSlots') showTimeSlots = true;
+                if (activeFlags.length > 1) {
+                    logger.warn('GEMINI_API', `Gemini retornou múltiplas flags exclusivas como true: ${activeFlags.map(f => f.name).join(', ')}. Forçando prioridade.`);
+                    // Reseta todas para false
+                    transferToHuman = requireCpf = showProceduresList = requireDescription = showCalendar = showTimeSlots = false;
+                    
+                    // Ativa apenas a de maior prioridade (o primeiro da lista acima)
+                    const priorityFlag = activeFlags[0].name;
+                    if (priorityFlag === 'transferToHuman') transferToHuman = true;
+                    else if (priorityFlag === 'requireCpf') requireCpf = true;
+                    else if (priorityFlag === 'showProceduresList') showProceduresList = true;
+                    else if (priorityFlag === 'requireDescription') requireDescription = true;
+                    else if (priorityFlag === 'showCalendar') showCalendar = true;
+                    else if (priorityFlag === 'showTimeSlots') showTimeSlots = true;
+                }
+
+                return {
+                    text,
+                    buttons,
+                    showCalendar,
+                    showTimeSlots,
+                    showProceduresList,
+                    requireCpf,
+                    transferToHuman,
+                    requireDescription
+                };
+
+            } catch (error) {
+                lastError = error;
+                if (attempt <= maxRetries) {
+                    const delayMs = attempt * 300 + Math.floor(Math.random() * 200);
+                    logger.warn('GEMINI_API', `Tentativa ${attempt} falhou (${error.message}). Retentando em ${delayMs}ms...`);
+                    await new Promise(res => setTimeout(res, delayMs));
+                }
             }
-
-            return {
-                text,
-                buttons,
-                showCalendar,
-                showTimeSlots,
-                showProceduresList,
-                requireCpf,
-                transferToHuman,
-                requireDescription
-            };
-
-        } catch (error) {
-            logger.error('GEMINI_API', error.message, error.stack);
-
-            return {
-                text:            'Desculpe, estamos com uma instabilidade no momento. Vou transferir você para um de nossos atendentes continuarem.',
-                buttons:         [],
-                showCalendar:    false,
-                showTimeSlots:   false,
-                showProceduresList: false,
-                requireCpf:      false,
-                transferToHuman: true
-            };
         }
+
+        logger.error('GEMINI_API', `Todas as ${maxRetries + 1} tentativas falharam: ${lastError.message}`, lastError.stack);
+
+        return {
+            text:            'Desculpe, estamos com uma instabilidade no momento. Vou transferir você para um de nossos atendentes continuarem.',
+            buttons:         [],
+            showCalendar:    false,
+            showTimeSlots:   false,
+            showProceduresList: false,
+            requireCpf:      false,
+            transferToHuman: true
+        };
     }
 }
 
