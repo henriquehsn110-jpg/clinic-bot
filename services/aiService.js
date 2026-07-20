@@ -331,10 +331,10 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
 
             } catch (error) {
                 lastError = error;
-                if (error.message && (error.message.includes('404') || error.message.includes('not found'))) {
+                if (error.message && (error.message.includes('429') || error.message.includes('Quota') || error.message.includes('404') || error.message.includes('not found'))) {
                     this.modelIndex = (this.modelIndex + 1) % this.candidateModels.length;
                     this.initModel();
-                    logger.warn('GEMINI_API', `Modelo anterior indisponível (404). Alternando para modelo fallback: ${this.candidateModels[this.modelIndex]}`);
+                    logger.warn('GEMINI_API', `Cota ou modelo indisponível (${error.message}). Alternando para modelo fallback: ${this.candidateModels[this.modelIndex]}`);
                 }
                 if (attempt <= maxRetries) {
                     const delayMs = attempt * 300 + Math.floor(Math.random() * 200);
