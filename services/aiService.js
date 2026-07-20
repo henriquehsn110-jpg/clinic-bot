@@ -6,9 +6,8 @@ class AIService {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         this.candidateModels = [
             process.env.GEMINI_MODEL,
-            'gemini-2.0-flash',
-            'gemini-1.5-flash',
-            'gemini-1.5-pro'
+            'gemini-flash-latest',
+            'gemini-flash-lite-latest'
         ].filter(Boolean);
         this.modelIndex = 0;
         this.initModel();
