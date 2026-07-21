@@ -139,11 +139,14 @@ class DashboardController {
                 if (sessionsList.some(s => s.clinic_id)) sessionsList = sessionsList.filter(s => !s.clinic_id || s.clinic_id === clinicId);
             }
 
-            // Sanitização LGPD de CPFs para exibição no frontend (mascara os números)
-            const safePatients = (patientsList || []).map(p => ({
-                ...p,
-                cpfMasked: p.cpf ? '•••.•••.•••-•• (Protegido LGPD)' : 'Não informado'
-            }));
+            // Sanitização LGPD de CPFs para exibição no frontend (mascara os números e remove CPF bruto)
+            const safePatients = (patientsList || []).map(p => {
+                const { cpf, ...rest } = p;
+                return {
+                    ...rest,
+                    cpfMasked: cpf ? '•••.•••.•••-•• (Protegido LGPD)' : 'Não informado'
+                };
+            });
 
             // Filtra sessões em Handoff Humano
             const humanHandoffs = (sessionsList || []).filter(s => {
