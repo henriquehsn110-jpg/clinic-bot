@@ -47,7 +47,9 @@ class CalendarService {
      * Lista agendamentos do dia (para disparo de lembretes ou painel).
      */
     async getTodayAppointments() {
-        const today = new Date().toISOString().split('T')[0];
+        const brtDateStr = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+        const brtObj = new Date(brtDateStr);
+        const today = `${brtObj.getFullYear()}-${String(brtObj.getMonth() + 1).padStart(2, '0')}-${String(brtObj.getDate()).padStart(2, '0')}`;
         return db.appointments.findByDate(today);
     }
 }
