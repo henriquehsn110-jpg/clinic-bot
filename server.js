@@ -9,6 +9,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_DASHBOARD_URL) {
 const crypto = require('crypto');
 const path = require('path');
 const conversationController = require('./controllers/conversationController');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
@@ -26,10 +27,14 @@ const localOnly = (req, res, next) => {
     next();
 };
 
-// 1. Serve o simulador web na rota /simulator (essencial para testes locais em desenvolvimento)
+// 1. Serve o simulador web e o painel da clínica
 if (process.env.NODE_ENV !== 'production') {
     app.use('/simulator', localOnly, express.static(path.join(__dirname, '../clinic-bot-simulator')));
 }
+app.use('/dashboard', express.static(path.join(__dirname, 'public')));
+app.get(['/dashboard.html', '/painel'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public/dashboard.html'));
+});
 
 // Captura o raw body em bytes antes do JSON.parse para validação do HMAC da Meta
 app.use(express.json({
@@ -46,9 +51,13 @@ app.use((req, res, next) => {
         res.header('Access-Control-Allow-Origin', process.env.ADMIN_DASHBOARD_URL || 'null');
     }
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
     next();
 });
+
+// Registra as rotas da API do Dashboard com Autenticação e Criptografia
+app.use('/api/dashboard', dashboardRoutes);
 
 // 2. Rotas do Simulador Local (Apenas em Desenvolvimento)
 if (process.env.NODE_ENV !== 'production') {
@@ -220,8 +229,9 @@ const processWebhookInbox = async () => {
 setInterval(processWebhookInbox, 10000);
 
 const handleIncomingWebhook = async (req, res) => {
-    if (process.env.NODE_ENV === 'production' && !verifySignature(req)) {
-        console.warn('⛔ Requisição rejeitada: assinatura inválida');
+    const skipVerify = process.env.SKIP_WEBHOOK_VERIFY === 'true';
+    if (!skipVerify && !verifySignature(req)) {
+        console.warn('⛔ Requisição rejeitada: assinatura HMAC inválida');
         return res.sendStatus(403);
     }
 
