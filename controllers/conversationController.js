@@ -461,7 +461,14 @@ class ConversationController {
                 }
             }
 
-            let aiResponse = await aiService.generateResponse(processedText, history);
+            // Garante que a IA sempre saiba o nome do paciente atual se ele já estiver cadastrado no BD,
+            // evitando que ela esqueça após mensagens curtas ou reinício de sessão.
+            let textForAI = processedText;
+            if (patient && patient.name && patient.cpf && !processedText.includes('[SISTEMA:')) {
+                textForAI = `[SISTEMA INVISÍVEL: Este paciente já é cadastrado no banco de dados. Nome: ${patient.name}, CPF: Validado. Não peça o nome ou CPF dele, pule direto para as confirmações]\n` + processedText;
+            }
+
+            let aiResponse = await aiService.generateResponse(textForAI, history);
 
             history.push({ role: 'user', parts: [{ text: processedText }] });
 

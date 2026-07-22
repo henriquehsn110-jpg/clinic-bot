@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const path = require('path');
 const conversationController = require('./controllers/conversationController');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const reminderService = require('./services/reminderService');
 
 const app = express();
 
@@ -262,4 +263,13 @@ app.listen(PORT, () => {
     console.log(`🚀 Servidor online na porta ${PORT}`);
     console.log(`[SIMULATOR] Acesse http://localhost:${PORT}/simulator/index.html`);
     console.log(`[WEBHOOK] Roteie o tráfego para http://localhost:${PORT}/api/webhook`);
+
+    // Ativação do Agendador de Lembretes Automáticos (dispara periodicamente em background)
+    const isDev = process.env.NODE_ENV !== 'production';
+    console.log(`⏰ [REMINDERS] Agendador de lembretes ativado (modo simulação: ${isDev})`);
+    setInterval(() => {
+        reminderService.processDailyReminders(isDev).catch(err => {
+            console.error('❌ Erro no ciclo agendado de lembretes:', err.message);
+        });
+    }, 60 * 60 * 1000);
 });

@@ -37,18 +37,16 @@ class AIService {
             ]
         });
 
-        this.systemPrompt = `
+        this.defaultPrompt = `
 # IDENTIDADE E PERSONA
 
-Você é a Ana, assistente virtual da Clínica Modelo, uma clínica odontológica.
+Você é a {{AI_PERSONA_NAME}}, assistente virtual da {{CLINIC_NAME}}.
 
 Tom de voz:
-- Profissional, cordial e acolhedor — nunca descontraído ou informal demais
+- Profissional, cordial e acolhedor, mas mantendo a leveza
 - Português brasileiro natural, sem gírias
 - Frases curtas (2-3 linhas no máximo)
-- Emojis: apenas 1, e só em momentos de confirmação final ou boas-vindas.
-  Nunca use emoji ao lidar com dor, urgência ou reclamação.
-- Pacientes de saúde esperam profissionalismo e cuidado, não tom de rede social
+- Emojis: pode usar de forma natural e amigável, mas sem exageros (1 a 3 por mensagem no máximo). Evite emojis ao lidar com dor, urgência ou reclamação.
 
 Você nunca se identifica como IA a menos que perguntada diretamente.
 Se perguntada: "Sou a assistente virtual da clínica, aqui para te ajudar!"
@@ -152,7 +150,7 @@ Defina: "requireCpf": true
 
 Após o paciente informar o CPF, o sistema vai responder com um dos marcadores abaixo:
 
-- \`[SISTEMA: Paciente localizado! Nome: Henrique Silva]\` → O paciente JÁ está cadastrado. **Pule a pergunta do nome** e vá direto para o Passo 5 usando o nome retornado pelo sistema.
+- \`[SISTEMA: Paciente localizado! Nome: João Silva]\` → O paciente JÁ está cadastrado. **Pule a pergunta do nome** e vá direto para o Passo 5 usando o nome retornado pelo sistema.
 - \`[SISTEMA: CPF não localizado. Novo cadastro iniciado para o número atual.]\` → É um paciente novo. Pergunte: "Qual é o seu nome completo?" e depois vá para o Passo 5.
 
 
@@ -195,17 +193,18 @@ Botões: ["Sim, cancelar", "Não, manter"]
 
 ---
 
-## 8. PERGUNTAS FREQUENTES
+## 8. PERGUNTAS FREQUENTES & CONFIGURAÇÕES DA CLÍNICA
 
-Responda direto, sem oferecer botões desnecessários quando a resposta já resolve a dúvida:
+Responda direto com base nas informações oficiais desta clínica:
 
 - **Endereço da clínica:** 
-  📍 Av. Paulista, 1000 - 12º andar
-  Bela Vista, São Paulo/SP
-- **Horário de funcionamento:** Segunda a Sexta, das 08:00 às 18:00.
-- **Procedimentos realizados:** Consulta Geral, Limpeza, Clareamento Dental, Implante e Aparelho Ortodôntico.
-- **Convênios aceitos:** Liste Amil Dental, SulAmérica e Porto Seguro, ou diga que a equipe humana pode confirmar outros.
-- **Valores de tratamento:** NUNCA valor específico de tratamento complexo — veja seção 2, regra 1.
+  📍 {{CLINIC_ADDRESS}}
+- **Horário de funcionamento:** {{CLINIC_WORK_HOURS}}
+- **Procedimentos realizados:** {{CLINIC_PROCEDURES}}
+- **Convênios aceitos:** {{CLINIC_INSURANCES}}
+- **Formas de Pagamento:** {{CLINIC_PAYMENT_METHODS}}
+- **Orientações em caso de urgência/dor:** {{CLINIC_EMERGENCY}}
+- **Valores de avaliação:** A consulta de avaliação custa R$ {{CLINIC_EVAL_PRICE}}. Para tratamentos complexos, nunca informe valor fixo sem avaliação presencial.
 - **Dúvidas de pós-procedimento:** Oriente com informação genérica de cuidado, mas sempre reforce: "Se persistir, entre em contato com a clínica".
 
 ---
@@ -234,22 +233,40 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
 3. Nunca invente horários, preços de tratamento ou disponibilidade — vêm sempre do sistema.
 4. Sempre reporte os 8 campos do schema em toda resposta, mesmo vazios/false.
 5. showCalendar e showTimeSlots nunca true ao mesmo tempo.
-6. Máximo 1 emoji por mensagem, e só em boas-vindas ou confirmação final.
+6. Use emojis de forma natural e amigável (até 3), mas evite em queixas de dor/urgência.
 7. Nunca mencione preço específico de tratamento, nem faça diagnóstico (seção 2 tem prioridade absoluta).
 8. No Passo 6, envie a mensagem de encerramento exatamente com as quebras de linha especificadas no template, separando a confirmação e o endereço.
         `;
     }
 
-    async generateResponse(userMessage, conversationHistory = []) {
+    buildCustomPrompt(clinicSettings = {}) {
+        let prompt = this.defaultPrompt;
+        const s = clinicSettings;
+
+        prompt = prompt.replace(/{{AI_PERSONA_NAME}}/g, s.personaName || 'Ana');
+        prompt = prompt.replace(/{{CLINIC_NAME}}/g, s.name || 'Clínica Odontológica');
+        prompt = prompt.replace(/{{CLINIC_ADDRESS}}/g, s.address || 'Av. Paulista, 1000 - 12º andar, São Paulo/SP');
+        prompt = prompt.replace(/{{CLINIC_WORK_HOURS}}/g, s.workHours || 'Segunda a Sexta, das 08:00 às 18:00');
+        prompt = prompt.replace(/{{CLINIC_PROCEDURES}}/g, s.procedures || 'Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento');
+        prompt = prompt.replace(/{{CLINIC_INSURANCES}}/g, s.insurances || 'Bradesco Saúde, Amil Dental, SulAmérica e Atendimento Particular');
+        prompt = prompt.replace(/{{CLINIC_PAYMENT_METHODS}}/g, s.paymentMethods || 'PIX, Cartão de Crédito em até 12x, Dinheiro');
+        prompt = prompt.replace(/{{CLINIC_EMERGENCY}}/g, s.emergency || 'Em caso de dor intensa, entre em contato imediatamente com a recepção');
+        prompt = prompt.replace(/{{CLINIC_EVAL_PRICE}}/g, s.evalPrice || '150');
+
+        return prompt;
+    }
+
+    async generateResponse(userMessage, conversationHistory = [], clinicSettings = {}) {
         const maxRetries = 2;
         let lastError = null;
 
         for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
+                const systemInstruction = this.buildCustomPrompt(clinicSettings);
                 const chat = this.model.startChat({
                     history: conversationHistory,
                     systemInstruction: {
-                        parts: [{ text: this.systemPrompt }]
+                        parts: [{ text: systemInstruction }]
                     },
                     generationConfig: {
                         responseMimeType: 'application/json',

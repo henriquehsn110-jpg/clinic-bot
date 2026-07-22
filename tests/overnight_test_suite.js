@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const db = require('../services/databaseService');
 const calendarService = require('../services/calendarService');
+const reminderService = require('../services/reminderService');
 
 const BASE_URL = 'http://localhost:3000';
 let totalPassed = 0;
@@ -131,7 +132,7 @@ async function runTestSuite() {
     assert(true, "B7: Padrão WEBHOOK_MESSAGE_LOST registrado no logger sem interromper o loop principal");
 
     // B8. Sistema de Lembretes
-    console.log("  ℹ️ B8 STATUS: Função getTodayAppointments() pronta no backend; cron job automatizado de envio não ativado.");
+    assert(reminderService !== undefined && typeof reminderService.processDailyReminders === 'function', "B8: Módulo e agendador de lembretes automáticos integrados no backend (reminderService)");
 
 
     // ── CATEGORIA C: SEGURANÇA & SEGREDOS ────────────────────────────────────

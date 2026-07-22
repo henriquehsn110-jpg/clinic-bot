@@ -563,4 +563,4 @@ const webhooks = {
 };
 
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { patients, appointments, sessions, conversations, webhooks };
+module.exports = { supabase, patients, appointments, sessions, conversations, webhooks };
