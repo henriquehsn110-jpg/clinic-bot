@@ -289,7 +289,8 @@ const appointments = {
     async findNextByPatient(patientId) {
         return withRetry(async () => {
             const brtString = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-            const today = new Date(brtString).toISOString().split('T')[0];
+            const brtObj = new Date(brtString);
+            const today = `${brtObj.getFullYear()}-${String(brtObj.getMonth() + 1).padStart(2, '0')}-${String(brtObj.getDate()).padStart(2, '0')}`;
 
             const { data, error } = await supabase
                 .from('appointments')

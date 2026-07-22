@@ -74,25 +74,22 @@ class DashboardController {
 
     // Login seguro da Clínica / Secretária
     async login(req, res) {
-        const { email, password, clinicSlug } = req.body;
+        const { email, password } = req.body;
 
-        if (!email) {
-            return res.status(400).json({ error: 'Informe o e-mail de acesso.' });
+        if (!email || !password) {
+            return res.status(401).json({ error: 'E-mail e senha são obrigatórios.' });
         }
 
         const normalizedEmail = email.toLowerCase().trim();
-        let userAccount = CLINIC_CREDENTIALS[normalizedEmail];
+        const userAccount = CLINIC_CREDENTIALS[normalizedEmail];
 
-        // Se for um e-mail novo/desconhecido em desenvolvimento, cria sessão dinâmica para a clínica
         if (!userAccount) {
-            const clinicName = clinicSlug === 'odonto-riso' ? 'Clínica Odonto Riso' 
-                : (clinicSlug === 'dra-ana' ? 'Clínica Dra. Ana Silva' : 'Clínica Modelo Odontológica');
-            
-            userAccount = {
-                clinicId: clinicSlug || 'clinica-modelo',
-                clinicName: clinicName,
-                role: 'admin'
-            };
+            return res.status(401).json({ error: 'Credenciais inválidas.' });
+        }
+
+        const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+        if (passwordHash !== userAccount.passwordHash) {
+            return res.status(401).json({ error: 'Credenciais inválidas.' });
         }
 
         const token = generateToken({
