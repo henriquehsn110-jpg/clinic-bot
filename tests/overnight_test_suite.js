@@ -32,26 +32,31 @@ function assert(condition, message) {
 
 async function ensureServerRunning() {
     try {
-        await axios.get(`${BASE_URL}/health`, { timeout: 1500 });
-        console.log("  ℹ️ Servidor HTTP já online em http://localhost:3000.");
-    } catch (err) {
-        console.log("  🚀 Servidor offline. Iniciando server.js na porta 3000...");
-        const { spawn } = require('child_process');
-        serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
-            cwd: path.join(__dirname, '..'),
-            stdio: 'ignore'
-        });
-
-        for (let i = 0; i < 20; i++) {
-            await new Promise(r => setTimeout(r, 500));
-            try {
-                await axios.get(`${BASE_URL}/health`, { timeout: 1000 });
-                console.log("  ✅ Servidor auto-iniciado e pronto na porta 3000.");
-                return;
-            } catch (e) {}
+        const { execSync } = require('child_process');
+        if (process.platform === 'win32') {
+            execSync('cmd /c "for /f "tokens=5" %a in (\'netstat -aon ^| findstr :3000 ^| findstr LISTENING\') do taskkill /f /pid %a"', { stdio: 'ignore' });
+        } else {
+            execSync('fuser -k 3000/tcp || true', { stdio: 'ignore' });
         }
-        throw new Error("Não foi possível iniciar o servidor na porta 3000 após 10 segundos.");
+        await new Promise(r => setTimeout(r, 1000));
+    } catch (e) {}
+
+    console.log("  🚀 Iniciando server.js na porta 3000...");
+    const { spawn } = require('child_process');
+    serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
+        cwd: path.join(__dirname, '..'),
+        stdio: 'ignore'
+    });
+
+    for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        try {
+            await axios.get(`${BASE_URL}/health`, { timeout: 1000 });
+            console.log("  ✅ Servidor auto-iniciado e pronto na porta 3000.");
+            return;
+        } catch (e) {}
     }
+    throw new Error("Não foi possível iniciar o servidor na porta 3000 após 10 segundos.");
 }
 
 async function runTestSuite() {
@@ -201,6 +206,21 @@ async function runTestSuite() {
 
     // B8. Sistema de Lembretes
     assert(reminderService !== undefined && typeof reminderService.processDailyReminders === 'function', "B8: Módulo e agendador de lembretes automáticos integrados no backend (reminderService)");
+
+    // B9. Sanitização de Variáveis de Ambiente Supabase
+    const cleanTest1 = db.cleanEnvVar(' " https://test.supabase.co " ');
+    const cleanTest2 = db.cleanEnvVar('\'"sb_service_key_123"\'');
+    const cleanTest3 = db.cleanEnvVar(null);
+    const cleanTest4 = db.cleanEnvVar(undefined);
+    const cleanTest5 = db.cleanEnvVar('  clean_key  ');
+    assert(
+        cleanTest1 === 'https://test.supabase.co' &&
+        cleanTest2 === 'sb_service_key_123' &&
+        cleanTest3 === '' &&
+        cleanTest4 === '' &&
+        cleanTest5 === 'clean_key',
+        "B9: db.cleanEnvVar sanitiza trim e aspas simples/duplas/aninhadas/nulas de variáveis de ambiente"
+    );
 
 
     // ── CATEGORIA C: SEGURANÇA & SEGREDOS ────────────────────────────────────

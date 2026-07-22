@@ -1,9 +1,21 @@
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('./logger');
 
+// ── Sanitização de Variáveis de Ambiente ──────────────────────────────────────
+function cleanEnvVar(val) {
+    if (val == null) return '';
+    let str = String(val).trim();
+    let prev;
+    do {
+        prev = str;
+        str = str.trim().replace(/^["']+|["']+$|^[`]+|[`]+$/g, '').trim();
+    } while (str !== prev);
+    return str;
+}
+
 // ── Conexão ────────────────────────────────────────────────────────────────────
-const supabaseUrl = (process.env.SUPABASE_URL || '').trim().replace(/^["']|["']$/g, '');
-const supabaseKey = (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || '').trim().replace(/^["']|["']$/g, '');
+const supabaseUrl = cleanEnvVar(process.env.SUPABASE_URL);
+const supabaseKey = cleanEnvVar(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY);
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -563,4 +575,4 @@ const webhooks = {
 };
 
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, patients, appointments, sessions, conversations, webhooks };
+module.exports = { supabase, patients, appointments, sessions, conversations, webhooks, cleanEnvVar };
