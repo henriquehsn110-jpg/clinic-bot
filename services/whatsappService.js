@@ -100,6 +100,35 @@ class WhatsAppService {
             throw error;
         }
     }
+
+    async sendTemplateMessage(to, templateName = 'lembrete_consulta_clinica', languageCode = 'pt_BR', bodyParameters = []) {
+        try {
+            const components = [];
+            if (bodyParameters && bodyParameters.length > 0) {
+                components.push({
+                    type: 'body',
+                    parameters: bodyParameters.map(param => ({
+                        type: 'text',
+                        text: String(param)
+                    }))
+                });
+            }
+
+            await axios.post(this.apiUrl, {
+                messaging_product: 'whatsapp',
+                to,
+                type: 'template',
+                template: {
+                    name: templateName,
+                    language: { code: languageCode },
+                    components: components.length > 0 ? components : undefined
+                }
+            }, { headers: this.headers });
+        } catch (error) {
+            handleMetaError(to, 'template_hsm', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = new WhatsAppService();

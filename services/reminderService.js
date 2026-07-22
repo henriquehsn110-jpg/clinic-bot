@@ -78,7 +78,12 @@ class ReminderService {
 
                 try {
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, reminderMsg);
+                        if (process.env.USE_WHATSAPP_TEMPLATES === 'true') {
+                            const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE || 'lembrete_consulta_clinica';
+                            await whatsappService.sendTemplateMessage(phone, templateName, 'pt_BR', [patientName, procType, time]);
+                        } else {
+                            await whatsappService.sendTextMessage(phone, reminderMsg);
+                        }
                     }
 
                     this.processedReminders.add(reminderKey);

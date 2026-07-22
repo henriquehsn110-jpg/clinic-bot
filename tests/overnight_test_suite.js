@@ -288,6 +288,33 @@ async function runTestSuite() {
         assert(err.response && err.response.status === 401, "C4: Rota protegida rejeita requisição sem token com HTTP 401");
     }
 
+    // ── SUÍTES ADICIONAIS DE QA & DB CHECKS ──────────────────────────────────
+    console.log(`\n🔹 [SUÍTES ADICIONAIS] Executando check_db, test_reminders e stress_test`);
+    try {
+        console.log(`\n--- 1. Running node check_db.js ---`);
+        const checkDbOut = execSync('node check_db.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+        console.log(checkDbOut.trim());
+    } catch (e) {
+        console.error("Erro em check_db.js:", e.stdout || e.message);
+    }
+
+    try {
+        console.log(`\n--- 2. Running node tests/test_reminders.js ---`);
+        const remindersOut = execSync('node tests/test_reminders.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+        console.log(remindersOut.trim());
+    } catch (e) {
+        console.error("Erro em test_reminders.js:", e.stdout || e.message);
+    }
+
+    try {
+        console.log(`\n--- 3. Running node tests/stress_test.js ---`);
+        const stressOut = execSync('node tests/stress_test.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+        console.log(stressOut.trim());
+    } catch (e) {
+        console.error("Erro em stress_test.js:", e.stdout || e.message);
+    }
+
+
 
     // ── RESUMO EXECUTIVO ──────────────────────────────────────────────────────
     console.log(`\n================================================================`);
