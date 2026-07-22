@@ -74,43 +74,48 @@ class DashboardController {
 
     // Login seguro da Clínica / Secretária
     async login(req, res) {
-        const { email, password } = req.body;
+        try {
+            const { email, password } = req.body || {};
 
-        if (!email || !password) {
-            return res.status(401).json({ error: 'E-mail e senha são obrigatórios.' });
-        }
+            if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+                return res.status(401).json({ error: 'E-mail e senha são obrigatórios.' });
+            }
 
-        const normalizedEmail = email.toLowerCase().trim();
-        const userAccount = CLINIC_CREDENTIALS[normalizedEmail];
+            const normalizedEmail = email.toLowerCase().trim();
+            const userAccount = CLINIC_CREDENTIALS[normalizedEmail];
 
-        if (!userAccount) {
-            return res.status(401).json({ error: 'Credenciais inválidas.' });
-        }
+            if (!userAccount) {
+                return res.status(401).json({ error: 'Credenciais inválidas.' });
+            }
 
-        const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-        if (passwordHash !== userAccount.passwordHash) {
-            return res.status(401).json({ error: 'Credenciais inválidas.' });
-        }
+            const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+            if (passwordHash !== userAccount.passwordHash) {
+                return res.status(401).json({ error: 'Credenciais inválidas.' });
+            }
 
-        const token = generateToken({
-            email: normalizedEmail,
-            clinicId: userAccount.clinicId,
-            clinicName: userAccount.clinicName,
-            role: userAccount.role
-        });
-
-        logger.info('DASHBOARD_AUTH', `Login efetuado com sucesso: ${normalizedEmail} (${userAccount.clinicName})`);
-
-        res.json({
-            success: true,
-            token,
-            user: {
+            const token = generateToken({
                 email: normalizedEmail,
                 clinicId: userAccount.clinicId,
                 clinicName: userAccount.clinicName,
                 role: userAccount.role
-            }
-        });
+            });
+
+            logger.info('DASHBOARD_AUTH', `Login efetuado com sucesso: ${normalizedEmail} (${userAccount.clinicName})`);
+
+            res.json({
+                success: true,
+                token,
+                user: {
+                    email: normalizedEmail,
+                    clinicId: userAccount.clinicId,
+                    clinicName: userAccount.clinicName,
+                    role: userAccount.role
+                }
+            });
+        } catch (err) {
+            logger.error('DASHBOARD_AUTH', `Erro no login: ${err.message}`);
+            return res.status(401).json({ error: 'Credenciais inválidas.' });
+        }
     }
 
     // Retorna todos os dados da clínica de forma isolada e segura

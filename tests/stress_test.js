@@ -5,15 +5,48 @@
  */
 
 require('dotenv').config();
+const path = require('path');
 const axios = require('axios');
 
 const BASE_URL = 'http://localhost:3000';
 const TOTAL_REQUESTS = 100;
+let serverProcess = null;
+
+async function ensureServerRunning() {
+    try {
+        await axios.get(`${BASE_URL}/health`, { timeout: 1500 });
+        console.log("  ℹ️ Servidor HTTP online em http://localhost:3000.");
+    } catch (err) {
+        console.log("  🚀 Servidor offline. Iniciando server.js na porta 3000...");
+        const { spawn } = require('child_process');
+        serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
+            cwd: path.join(__dirname, '..'),
+            stdio: 'ignore'
+        });
+
+        for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 500));
+            try {
+                await axios.get(`${BASE_URL}/health`, { timeout: 1000 });
+                console.log("  ✅ Servidor auto-iniciado e pronto.");
+                return;
+            } catch (e) {}
+        }
+        throw new Error("Não foi possível iniciar o servidor na porta 3000.");
+    }
+}
 
 async function runStressTest() {
     console.log(`\n================================================================`);
     console.log(`⚡ INICIANDO TESTE DE CARGA (STRESS TEST) — ${TOTAL_REQUESTS} REQUISIÇÕES CONCORRENTES`);
     console.log(`================================================================\n`);
+
+    try {
+        await ensureServerRunning();
+    } catch (bootErr) {
+        console.error(`🚨 ERRO CRÍTICO DE INICIALIZAÇÃO: ${bootErr.message}`);
+        process.exit(1);
+    }
 
     const startTime = Date.now();
     let successCount = 0;
@@ -31,6 +64,7 @@ async function runStressTest() {
         token = loginRes.data.token;
     } catch (e) {
         console.error('Falha ao autenticar para teste de carga:', e.message);
+        if (serverProcess) serverProcess.kill();
         process.exit(1);
     }
 
@@ -79,10 +113,16 @@ async function runStressTest() {
     console.log(`  Latência Máxima:        ${maxLatency} ms`);
     console.log(`  --------------------------------------------------\n`);
 
+    if (serverProcess) {
+        console.log("  🧹 Encerrando processo do servidor auto-iniciado...");
+        serverProcess.kill();
+    }
+
     if (errorCount === 0) {
         console.log(`🎉 TESTE DE CARGA APROVADO COM ZERO FALHAS E ALTA ESTABILIDADE!`);
     } else {
         console.log(`⚠️ ALERTA: ${errorCount} requisições falharam durante o estresse.`);
+        process.exit(1);
     }
 }
 

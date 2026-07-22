@@ -33,7 +33,7 @@ if (process.env.NODE_ENV !== 'production') {
     app.use('/simulator', localOnly, express.static(path.join(__dirname, '../clinic-bot-simulator')));
 }
 app.use('/dashboard', express.static(path.join(__dirname, 'public')));
-app.get(['/dashboard.html', '/painel'], (req, res) => {
+app.get(['/dashboard', '/dashboard.html', '/painel'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public/dashboard.html'));
 });
 
@@ -264,12 +264,21 @@ app.listen(PORT, () => {
     console.log(`[SIMULATOR] Acesse http://localhost:${PORT}/simulator/index.html`);
     console.log(`[WEBHOOK] Roteie o tráfego para http://localhost:${PORT}/api/webhook`);
 
-    // Ativação do Agendador de Lembretes Automáticos (dispara periodicamente em background)
+    // Ativação do Agendador de Lembretes Automáticos via Cron (diariamente às 08:00 AM America/Sao_Paulo)
     const isDev = process.env.NODE_ENV !== 'production';
     console.log(`⏰ [REMINDERS] Agendador de lembretes ativado (modo simulação: ${isDev})`);
-    setInterval(() => {
-        reminderService.processDailyReminders(isDev).catch(err => {
-            console.error('❌ Erro no ciclo agendado de lembretes:', err.message);
+    try {
+        const cron = require('node-cron');
+        cron.schedule('0 8 * * *', () => {
+            console.log('⏰ [REMINDERS] Executando disparo diário de lembretes (08:00 BRT)...');
+            reminderService.processDailyReminders(isDev).catch(err => {
+                console.error('❌ Erro no ciclo agendado de lembretes:', err.message);
+            });
+        }, {
+            timezone: 'America/Sao_Paulo'
         });
-    }, 60 * 60 * 1000);
+        console.log('✅ [REMINDERS] Cron job agendado com sucesso para 08:00 AM (America/Sao_Paulo)');
+    } catch (cronErr) {
+        console.warn('⚠️ [REMINDERS] Erro ao inicializar node-cron:', cronErr.message);
+    }
 });

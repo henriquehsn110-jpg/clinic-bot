@@ -11,8 +11,8 @@ function handleMetaError(to, actionName, error) {
 
 class WhatsAppService {
     constructor() {
-        this.token  = process.env.WHATSAPP_TOKEN;
-        this.phoneId = process.env.WHATSAPP_PHONE_ID;
+        this.token  = process.env.WHATSAPP_TOKEN || process.env.META_WA_TOKEN;
+        this.phoneId = process.env.WHATSAPP_PHONE_ID || process.env.PHONE_NUMBER_ID;
         this.apiUrl  = `https://graph.facebook.com/v25.0/${this.phoneId}/messages`;
         this.headers = {
             'Authorization': `Bearer ${this.token}`,

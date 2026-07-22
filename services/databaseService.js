@@ -2,11 +2,10 @@ const { createClient } = require('@supabase/supabase-js');
 const logger = require('./logger');
 
 // ── Conexão ────────────────────────────────────────────────────────────────────
-// Use SEMPRE a service_role key aqui — nunca a anon key em backend
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY  // Settings → API → service_role
-);
+const supabaseUrl = (process.env.SUPABASE_URL || '').trim().replace(/^["']|["']$/g, '');
+const supabaseKey = (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || '').trim().replace(/^["']|["']$/g, '');
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const crypto = require('crypto');
 
