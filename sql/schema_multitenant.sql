@@ -73,3 +73,23 @@ WHERE clinic_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_patients_clinic_id ON public.patients(clinic_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_clinic_id ON public.appointments(clinic_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_clinic_id ON public.sessions(clinic_id);
+
+-- 5. POLÍTICAS DE ROW LEVEL SECURITY (RLS) MULTI-TENANT
+-- Ativa RLS para isolamento de dados por clínica (Defesa em profundidade para service_role)
+ALTER TABLE public.patients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON public.patients;
+CREATE POLICY "service_role_full_access" ON public.patients
+  FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "service_role_full_access" ON public.appointments;
+CREATE POLICY "service_role_full_access" ON public.appointments
+  FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "service_role_full_access" ON public.sessions;
+CREATE POLICY "service_role_full_access" ON public.sessions
+  FOR ALL USING (auth.role() = 'service_role');
+
+
