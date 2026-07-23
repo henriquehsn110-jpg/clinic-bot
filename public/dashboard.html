@@ -1485,6 +1485,13 @@
             showToast(`Profissional ${name} salvo com sucesso!`);
         }
 
+        function renderHandoffTable(sessions) {
+            const tbody = document.getElementById('handoff-tbody');
+            if (!tbody) return;
+            if (!sessions || sessions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 40px;">Nenhum paciente aguardando atendimento.</td></tr>';
+                return;
+            }
             tbody.innerHTML = sessions.map(s => {
                 const phoneRaw = s.phone || '';
                 const cleanPhone = esc(phoneRaw.replace(/\D/g, ''));
