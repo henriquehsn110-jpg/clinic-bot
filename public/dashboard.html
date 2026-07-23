@@ -1337,7 +1337,7 @@
         function renderAppointmentsTable(data) {
             const tbody = document.getElementById('appointments-tbody');
             if (!data || data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">Nenhum agendamento encontrado nesta categoria.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">Nenhum agendamento encontrado nesta categoria.</td></tr>`;
                 return;
             }
 
@@ -1348,22 +1348,28 @@
                 const pPhone = esc(pPhoneRaw || 'Telefone não informado');
                 const appType = esc(app.type || 'Consulta');
 
-                let docName = 'Dr. Carlos / Dra. Juliana';
-                const typeLower = appType.toLowerCase();
-                if (typeLower.includes('limpeza') || typeLower.includes('clareamento')) docName = 'Dra. Juliana Mendes';
-                else if (typeLower.includes('implante') || typeLower.includes('prótese') || typeLower.includes('protese')) docName = 'Dr. Roberto Alves';
-                else if (typeLower.includes('aparelho') || typeLower.includes('ortodontia')) docName = 'Dr. Carlos Eduardo';
+                const isFamily = app.is_family || app.dependent_name || app.is_family_booking || (app.notes && /familia|familiar|dependente|filho|filha|esposa|marido|mae|pai/i.test(app.notes));
+                const familyTagHTML = isFamily ? `<span class="pulse-badge" style="background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.3); color: #a78bfa; font-size: 10px; padding: 2px 6px; margin-left: 6px;" title="Agendamento Familiar / Dependente"><i class="fa-solid fa-users"></i> ${esc(app.dependent_name ? `Familiar: ${app.dependent_name}` : 'Familiar')}</span>` : '';
+
+                let docName = app.doctor_name || app.doctor;
+                if (!docName) {
+                    const typeLower = appType.toLowerCase();
+                    if (typeLower.includes('limpeza') || typeLower.includes('clareamento')) docName = 'Dra. Juliana Mendes';
+                    else if (typeLower.includes('implante') || typeLower.includes('prótese') || typeLower.includes('protese')) docName = 'Dr. Roberto Alves';
+                    else if (typeLower.includes('aparelho') || typeLower.includes('ortodontia')) docName = 'Dr. Carlos Eduardo';
+                    else docName = 'Dr. Carlos / Dra. Juliana';
+                }
 
                 const statusClass = app.status === 'confirmed' ? 'confirmed' : (app.status === 'cancelled' ? 'cancelled' : 'pending');
                 const statusLabel = app.status === 'confirmed' ? 'Confirmado' : (app.status === 'cancelled' ? 'Cancelado' : 'Pendente');
 
                 const whatsappBtn = cleanPhone 
-                    ? `<a href="https://wa.me/${cleanPhone}?text=${encodeURIComponent('Olá ' + app.patients?.name + ', falamos da recepção da clínica.')}" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp" style="padding: 4px 8px; font-size: 11px;" title="Conversar no WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>` 
+                    ? `<a href="https://wa.me/${cleanPhone}?text=${encodeURIComponent('Olá ' + (app.patients?.name || '') + ', falamos da recepção da clínica.')}" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp" style="padding: 4px 8px; font-size: 11px;" title="Conversar no WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>` 
                     : '';
 
                 return `
                     <tr>
-                        <td><div style="font-weight: 700;">${pName}</div><div style="font-size: 12px; color: var(--text-muted);">${pPhone}</div></td>
+                        <td><div style="font-weight: 700; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">${pName}${familyTagHTML}</div><div style="font-size: 12px; color: var(--text-muted);">${pPhone}</div></td>
                         <td><span style="font-weight: 500;">${appType}</span></td>
                         <td><span style="color: var(--primary); font-weight: 600; font-size: 13px;"><i class="fa-solid fa-user-doctor"></i> ${esc(docName)}</span></td>
                         <td>${esc(formatDate(app.appointment_date))}</td>

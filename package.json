@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test_suite.js"
+    "test": "node tests/overnight_test_suite.js"
   },
   "keywords": [
     "whatsapp",
