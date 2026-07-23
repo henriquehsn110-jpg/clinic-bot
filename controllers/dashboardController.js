@@ -163,6 +163,12 @@ class DashboardController {
             const todayAppts = (appts || []).filter(a => a.appointment_date === todayStr);
             const confirmedAppts = (appts || []).filter(a => a.status === 'confirmed');
 
+            const doctorsList = [
+                { id: 'doc_1', name: 'Dr. Carlos Eduardo', specialty: 'Ortodontia & Aparelhos', cro: 'CRO-SP 112233', available_days: 'Seg, Qua, Sex (08h às 18h)', status: 'Ativo', avatar: '👨‍⚕️' },
+                { id: 'doc_2', name: 'Dra. Juliana Mendes', specialty: 'Odontopediatria & Limpeza', cro: 'CRO-SP 445566', available_days: 'Ter, Qui, Sáb (08h às 18h)', status: 'Ativo', avatar: '👩‍⚕️' },
+                { id: 'doc_3', name: 'Dr. Roberto Alves', specialty: 'Implantes & Próteses', cro: 'CRO-SP 778899', available_days: 'Seg, Ter, Qui (08h às 18h)', status: 'Ativo', avatar: '👨‍⚕️' }
+            ];
+
             res.json({
                 kpis: {
                     todayCount: todayAppts.length,
@@ -172,7 +178,8 @@ class DashboardController {
                 },
                 appointments: appts || [],
                 patients: safePatients,
-                handoffs: humanHandoffs
+                handoffs: humanHandoffs,
+                doctors: doctorsList
             });
 
         } catch (err) {

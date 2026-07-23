@@ -563,6 +563,7 @@
             <button class="tab-btn active" onclick="switchTab('appointments', this)"><i class="fa-solid fa-calendar-days"></i> Agenda de Consultas</button>
             <button class="tab-btn" onclick="switchTab('patients', this)"><i class="fa-solid fa-id-card"></i> Pacientes</button>
             <button class="tab-btn" onclick="switchTab('handoff', this)"><i class="fa-solid fa-comments"></i> Transbordo Humano</button>
+            <button class="tab-btn" onclick="switchTab('doctors', this)"><i class="fa-solid fa-user-doctor"></i> Corpo Clínico & Médicos</button>
             <button class="tab-btn" onclick="switchTab('settings', this)"><i class="fa-solid fa-sliders"></i> Configurações da IA & WhatsApp</button>
         </div>
 
@@ -676,9 +677,22 @@
                     </tbody>
                 </table>
             </div>
+        <!-- TAB 4: CORPO CLÍNICO & MÉDICOS -->
+        <div id="tab-doctors" class="section-card" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <h2 style="font-size: 20px; font-weight: 800; color: var(--text-main);"><i class="fa-solid fa-user-doctor" style="color: var(--primary);"></i> Corpo Clínico & Médicos Especialistas</h2>
+                    <p style="font-size: 14px; color: var(--text-muted);">Gerencie os profissionais de saúde da clínica, suas especialidades, registro profissional (CRO/CRM) e dias de atendimento no WhatsApp.</p>
+                </div>
+                <button class="btn btn-primary" onclick="openModal('modal-doctor')"><i class="fa-solid fa-plus"></i> + Cadastrar Médico</button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;" id="doctors-cards-container">
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">Carregando corpo clínico...</div>
+            </div>
         </div>
 
-        <!-- TAB 4: CONFIGURAÇÕES EXPANSAIS DA IA & WHATSAPP DA CLÍNICA -->
+        <!-- TAB 5: CONFIGURAÇÕES EXPANSAIS DA IA & WHATSAPP DA CLÍNICA -->
         <div id="tab-settings" class="section-card" style="display: none;">
             <div style="margin-bottom: 24px;">
                 <h2 style="font-size: 20px; font-weight: 800; color: var(--text-main);">⚙️ Central de Configurações da IA & WhatsApp</h2>
@@ -885,6 +899,45 @@
                     <button type="submit" class="btn btn-success">Confirmar Agendamento</button>
                 </div>
             </form>
+    <!-- MODAL: CADASTRAR MÉDICO / ESPECIALISTA -->
+    <div class="modal-overlay" id="modal-doctor">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fa-solid fa-user-doctor" style="color: var(--primary);"></i> Cadastrar Profissional de Saúde</h3>
+                <button class="modal-close" onclick="closeModal('modal-doctor')">&times;</button>
+            </div>
+            <form onsubmit="handleSaveDoctor(event)">
+                <div class="form-group">
+                    <label>Nome Completo do Médico(a) *</label>
+                    <input type="text" id="doc-name" placeholder="Ex: Dr. Fernando Souza" required>
+                </div>
+                <div class="form-group">
+                    <label>Especialidade Principal *</label>
+                    <input type="text" id="doc-specialty" placeholder="Ex: Ortodontia & Aparelhos" required>
+                </div>
+                <div style="display: flex; gap: 16px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Registro Profissional (CRO/CRM) *</label>
+                        <input type="text" id="doc-cro" placeholder="Ex: CRO-SP 998877" required>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Status *</label>
+                        <select id="doc-status">
+                            <option value="Ativo">Ativo</option>
+                            <option value="Férias">Férias</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Dias & Horários de Atendimento *</label>
+                    <input type="text" id="doc-days" placeholder="Ex: Seg, Qua, Sex (08h às 18h)" required>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                    <button type="button" class="btn" onclick="closeModal('modal-doctor')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Salvar Profissional</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -965,6 +1018,24 @@
                 const status = btn.dataset.status;
                 if (id && status) updateAppointmentStatus(id, status);
             });
+
+            const doctorsContainer = document.getElementById('doctors-cards-container');
+            if (doctorsContainer) {
+                doctorsContainer.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.btn-edit-doc');
+                    if (!btn) return;
+                    const docId = btn.dataset.id;
+                    const doc = allDoctors.find(d => d.id === docId);
+                    if (doc) {
+                        document.getElementById('doc-name').value = doc.name;
+                        document.getElementById('doc-specialty').value = doc.specialty;
+                        document.getElementById('doc-cro').value = doc.cro;
+                        document.getElementById('doc-status').value = doc.status;
+                        document.getElementById('doc-days').value = doc.available_days;
+                        openModal('modal-doctor');
+                    }
+                });
+            }
 
             document.getElementById('handoff-tbody').addEventListener('click', (e) => {
                 const btn = e.target.closest('.btn-return-ai');
@@ -1083,11 +1154,15 @@
                 allAppointments = data.appointments || [];
                 allPatients = data.patients || [];
                 allSessions = data.handoffs || [];
+                if (data.doctors && data.doctors.length > 0) {
+                    allDoctors = data.doctors;
+                }
 
                 updateKPIs(data.kpis);
                 renderAppointmentsTable(getFilteredAppointments());
                 renderPatientsTable(allPatients);
                 renderHandoffTable(allSessions);
+                renderDoctorsCards(allDoctors);
                 populatePatientDropdown(allPatients);
 
                 if (indicator) {
@@ -1296,12 +1371,70 @@
             }).join('');
         }
 
-        function renderHandoffTable(sessions) {
-            const tbody = document.getElementById('handoff-tbody');
-            if (!sessions || sessions.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--accent-success);">Nenhum paciente aguardando atendimento humano no momento.</td></tr>`;
+        function renderDoctorsCards(doctors) {
+            const container = document.getElementById('doctors-cards-container');
+            if (!container) return;
+
+            if (!doctors || doctors.length === 0) {
+                container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">Nenhum médico cadastrado.</div>`;
                 return;
             }
+
+            container.innerHTML = doctors.map(doc => `
+                <div class="settings-card" style="margin: 0; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <span style="font-size: 28px;">${esc(doc.avatar || '👨‍⚕️')}</span>
+                            <span class="status-pill confirmed">${esc(doc.status)}</span>
+                        </div>
+                        <h3 style="font-size: 17px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">${esc(doc.name)}</h3>
+                        <p style="font-size: 13px; color: var(--primary); font-weight: 700; margin-bottom: 8px;">${esc(doc.specialty)}</p>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;"><i class="fa-solid fa-id-badge"></i> ${esc(doc.cro)}</p>
+                        <div style="background: rgba(30, 41, 59, 0.8); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">ESCALA DE ATENDIMENTO</span>
+                            <span style="font-size: 13px; color: var(--text-main);"><i class="fa-solid fa-clock"></i> ${esc(doc.available_days)}</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                        <button class="btn btn-primary btn-edit-doc" data-id="${esc(doc.id)}" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-pen"></i> Editar Escala</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function handleSaveDoctor(e) {
+            e.preventDefault();
+            const name = document.getElementById('doc-name').value.trim();
+            const specialty = document.getElementById('doc-specialty').value.trim();
+            const cro = document.getElementById('doc-cro').value.trim();
+            const status = document.getElementById('doc-status').value;
+            const days = document.getElementById('doc-days').value.trim();
+
+            if (!name || !specialty || !cro || !days) {
+                showToast('Preencha todos os campos obrigatórios.');
+                return;
+            }
+
+            const existingIndex = allDoctors.findIndex(d => d.cro === cro || d.name.toLowerCase() === name.toLowerCase());
+            if (existingIndex >= 0) {
+                allDoctors[existingIndex] = { ...allDoctors[existingIndex], name, specialty, cro, status, available_days: days };
+            } else {
+                const newDoc = {
+                    id: 'doc_' + (allDoctors.length + 1),
+                    name,
+                    specialty,
+                    cro,
+                    status,
+                    available_days: days,
+                    avatar: name.toLowerCase().includes('dra') ? '👩‍⚕️' : '👨‍⚕️'
+                };
+                allDoctors.push(newDoc);
+            }
+
+            renderDoctorsCards(allDoctors);
+            closeModal('modal-doctor');
+            showToast(`Profissional ${name} salvo com sucesso!`);
+        }
 
             tbody.innerHTML = sessions.map(s => {
                 const phoneRaw = s.phone || '';
@@ -1525,6 +1658,7 @@
             document.getElementById('tab-appointments').style.display = tabName === 'appointments' ? 'block' : 'none';
             document.getElementById('tab-patients').style.display = tabName === 'patients' ? 'block' : 'none';
             document.getElementById('tab-handoff').style.display = tabName === 'handoff' ? 'block' : 'none';
+            document.getElementById('tab-doctors').style.display = tabName === 'doctors' ? 'block' : 'none';
             document.getElementById('tab-settings').style.display = tabName === 'settings' ? 'block' : 'none';
         }
 
