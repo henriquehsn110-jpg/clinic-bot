@@ -32,8 +32,13 @@ const localOnly = (req, res, next) => {
 if (process.env.NODE_ENV !== 'production') {
     app.use('/simulator', localOnly, express.static(path.join(__dirname, '../clinic-bot-simulator')));
 }
-app.use('/dashboard', express.static(path.join(__dirname, 'public')));
-app.get(['/dashboard', '/dashboard.html', '/painel'], (req, res) => {
+app.use('/dashboard', express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+}));
+app.get(['/', '/dashboard', '/dashboard.html', '/painel'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(__dirname, 'public/dashboard.html'));
 });
 
