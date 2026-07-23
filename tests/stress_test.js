@@ -113,6 +113,20 @@ async function runStressTest() {
     console.log(`  Latência Máxima:        ${maxLatency} ms`);
     console.log(`  --------------------------------------------------\n`);
 
+    // Limpeza automática dos dados de teste criados no Supabase
+    try {
+        const db = require('../services/databaseService');
+        const { data: dummyPatients } = await db.supabase.from('patients').select('id').or('phone.like.5511988%,phone.eq.5511994703641');
+        const dummyIds = (dummyPatients || []).map(p => p.id);
+        if (dummyIds.length > 0) {
+            await db.supabase.from('appointments').delete().in('patient_id', dummyIds);
+            await db.supabase.from('patients').delete().in('id', dummyIds);
+            console.log(`  🧹 ${dummyIds.length} pacientes de teste limpos do banco com sucesso.`);
+        }
+    } catch (cleanErr) {
+        console.warn('  ⚠️ Aviso: Limpeza automática de dados de teste ignorada:', cleanErr.message);
+    }
+
     if (serverProcess) {
         console.log("  🧹 Encerrando processo do servidor auto-iniciado...");
         serverProcess.kill();
