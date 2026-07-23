@@ -9,12 +9,12 @@ const logger            = require('../services/logger');
 const DATE_SELECTION_REGEX = /Selecionei a data:\s*(\d{4}-\d{2}-\d{2})/i;
 
 const PROCEDURES_RICH = [
-    { id: 'proc_0', title: "Consulta geral", description: "Avaliação, diagnóstico e check-up" },
-    { id: 'proc_1', title: "Limpeza", description: "Profilaxia e remoção de tártaro" },
-    { id: 'proc_2', title: "Clareamento Dental", description: "Tratamento estético para os dentes" },
-    { id: 'proc_3', title: "Implante", description: "Reposição de dentes perdidos" },
-    { id: 'proc_4', title: "Aparelho Ortodôntico", description: "Alinhamento e correção" },
-    { id: 'proc_5', title: "Outro", description: "Descreva seu problema no chat" }
+    { id: 'proc_0', title: "Consulta geral", description: "Avaliação Geral (Dr. Carlos / Dra. Juliana)" },
+    { id: 'proc_1', title: "Limpeza", description: "Dra. Juliana Mendes (Odontopediatria & Profilaxia)" },
+    { id: 'proc_2', title: "Clareamento Dental", description: "Dra. Juliana Mendes (Estética Dental)" },
+    { id: 'proc_3', title: "Implante", description: "Dr. Roberto Alves (Implantes & Próteses)" },
+    { id: 'proc_4', title: "Aparelho Ortodôntico", description: "Dr. Carlos Eduardo (Ortodontia)" },
+    { id: 'proc_5', title: "Outro", description: "Descreva seu caso para nossa equipe" }
 ];
 
 const PROCEDURES_LIST = PROCEDURES_RICH.map(p => p.title);

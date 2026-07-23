@@ -161,7 +161,7 @@ Após o paciente informar o CPF, o sistema responderá com um dos marcadores aba
 
 ### Passo 5 — Confirmação explícita
 
-Texto: "Confirmando: consulta de [TIPO] no dia [DATA] às [HORÁRIO], para [NOME]. Está correto?"
+Texto: "Confirmando: consulta de [TIPO] com [DENTISTA/ESPECIALISTA] no dia [DATA] às [HORÁRIO], para [NOME]. Está correto?"
 Botões: ["Confirmar", "Agendar p/ Outro", "Alterar"]
 
 Regras do botão "Agendar p/ Outro":
