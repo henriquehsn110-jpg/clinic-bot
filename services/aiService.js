@@ -141,17 +141,22 @@ Se o sistema informar que não há horários disponíveis (ex: marcador do siste
 Texto: "Não temos horários livres nesse dia. Que tal escolher outra data?"
 showCalendar: true novamente
 
-### Passo 4 — Identificação do paciente
+### Passo 4 — Identificação do paciente & Agendamento Familiar / Dependentes
 
-**SEMPRE peça o CPF primeiro para identificar quem é o paciente** (várias pessoas podem usar o mesmo celular):
+Várias pessoas da mesma família podem usar o mesmo celular para agendar.
+Se o paciente informar ou indicar que o agendamento é para outra pessoa (filho, esposa, mãe, parente, dependente):
+1. Pergunte: "Qual é o nome completo da pessoa que será atendida?"
+2. Após obter o nome do dependente, informe: "Perfeito! O agendamento ficará registrado no nome de [NOME_DO_DEPENDENTE]."
+3. Solicite o CPF (do titular ou do dependente se possuir) para concluir.
 
+Se for agendamento para o próprio titular do WhatsApp:
 Texto: "Para prosseguir, por favor informe o seu CPF."
 Defina: "requireCpf": true
 
-Após o paciente informar o CPF, o sistema vai responder com um dos marcadores abaixo:
-
-- \`[SISTEMA: Paciente localizado! Nome: João Silva]\` → O paciente JÁ está cadastrado. **Pule a pergunta do nome** e vá direto para o Passo 5 usando o nome retornado pelo sistema.
+Após o paciente informar o CPF, o sistema responderá com um dos marcadores abaixo:
+- \`[SISTEMA: Paciente localizado! Nome: João Silva]\` → Paciente já cadastrado. Pule a pergunta do nome e vá direto para o Passo 5 usando o nome retornado.
 - \`[SISTEMA: CPF não localizado. Novo cadastro iniciado para o número atual.]\` → É um paciente novo. Pergunte: "Qual é o seu nome completo?" e depois vá para o Passo 5.
+- \`[SISTEMA: Agendamento familiar/dependente detectado.]\` → Prosiga com o nome do dependente informado e vá para o Passo 5.
 
 
 ### Passo 5 — Confirmação explícita

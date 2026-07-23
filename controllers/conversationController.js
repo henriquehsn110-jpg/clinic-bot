@@ -405,8 +405,12 @@ class ConversationController {
                     const foundPatient = await db.patients.findByCpf(rawCpf);
 
                     if (foundPatient) {
-                        // Cross-check explícito de autorização
-                        if (foundPatient.phone !== phone) {
+                        // Verifica se é agendamento familiar/dependente legítimo (ex: filho, esposa, mãe, outra pessoa)
+                        const historyText = history.map(h => h.parts?.[0]?.text || '').join(' ').toLowerCase();
+                        const currentText = sanitizedText.toLowerCase();
+                        const isFamilyBooking = /filh|esposa|marido|mãe|mae|pai|dependente|outra pessoa|familiar|sobrinh|irmã|irma|irmão|irmao/.test(historyText + ' ' + currentText);
+
+                        if (foundPatient.phone !== phone && !isFamilyBooking) {
                             logger.warn('SECURITY', `Tentativa de acesso CPF ${rawCpf} por telefone não autorizado (${phone}). Block aplicado.`);
                             
                             // Persiste a marca de Handoff no banco de dados com contexto da mensagem para evitar bypass
@@ -429,8 +433,12 @@ class ConversationController {
                                 transferToHuman: true
                             };
                         } else {
-                            // Autenticado com sucesso. O update redundante foi removido.
-                            processedText = `${sanitizedText}\n[SISTEMA: Paciente localizado! Nome: ${foundPatient.name}]`;
+                            if (isFamilyBooking) {
+                                logger.info('FAMILY_BOOKING', `Agendamento familiar autorizado para CPF ${rawCpf} pelo telefone ${phone}`);
+                                processedText = `${sanitizedText}\n[SISTEMA: Agendamento familiar/dependente detectado e autorizado.]`;
+                            } else {
+                                processedText = `${sanitizedText}\n[SISTEMA: Paciente localizado! Nome: ${foundPatient.name}]`;
+                            }
                         }
                     } else {
                         // Vinculação inicial (Cadastro Novo)
