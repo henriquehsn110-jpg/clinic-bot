@@ -1051,6 +1051,12 @@
                 selectCalendarDate(cell.dataset.date);
             });
 
+            if (window.location.protocol === 'file:') {
+                fetch('http://localhost:3000/api/dashboard/auth/login', { method: 'POST' })
+                    .then(() => { window.location.href = 'http://localhost:3000/dashboard.html'; })
+                    .catch(() => {});
+            }
+
             if (!token || !userData) {
                 autoLoginDefaultAdmin();
             } else {
