@@ -1051,24 +1051,14 @@
                 selectCalendarDate(cell.dataset.date);
             });
 
+            // Redireciona file:// para HTTP
             if (window.location.protocol === 'file:') {
-                fetch('http://localhost:3000/api/dashboard/auth/login', { method: 'POST' })
-                    .then(() => { window.location.href = 'http://localhost:3000/dashboard.html'; })
-                    .catch(() => {});
+                window.location.href = 'http://localhost:3000/dashboard.html';
+                return;
             }
 
-            if (!token || !userData) {
-                autoLoginDefaultAdmin();
-            } else {
-                try {
-                    const user = JSON.parse(userData);
-                    document.getElementById('user-display-name').innerText = `${esc(user.clinicName)} (${esc(user.role)})`;
-                    fetchLiveDashboardData();
-                    updateLivePreview();
-                } catch {
-                    logout();
-                }
-            }
+            // SEMPRE tenta auto-login ao carregar para garantir token válido
+            autoLoginDefaultAdmin();
         });
 
         // REQUISIÇÕES À API (SEM FALLBACK SILENCIOSO MOCKADO — PROPAGA ERRO REAL)
@@ -1083,8 +1073,8 @@
             const res = await fetch(`${API_BASE}${endpoint}`, config);
 
             if (res.status === 401) {
-                logout();
-                throw new Error('Sessão expirada. Faça login novamente.');
+                // NÃO chama logout() aqui — evita loop infinito com modal
+                throw new Error('AUTH_EXPIRED');
             }
 
             const data = await res.json();
@@ -1126,11 +1116,16 @@
         function logout() {
             localStorage.removeItem('clinicabot_token');
             localStorage.removeItem('clinicabot_user');
+            if (pollTimeoutId) { clearTimeout(pollTimeoutId); pollTimeoutId = null; }
             openModal('modal-login');
         }
 
+        let _autoLoginInProgress = false;
         async function autoLoginDefaultAdmin() {
+            if (_autoLoginInProgress) return;
+            _autoLoginInProgress = true;
             try {
+                console.log('[AUTH] Auto-login iniciando...');
                 const res = await fetch(`${API_BASE}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1141,13 +1136,20 @@
                     localStorage.setItem('clinicabot_token', data.token);
                     localStorage.setItem('clinicabot_user', JSON.stringify(data.user));
                     document.getElementById('user-display-name').innerText = `${esc(data.user.clinicName)} (${esc(data.user.role)})`;
+                    console.log('[AUTH] Auto-login OK:', data.user.clinicName);
+                    closeModal('modal-login');
+                    showToast(`🔐 Autenticado: ${esc(data.user.clinicName)}`);
                     fetchLiveDashboardData();
                     updateLivePreview();
                 } else {
+                    console.warn('[AUTH] Auto-login falhou, mostrando modal');
                     openModal('modal-login');
                 }
-            } catch {
+            } catch (err) {
+                console.error('[AUTH] Auto-login erro:', err.message);
                 openModal('modal-login');
+            } finally {
+                _autoLoginInProgress = false;
             }
         }
 
@@ -1201,14 +1203,16 @@
                 }
 
             } catch (err) {
-                console.warn('Erro ao atualizar dados em tempo real:', err.message);
+                console.warn('[POLL] Erro ao atualizar dados:', err.message);
+                if (err.message === 'AUTH_EXPIRED') {
+                    console.log('[POLL] Token expirado, re-autenticando...');
+                    autoLoginDefaultAdmin();
+                    return; // autoLoginDefaultAdmin vai chamar fetchLiveDashboardData após re-login
+                }
                 if (indicator) {
                     indicator.classList.add('offline');
                     dot.classList.add('offline');
                     text.innerText = '⚠️ Erro de Conexão com o Servidor';
-                }
-                if (err.message && (err.message.includes('Sessão expirada') || err.message.includes('401') || err.message.includes('token'))) {
-                    autoLoginDefaultAdmin();
                 }
             } finally {
                 // Mantém um único polling ativo a cada 4 segundos
