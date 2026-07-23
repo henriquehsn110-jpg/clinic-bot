@@ -48,13 +48,13 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 
-// CORS restritivo para proteção das APIs
+// CORS para proteção das APIs (suporta dev local, file:// e produção)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (process.env.NODE_ENV !== 'production') {
-        res.header('Access-Control-Allow-Origin', origin || 'http://localhost:3000');
+        res.header('Access-Control-Allow-Origin', (origin && origin !== 'null') ? origin : '*');
     } else {
-        res.header('Access-Control-Allow-Origin', process.env.ADMIN_DASHBOARD_URL || 'null');
+        res.header('Access-Control-Allow-Origin', process.env.ADMIN_DASHBOARD_URL || '*');
     }
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');

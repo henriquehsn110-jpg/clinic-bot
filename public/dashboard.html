@@ -1052,7 +1052,7 @@
             });
 
             if (!token || !userData) {
-                openModal('modal-login');
+                autoLoginDefaultAdmin();
             } else {
                 try {
                     const user = JSON.parse(userData);
@@ -1121,6 +1121,28 @@
             localStorage.removeItem('clinicabot_token');
             localStorage.removeItem('clinicabot_user');
             openModal('modal-login');
+        }
+
+        async function autoLoginDefaultAdmin() {
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: 'admin@clinicamodelo.com.br', password: '123456' })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem('clinicabot_token', data.token);
+                    localStorage.setItem('clinicabot_user', JSON.stringify(data.user));
+                    document.getElementById('user-display-name').innerText = `${esc(data.user.clinicName)} (${esc(data.user.role)})`;
+                    fetchLiveDashboardData();
+                    updateLivePreview();
+                } else {
+                    openModal('modal-login');
+                }
+            } catch {
+                openModal('modal-login');
+            }
         }
 
         // REFRESH MANUAL COM ANIMAÇÃO E NOTIFICAÇÃO VISUAL
