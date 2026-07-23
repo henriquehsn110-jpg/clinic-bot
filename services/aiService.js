@@ -4,11 +4,12 @@ const logger = require('./logger');
 class AIService {
     constructor() {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        // P5: Modelo mais barato primeiro para reduzir custos
+        // P5: Modelos ativos e de menor custo da API Gemini
         this.candidateModels = [
-            process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite',
-            'gemini-2.0-flash-lite',
-            'gemini-flash-lite-latest'
+            process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+            'gemini-1.5-flash',
+            'gemini-flash-lite-latest',
+            'gemini-flash-latest'
         ].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicatas
         this.modelIndex = 0;
 
