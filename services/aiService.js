@@ -4,13 +4,36 @@ const logger = require('./logger');
 class AIService {
     constructor() {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        // P5: Modelo mais barato primeiro para reduzir custos
         this.candidateModels = [
-            process.env.GEMINI_MODEL,
-            'gemini-flash-latest',
+            process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite',
+            'gemini-2.0-flash-lite',
             'gemini-flash-lite-latest'
-        ].filter(Boolean);
+        ].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicatas
         this.modelIndex = 0;
+
+        // P2: Rate Limiter — máximo de chamadas por minuto à API Gemini
+        this.MAX_CALLS_PER_MINUTE = parseInt(process.env.GEMINI_RATE_LIMIT) || 15;
+        this._callTimestamps = [];
+
         this.initModel();
+    }
+
+    /**
+     * Rate limiter: rejeita chamadas acima do limite por minuto
+     * Retorna true se a chamada é permitida, false se excedeu o limite
+     */
+    _checkRateLimit() {
+        const now = Date.now();
+        const oneMinuteAgo = now - 60000;
+        // Remove timestamps antigos (mais de 1 minuto)
+        this._callTimestamps = this._callTimestamps.filter(t => t > oneMinuteAgo);
+        if (this._callTimestamps.length >= this.MAX_CALLS_PER_MINUTE) {
+            logger.warn('GEMINI_RATE_LIMIT', `Limite de ${this.MAX_CALLS_PER_MINUTE} chamadas/min atingido. Chamada bloqueada para economizar créditos.`);
+            return false;
+        }
+        this._callTimestamps.push(now);
+        return true;
     }
 
     initModel() {
@@ -268,19 +291,28 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
     }
 
     async generateResponse(userMessage, conversationHistory = [], clinicSettings = {}) {
+        // P2: Verifica rate limit antes de chamar a API
+        if (!this._checkRateLimit()) {
+            throw new Error('RATE_LIMIT_EXCEEDED: Limite de chamadas por minuto atingido. Tente novamente em breve.');
+        }
+
         const maxRetries = 2;
         let lastError = null;
 
         for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
                 const systemInstruction = this.buildCustomPrompt(clinicSettings);
+                // Trunca o histórico para as últimas 10 mensagens para economizar tokens de entrada
+                const cappedHistory = (conversationHistory || []).slice(-10);
                 const chat = this.model.startChat({
-                    history: conversationHistory,
+                    history: cappedHistory,
                     systemInstruction: {
                         parts: [{ text: systemInstruction }]
                     },
                     generationConfig: {
                         responseMimeType: 'application/json',
+                        temperature: 0.3,
+                        maxOutputTokens: 350, // Limita tokens de saída por resposta (economia de custos)
                         responseSchema: {
                             type: 'object',
                             properties: {

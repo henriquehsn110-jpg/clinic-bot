@@ -180,7 +180,56 @@ class ConversationController {
                 }
             }
 
-            // ── FASE 1: RESERVA ATÔMICA & CRIAÇÃO DE AGENDAMENTO DE CONSULTA ───────
+            // ── P3: CACHE LOCAL DE BOAS-VINDAS & ATALHOS (0 TOKENS GEMINI) ───────
+            // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato)
+            if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar')) {
+                const welcomeText = "Olá! Sou a Ana, da Clínica Modelo 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?";
+                const welcomeButtons = ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"];
+
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: welcomeText }] });
+                await db.sessions.set(phone, history);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, welcomeText).catch(() => {});
+                }
+
+                return {
+                    text: welcomeText,
+                    buttons: welcomeButtons,
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            // 2. Atalho para botão "Agendar Consulta"
+            if (sanitizedText.toLowerCase() === 'agendar consulta') {
+                const procText = "Ótimo! Escolha qual procedimento você gostaria de agendar:";
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
+                await db.sessions.set(phone, history);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, procText).catch(() => {});
+                }
+
+                return {
+                    text: procText,
+                    buttons: [],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: true,
+                    requireCpf: false,
+                    procedures: PROCEDURES_LIST,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
             const isConfirming = sanitizedText.toLowerCase() === 'confirmar';
             if (isConfirming) {
                 if (draft.date && draft.time && draft.type) {

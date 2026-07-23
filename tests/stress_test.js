@@ -74,10 +74,9 @@ async function runStressTest() {
         const phone = `5511988${String(i).padStart(6, '0')}`;
         const pStart = Date.now();
 
-        // 50% requisições para /api/simulate e 50% requisições para /api/dashboard/data
-        const p = (i % 2 === 0)
-            ? axios.post(`${BASE_URL}/api/simulate`, { phone, text: 'Olá, gostaria de saber os horários' })
-            : axios.get(`${BASE_URL}/api/dashboard/data`, { headers: { Authorization: `Bearer ${token}` } });
+        // 100% requisições para /api/dashboard/data (SEM chamar Gemini API para evitar custo)
+        // IMPORTANTE: NÃO usar /api/simulate aqui — cada chamada consome tokens da API Gemini ($$$)
+        const p = axios.get(`${BASE_URL}/api/dashboard/data`, { headers: { Authorization: `Bearer ${token}` } });
 
         promises.push(
             p.then(res => {
