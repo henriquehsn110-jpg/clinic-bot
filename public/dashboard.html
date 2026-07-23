@@ -1207,6 +1207,9 @@
                     dot.classList.add('offline');
                     text.innerText = '⚠️ Erro de Conexão com o Servidor';
                 }
+                if (err.message && (err.message.includes('Sessão expirada') || err.message.includes('401') || err.message.includes('token'))) {
+                    autoLoginDefaultAdmin();
+                }
             } finally {
                 // Mantém um único polling ativo a cada 4 segundos
                 pollTimeoutId = setTimeout(fetchLiveDashboardData, 4000);
