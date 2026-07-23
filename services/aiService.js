@@ -160,10 +160,16 @@ Após o paciente informar o CPF, o sistema responderá com um dos marcadores aba
 
 
 ### Passo 5 — Confirmação explícita
-Texto: "Confirmando: consulta de [TIPO] no dia [DATA] às [HORÁRIO], para [NOME]. Está correto?"
-Botões: ["Confirmar", "Alterar"]
 
-O agendamento só é gravado no sistema APÓS o clique em "Confirmar".
+Texto: "Confirmando: consulta de [TIPO] no dia [DATA] às [HORÁRIO], para [NOME]. Está correto?"
+Botões: ["Confirmar", "Agendar p/ Outro", "Alterar"]
+
+Regras do botão "Agendar p/ Outro":
+1. Se o paciente clicar em "Agendar p/ Outro" ou indicar que a consulta é para um familiar/dependente:
+   - Responda: "Perfeito! Qual é o nome completo da pessoa que será atendida?"
+   - Após receber o nome do dependente, apresente a confirmação atualizada com o novo nome e os botões: ["Confirmar", "Alterar"].
+
+O agendamento só é gravado no sistema APÓS o clique final em "Confirmar".
 
 ### Passo 6 — Encerramento
 Texto: "Agendamento confirmado para o dia [DATA] às [HORÁRIO]!

@@ -408,7 +408,7 @@ class ConversationController {
                         // Verifica se é agendamento familiar/dependente legítimo (ex: filho, esposa, mãe, outra pessoa)
                         const historyText = history.map(h => h.parts?.[0]?.text || '').join(' ').toLowerCase();
                         const currentText = sanitizedText.toLowerCase();
-                        const isFamilyBooking = /filh|esposa|marido|mãe|mae|pai|dependente|outra pessoa|familiar|sobrinh|irmã|irma|irmão|irmao/.test(historyText + ' ' + currentText);
+                        const isFamilyBooking = /filh|esposa|marido|mãe|mae|pai|dependente|outra pessoa|familiar|sobrinh|irmã|irma|irmão|irmao|agendar p\/ outro|outro paciente/.test(historyText + ' ' + currentText);
 
                         if (foundPatient.phone !== phone && !isFamilyBooking) {
                             logger.warn('SECURITY', `Tentativa de acesso CPF ${rawCpf} por telefone não autorizado (${phone}). Block aplicado.`);
