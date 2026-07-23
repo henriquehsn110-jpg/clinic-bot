@@ -9,12 +9,12 @@ const logger            = require('../services/logger');
 const DATE_SELECTION_REGEX = /Selecionei a data:\s*(\d{4}-\d{2}-\d{2})/i;
 
 const PROCEDURES_RICH = [
-    { id: 'proc_0', title: "Consulta geral", description: "Avaliação Geral (Dr. Carlos / Dra. Juliana)" },
-    { id: 'proc_1', title: "Limpeza", description: "Dra. Juliana Mendes (Odontopediatria & Profilaxia)" },
-    { id: 'proc_2', title: "Clareamento Dental", description: "Dra. Juliana Mendes (Estética Dental)" },
-    { id: 'proc_3', title: "Implante", description: "Dr. Roberto Alves (Implantes & Próteses)" },
-    { id: 'proc_4', title: "Aparelho Ortodôntico", description: "Dr. Carlos Eduardo (Ortodontia)" },
-    { id: 'proc_5', title: "Outro", description: "Descreva seu caso para nossa equipe" }
+    { id: 'proc_0', title: "Consulta geral", description: "Avaliação Geral (Dr. Carlos / Dra. Juliana)", doctor: "Dr. Carlos Eduardo / Dra. Juliana Mendes" },
+    { id: 'proc_1', title: "Limpeza", description: "Dra. Juliana Mendes (Odontopediatria & Profilaxia)", doctor: "Dra. Juliana Mendes" },
+    { id: 'proc_2', title: "Clareamento Dental", description: "Dra. Juliana Mendes (Estética Dental)", doctor: "Dra. Juliana Mendes" },
+    { id: 'proc_3', title: "Implante", description: "Dr. Roberto Alves (Implantes & Próteses)", doctor: "Dr. Roberto Alves" },
+    { id: 'proc_4', title: "Aparelho Ortodôntico", description: "Dr. Carlos Eduardo (Ortodontia)", doctor: "Dr. Carlos Eduardo" },
+    { id: 'proc_5', title: "Outro", description: "Descreva seu caso para nossa equipe", doctor: "Equipe Clínica Modelo" }
 ];
 
 const PROCEDURES_LIST = PROCEDURES_RICH.map(p => p.title);
@@ -469,11 +469,20 @@ class ConversationController {
                 }
             }
 
-            // Garante que a IA sempre saiba o nome do paciente atual se ele já estiver cadastrado no BD,
-            // evitando que ela esqueça após mensagens curtas ou reinício de sessão.
+            // Garante que a IA sempre receba o procedimento e nome do médico responsável no prompt
+            const matchedProc = PROCEDURES_RICH.find(p => 
+                draft.type && (p.title.toLowerCase().includes(draft.type.toLowerCase()) || draft.type.toLowerCase().includes(p.title.toLowerCase()))
+            );
+            const doctorName = matchedProc ? matchedProc.doctor : 'Dr. Carlos Eduardo / Dra. Juliana Mendes';
+
             let textForAI = processedText;
             if (patient && patient.name && patient.cpf && !processedText.includes('[SISTEMA:')) {
-                textForAI = `[SISTEMA INVISÍVEL: Este paciente já é cadastrado no banco de dados. Nome: ${patient.name}, CPF: Validado. Não peça o nome ou CPF dele, pule direto para as confirmações]\n` + processedText;
+                textForAI = `[SISTEMA INVISÍVEL: Este paciente já é cadastrado no banco de dados. Nome: ${patient.name}, CPF: Validado.]\n` + processedText;
+            }
+
+            if (draft.type || draft.date || draft.time) {
+                const draftInfoTag = `[SISTEMA INVISÍVEL: Dados do agendamento — Procedimento: ${draft.type || 'Consulta'}, Médico: ${doctorName}, Data: ${draft.date || 'a definir'}, Horário: ${draft.time || 'a definir'}. Na mensagem de confirmação, cite obrigatoriamente o procedimento ("${draft.type || 'Consulta'}") e o médico ("${doctorName}")].`;
+                textForAI = `${textForAI}\n${draftInfoTag}`;
             }
 
             let aiResponse = await aiService.generateResponse(textForAI, history);
