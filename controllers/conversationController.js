@@ -191,7 +191,7 @@ class ConversationController {
                 await db.sessions.set(phone, history);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, welcomeText).catch(() => {});
+                    await whatsappService.sendButtonMessage(phone, welcomeText, welcomeButtons).catch(() => {});
                 }
 
                 return {
@@ -208,14 +208,18 @@ class ConversationController {
             }
 
             // 2. Atalho para botão "Agendar Consulta"
-            if (sanitizedText.toLowerCase() === 'agendar consulta') {
+            if (sanitizedText.toLowerCase() === 'agendar consulta' || sanitizedText.toLowerCase() === 'agendar') {
                 const procText = "Ótimo! Escolha qual procedimento você gostaria de agendar:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
                 await db.sessions.set(phone, history);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, procText).catch(() => {});
+                    const sections = [{
+                        title: "Tratamentos",
+                        rows: PROCEDURES_RICH
+                    }];
+                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, "Especialidades").catch(() => {});
                 }
 
                 return {
