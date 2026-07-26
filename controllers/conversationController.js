@@ -547,6 +547,14 @@ class ConversationController {
 
             let aiResponse = await aiService.generateResponse(textForAI, history);
 
+            // Trava determinística: força a exibição do calendário quando um procedimento é escolhido ou 'Outras datas...' clicado
+            const isProcSelection = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
+            if ((isProcSelection || processedText.includes('Outras datas...')) && !draft.date && !aiResponse.transferToHuman) {
+                aiResponse.showCalendar = true;
+                aiResponse.showProceduresList = false;
+                aiResponse.showTimeSlots = false;
+            }
+
             history.push({ role: 'user', parts: [{ text: processedText }] });
 
             let responseText = aiResponse.text;
