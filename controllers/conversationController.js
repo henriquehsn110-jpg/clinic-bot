@@ -230,7 +230,7 @@ class ConversationController {
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                    await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken).catch(() => {});
+                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken).catch(() => {});
                 }
 
                 return {
