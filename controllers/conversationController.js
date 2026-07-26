@@ -266,7 +266,12 @@ class ConversationController {
                             logger.info('SCHEDULING', `Agendamento criado com sucesso via WhatsApp/Simulador para [${phone}] - ${draft.date} ${draft.time}`);
                         }
 
-                        // Limpa o rascunho após criação com sucesso
+                        // Limpa o rascunho após criação com sucesso (no banco e na memória local da requisição)
+                        draft.type = null;
+                        draft.date = null;
+                        draft.time = null;
+                        draft.name = null;
+                        draft.notes = null;
                         await db.sessions.setDraft(phone, null, clinicId);
 
                     } catch (dbErr) {
