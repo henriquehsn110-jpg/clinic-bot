@@ -63,7 +63,7 @@ function extractAndNormalizeCpf(text) {
 }
 
 // Auxiliar para persistir o Handoff Humano no histórico da sessão com a última fala do usuário
-async function persistHumanHandoff(phone, patient, history, userText, extraNote = '') {
+async function persistHumanHandoff(phone, patient, history, userText, extraNote = '', clinicId) {
     const marker = `[SISTEMA: conversa transferida para atendente humano]${extraNote ? ' ' + extraNote : ''}`;
     const updatedHistory = [
         ...history,
@@ -72,7 +72,7 @@ async function persistHumanHandoff(phone, patient, history, userText, extraNote 
     ].slice(-20);
 
     try {
-        await db.sessions.set(phone, updatedHistory);
+        await db.sessions.set(phone, updatedHistory, clinicId);
         if (patient?.id) {
             await db.conversations.log(patient.id, 'assistant', '[Transferido para atendimento humano]');
         }
@@ -131,19 +131,30 @@ function normalizeInputTime(text) {
 
 class ConversationController {
 
-    async handleIncomingMessage(phone, text, isSimulation = false) {
+    async handleIncomingMessage(phone, text, isSimulation = false, clinicId, phoneId) {
+        if (!clinicId) {
+            const defaultClinic = await db.clinics.findBySlug('clinica-modelo') || (await db.clinics.getAll())[0];
+            if (defaultClinic) clinicId = defaultClinic.id;
+        }
+        if (!clinicId) throw new Error('clinicId é obrigatório em handleIncomingMessage');
+
+        let clinicToken = null;
         try {
-            const patient = await db.patients.findOrCreate(phone);
+            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token').eq('id', clinicId).maybeSingle();
+            clinicToken = cData?.whatsapp_token || cData?.token || null;
+        } catch {}
+        try {
+            const patient = await db.patients.findOrCreate(phone, clinicId);
             await db.conversations.log(patient.id, 'user', text);
 
             // ── SANITIZAÇÃO DE SEGURANÇA ──────────────────────────────────────────
             // Impede injeção de prompt que tenta forçar comandos do sistema via colchetes
             const sanitizedText = text.replace(/\[\s*SISTEMA\s*:.*?\]/gi, '').trim();
 
-            let history = await db.sessions.get(phone);
+            let history = await db.sessions.get(phone, clinicId);
 
             // Carrega ou inicializa o rascunho de agendamento estruturado da sessão
-            let draft = await db.sessions.getDraft(phone) || {};
+            let draft = await db.sessions.getDraft(phone, clinicId) || {};
 
             // ── VERIFICAÇÃO DE HANDOFF HUMANO PERSISTIDO ─────────────────────────
             // Fica ANTES de qualquer lógica automática (inclusive confirmação de
@@ -160,12 +171,12 @@ class ConversationController {
                     logger.info('HUMAN_HANDOFF_CANCELED', `Paciente [${phone}] solicitou retorno à IA. Histórico e rascunho resetados.`);
                     history = [];
                     draft = {};
-                    await db.sessions.set(phone, history);
-                    await db.sessions.setDraft(phone, null);
+                    await db.sessions.set(phone, history, clinicId);
+                    await db.sessions.setDraft(phone, null, clinicId);
                 } else {
                     const responseText = "Você já está em atendimento com um de nossos atendentes no momento.";
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, responseText).catch(() => {});
+                        await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken).catch(() => {});
                     }
                     return {
                         text: responseText,
@@ -188,10 +199,10 @@ class ConversationController {
 
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: welcomeText }] });
-                await db.sessions.set(phone, history);
+                await db.sessions.set(phone, history, clinicId);
 
                 if (!isSimulation) {
-                    await whatsappService.sendButtonMessage(phone, welcomeText, welcomeButtons).catch(() => {});
+                    await whatsappService.sendButtonMessage(phone, welcomeText, welcomeButtons, phoneId, clinicToken).catch(() => {});
                 }
 
                 return {
@@ -212,14 +223,14 @@ class ConversationController {
                 const procText = "Ótimo! Escolha qual procedimento você gostaria de agendar:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
-                await db.sessions.set(phone, history);
+                await db.sessions.set(phone, history, clinicId);
 
                 if (!isSimulation) {
                     const sections = [{
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, "Especialidades").catch(() => {});
+                    await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken).catch(() => {});
                 }
 
                 return {
@@ -239,11 +250,12 @@ class ConversationController {
                 if (draft.date && draft.time && draft.type) {
                     try {
                         // Verifica primeiro se já não existe exatamente esse agendamento ativo para esse paciente (idempotência de reentrega)
-                        const existing = await db.appointments.findActiveAppointment(patient.id, draft.date, draft.time);
+                        const existing = await db.appointments.findActiveAppointment(patient.id, draft.date, draft.time, clinicId);
                         if (existing) {
                             logger.info('SCHEDULING', `Agendamento idempotente detectado para [${phone}] - ${draft.date} ${draft.time}`);
                         } else {
                             await calendarService.scheduleAppointment({
+                                clinicId,
                                 phone,
                                 name: draft.name || null,
                                 date: draft.date,
@@ -255,7 +267,7 @@ class ConversationController {
                         }
 
                         // Limpa o rascunho após criação com sucesso
-                        await db.sessions.setDraft(phone, null);
+                        await db.sessions.setDraft(phone, null, clinicId);
 
                     } catch (dbErr) {
                         if (dbErr.code === '23505' || dbErr.message.includes('23505') || dbErr.message.includes('unique_violation')) {
@@ -264,10 +276,10 @@ class ConversationController {
                             
                             history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                             history.push({ role: 'model', parts: [{ text: `${conflictText}\n[SISTEMA: calendário exibido, aguardando data, offset=0]` }] });
-                            await db.sessions.set(phone, history);
+                            await db.sessions.set(phone, history, clinicId);
 
                             if (!isSimulation) {
-                                await whatsappService.sendTextMessage(phone, conflictText).catch(() => {});
+                                await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
                             }
 
                             return {
@@ -291,10 +303,10 @@ class ConversationController {
                     
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                     history.push({ role: 'model', parts: [{ text: `${errText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
-                    await db.sessions.set(phone, history);
+                    await db.sessions.set(phone, history, clinicId);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, errText).catch(() => {});
+                        await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
                     }
 
                     return {
@@ -358,14 +370,14 @@ class ConversationController {
             const selectedProc = PROCEDURES_LIST.find(p => sanitizedText.toLowerCase() === p.toLowerCase());
             if (selectedProc) {
                 draft.type = selectedProc;
-                await db.sessions.setDraft(phone, { type: selectedProc });
+                await db.sessions.setDraft(phone, {}, clinicId);
             }
 
             // 2. Extração do Horário
             const timeMatch = processedText.match(/Selecionei o horário:\s*(\d{2}:\d{2})/i) || processedText.match(/^\b(\d{2}:\d{2})\b$/);
             if (timeMatch) {
                 draft.time = timeMatch[1];
-                await db.sessions.setDraft(phone, { time: draft.time });
+                await db.sessions.setDraft(phone, {}, clinicId);
             }
 
             // 3. Extração do Nome (se foi solicitado explicitamente no histórico)
@@ -384,7 +396,7 @@ class ConversationController {
                 const greetingBlocklist = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|obrigad[oa]|sim|não|nao|ok|beleza|valeu|tchau|confirmar|cancelar|remarcar|alterar|agendar|menu)$/i;
                 if (!greetingBlocklist.test(sanitizedText.trim())) {
                     draft.name = sanitizedText;
-                    await db.sessions.setDraft(phone, { name: draft.name });
+                    await db.sessions.setDraft(phone, {}, clinicId);
                 }
             }
 
@@ -401,7 +413,7 @@ class ConversationController {
             }
             if (wasOtherDescriptionRequested && sanitizedText.length > 2 && !sanitizedText.includes('Selecionei')) {
                 draft.notes = sanitizedText;
-                await db.sessions.setDraft(phone, { notes: draft.notes });
+                await db.sessions.setDraft(phone, {}, clinicId);
                 processedText = `${sanitizedText}\n[SISTEMA: descrição do paciente para a opção Outro coletada. Avance para a escolha da data (Passo 2)]`;
             }
 
@@ -411,13 +423,13 @@ class ConversationController {
             const dateMatch = processedText.match(DATE_SELECTION_REGEX);
             if (dateMatch) {
                 const selectedDate = dateMatch[1];
-                const slots = await calendarService.getAvailableSlots(selectedDate);
+                const slots = await calendarService.getAvailableSlots(selectedDate, clinicId);
                 if (slots.length === 0) {
                     processedText = `${processedText}\n[SISTEMA: Nenhum horário disponível para ${selectedDate}. Informe ao paciente que o dia está cheio e solicite outra data.]`;
                 } else {
                     // Salva a data selecionada no rascunho
                     draft.date = selectedDate;
-                    await db.sessions.setDraft(phone, { date: selectedDate });
+                    await db.sessions.setDraft(phone, {}, clinicId);
                 }
             }
 
@@ -434,10 +446,10 @@ class ConversationController {
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: `${errText}\n[SISTEMA: CPF solicitado, aguardando CPF]` }] });
                 if (history.length > 20) history = history.slice(-20);
-                await db.sessions.set(phone, history);
+                await db.sessions.set(phone, history, clinicId);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, errText).catch(() => {});
+                    await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
                 }
 
                 return {
@@ -455,34 +467,29 @@ class ConversationController {
 
             if (rawCpf) {
                 try {
-                    const foundPatient = await db.patients.findByCpf(rawCpf);
+                    const foundPatient = await db.patients.findByCpf(rawCpf, clinicId);
 
                     if (foundPatient) {
-                        // Verifica se é agendamento familiar/dependente legítimo (ex: filho, esposa, mãe, outra pessoa)
-                        const historyText = history.map(h => h.parts?.[0]?.text || '').join(' ').toLowerCase();
-                        const currentText = sanitizedText.toLowerCase();
-                        const isFamilyBooking = /filh|esposa|marido|mãe|mae|pai|dependente|outra pessoa|familiar|sobrinh|irmã|irma|irmão|irmao|agendar p\/ outro|outro paciente/.test(historyText + ' ' + currentText);
-
-                        if (foundPatient.phone !== phone && !isFamilyBooking) {
-                            logger.warn('SECURITY', `Tentativa de acesso CPF ${rawCpf} por telefone não autorizado (${phone}). Block aplicado.`);
+                        if (foundPatient.phone !== phone) {
+                            logger.warn('SECURITY', `Tentativa de agendamento de terceiros/familiar para CPF ${rawCpf} por telefone [${phone}]. Transferindo para validação humana.`);
                             
-                            // Persiste a marca de Handoff no banco de dados com contexto da mensagem para evitar bypass
-                            await persistHumanHandoff(phone, patient, history, sanitizedText, '(motivo: CPF de outro telefone)');
+                            // Persiste a marca de Handoff no banco para validação humana segura (LGPD)
+                            await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
 
-                            const blockText = "Não conseguimos confirmar seus dados automaticamente. Vou te transferir para um de nossos atendentes para finalizar.";
+                            const blockText = "Para a segurança dos seus dados e agendamento de familiares, vou te transferir para um de nossos atendentes confirmar os dados com você.";
                             if (!isSimulation) {
-                                await whatsappService.sendTextMessage(phone, blockText).catch(() => {});
+                                await whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken).catch(() => {});
                             }
 
-                            // HARD BLOCK: Aborta o fluxo imediatamente com resposta genérica e sem vazamento de dados.
                             return {
-                                text: blockText,
-                                buttons: [],
-                                showCalendar: false,
-                                showTimeSlots: false,
+                                text:            blockText,
+                                buttons:         [],
+                                showCalendar:    false,
+                                showTimeSlots:   false,
                                 showProceduresList: false,
-                                requireCpf: false,
-                                availableSlots: null,
+                                requireCpf:      false,
+                                procedures:      null,
+                                availableSlots:  null,
                                 transferToHuman: true
                             };
                         } else {
@@ -495,18 +502,18 @@ class ConversationController {
                         }
                     } else {
                         // Vinculação inicial (Cadastro Novo)
-                        await db.patients.updateCpf(phone, rawCpf);
+                        await db.patients.updateCpf(phone, rawCpf, clinicId);
                         processedText = `${sanitizedText}\n[SISTEMA: CPF não localizado. Novo cadastro iniciado para o número atual.]`;
                     }
                 } catch (err) {
                     logger.error('DATABASE_COMMUNICATION', `Falha de comunicação com Supabase: ${err.message}`, err.stack);
 
                     // Persiste a falha técnica para evitar loop infinito
-                    await persistHumanHandoff(phone, patient, history, sanitizedText, '(motivo: falha de infraestrutura)');
+                    await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
 
                     const failText = "Estamos com uma instabilidade técnica temporária. Vou te transferir para um de nossos atendentes continuar seu atendimento.";
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, failText).catch(() => {});
+                        await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
                     }
 
                     return {
@@ -576,7 +583,7 @@ class ConversationController {
                 }
 
                 if (dateStr) {
-                    availableSlots = await calendarService.getAvailableSlots(dateStr);
+                    availableSlots = await calendarService.getAvailableSlots(dateStr, clinicId);
                 } else {
                     logger.warn('SCHEDULING_DATA', `showTimeSlots=true mas nenhuma data extraída da mensagem/histórico [${phone}]`);
                     availableSlots = [];
@@ -591,7 +598,7 @@ class ConversationController {
                             title: "Tratamentos",
                             rows: PROCEDURES_RICH
                         }];
-                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades");
+                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken);
                     } else if (aiResponse.showCalendar) {
                         const rows = [];
                         const brtString = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
@@ -658,7 +665,7 @@ class ConversationController {
                             title: "Datas Disponíveis",
                             rows
                         }];
-                        await whatsappService.sendListMessage(phone, responseText, "Ver Calendário", sections, "Calendário");
+                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken);
                     } else if (aiResponse.showTimeSlots) {
                         if (availableSlots && availableSlots.length > 0) {
                             // Limita a 4 opções por período para sobrar espaço para o botão "Outros horários..."
@@ -689,19 +696,19 @@ class ConversationController {
                                 });
                             }
 
-                            await whatsappService.sendListMessage(phone, responseText, "Ver Horários", sections, "Horários Disponíveis");
+                            await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken);
                         } else {
-                            await whatsappService.sendTextMessage(phone, responseText);
+                            await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken);
                         }
                     } else if (aiResponse.buttons?.length > 0) {
-                        await whatsappService.sendButtonMessage(phone, responseText, aiResponse.buttons);
+                        await whatsappService.sendButtonMessage(phone, responseText, aiResponse.buttons, phoneId, clinicToken);
                     } else {
-                        await whatsappService.sendTextMessage(phone, responseText);
+                        await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken);
                     }
                 } catch (sendError) {
                     logger.error('WHATSAPP_SEND', `Falha ao enviar mensagem via WhatsApp API: ${sendError.message}`, sendError.stack);
                     responseText = 'Desculpe, estou com dificuldades técnicas. Retorno em breve.';
-                    await whatsappService.sendTextMessage(phone, responseText).catch(() => {});
+                    await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
                 }
             }
 
@@ -728,7 +735,7 @@ class ConversationController {
                 history = history.slice(-20);
             }
 
-            await db.sessions.set(phone, history);
+            await db.sessions.set(phone, history, clinicId);
             await db.conversations.log(patient.id, 'assistant', responseText);
 
             // Definição da lista real de procedimentos centralizada no Backend
@@ -750,7 +757,7 @@ class ConversationController {
             logger.error('CONTROLLER_ERROR', `Erro no controller [${phone}]: ${error.message}`, error.stack);
             const errText = 'Desculpe, ocorreu um erro interno.';
             if (!isSimulation) {
-                await whatsappService.sendTextMessage(phone, errText).catch(() => {});
+                await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
             }
             return {
                 text:            errText,

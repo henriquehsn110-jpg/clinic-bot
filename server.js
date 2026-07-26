@@ -158,6 +158,23 @@ const processWebhookInbox = async () => {
                             const value = change.value;
                             if (!value) continue;
 
+                            // MULTI-TENANT: Resolve a clínica dona deste número
+                            const phoneNumberId = value.metadata?.phone_number_id;
+                            let clinicId = null;
+                            if (phoneNumberId) {
+                                const clinic = await db.clinics.findByPhoneNumberId(phoneNumberId);
+                                if (clinic) clinicId = clinic.id;
+                            }
+                            if (!clinicId) {
+                                const defaultClinic = await db.clinics.findBySlug('clinica-modelo') || (await db.clinics.getAll())[0];
+                                if (defaultClinic) {
+                                    clinicId = defaultClinic.id;
+                                    if (phoneNumberId) {
+                                        await db.supabase.from('clinics').update({ phone_number_id: phoneNumberId }).eq('id', defaultClinic.id).catch(() => {});
+                                    }
+                                }
+                            }
+
                             // Processa Statuses de Entrega
                             if (value.statuses && Array.isArray(value.statuses)) {
                                 for (const statusObj of value.statuses) {
@@ -198,11 +215,11 @@ const processWebhookInbox = async () => {
                                         }
 
                                         if (text) {
-                                            console.log(`📩 [WEBHOOK] Mensagem de [${phone}]: "${text}"`);
-                                            await conversationController.handleIncomingMessage(phone, text, false);
+                                            console.log(`📩 [WEBHOOK] Mensagem de [${phone}]: "${text}" para Clínica [${clinicId}]`);
+                                            await conversationController.handleIncomingMessage(phone, text, false, clinicId, phoneNumberId);
                                         } else {
                                             console.log(`📩 [WEBHOOK] Mensagem com formato não suportado recebida de [${phone}]`);
-                                            await whatsappService.sendTextMessage(phone, "Por enquanto, eu só consigo responder mensagens de texto e cliques em botões. Como posso te ajudar por texto?").catch(() => {});
+                                            await whatsappService.sendTextMessage(phone, "Por enquanto, eu só consigo responder mensagens de texto e cliques em botões. Como posso te ajudar por texto?", phoneNumberId).catch(() => {});
                                         }
                                     } catch (messageErr) {
                                         // ATENÇÃO: attemptProcessing já marcou messageId como processado
