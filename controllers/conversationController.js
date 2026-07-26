@@ -370,14 +370,14 @@ class ConversationController {
             const selectedProc = PROCEDURES_LIST.find(p => sanitizedText.toLowerCase() === p.toLowerCase());
             if (selectedProc) {
                 draft.type = selectedProc;
-                await db.sessions.setDraft(phone, {}, clinicId);
+                await db.sessions.setDraft(phone, draft, clinicId);
             }
 
             // 2. Extração do Horário
             const timeMatch = processedText.match(/Selecionei o horário:\s*(\d{2}:\d{2})/i) || processedText.match(/^\b(\d{2}:\d{2})\b$/);
             if (timeMatch) {
                 draft.time = timeMatch[1];
-                await db.sessions.setDraft(phone, {}, clinicId);
+                await db.sessions.setDraft(phone, draft, clinicId);
             }
 
             // 3. Extração do Nome (se foi solicitado explicitamente no histórico)
@@ -396,7 +396,7 @@ class ConversationController {
                 const greetingBlocklist = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|obrigad[oa]|sim|não|nao|ok|beleza|valeu|tchau|confirmar|cancelar|remarcar|alterar|agendar|menu)$/i;
                 if (!greetingBlocklist.test(sanitizedText.trim())) {
                     draft.name = sanitizedText;
-                    await db.sessions.setDraft(phone, {}, clinicId);
+                    await db.sessions.setDraft(phone, draft, clinicId);
                 }
             }
 
@@ -413,7 +413,7 @@ class ConversationController {
             }
             if (wasOtherDescriptionRequested && sanitizedText.length > 2 && !sanitizedText.includes('Selecionei')) {
                 draft.notes = sanitizedText;
-                await db.sessions.setDraft(phone, {}, clinicId);
+                await db.sessions.setDraft(phone, draft, clinicId);
                 processedText = `${sanitizedText}\n[SISTEMA: descrição do paciente para a opção Outro coletada. Avance para a escolha da data (Passo 2)]`;
             }
 
@@ -429,7 +429,7 @@ class ConversationController {
                 } else {
                     // Salva a data selecionada no rascunho
                     draft.date = selectedDate;
-                    await db.sessions.setDraft(phone, {}, clinicId);
+                    await db.sessions.setDraft(phone, draft, clinicId);
                 }
             }
 
