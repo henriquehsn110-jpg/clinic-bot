@@ -86,3 +86,8 @@
 - **Sintoma:** Ao tentar agendar para `2026-07-27 08:00`, a gravação no Supabase retornava erro `23505` (`appointments_active_slot_unique`), enquanto a busca de vagas continuava exibindo `08:00` como disponível.
 - **Causa Raiz:** Existia um agendamento antigo na tabela `appointments` com `clinic_id: null` para `2026-07-27 08:00:00`. A função `getOccupiedSlots` filtrava por `clinic_id = 'uuid'`, ignorando a linha órfã, enquanto a constraint única do PostgreSQL bloqueava qualquer novo insert para a mesma data/horário.
 - **Resolução:** Sanitizadas todas as linhas órfãs nas tabelas `patients` e `appointments` atribuindo o `clinic_id` correto (fazendo `08:00` ser devidamente filtrado das vagas disponíveis) e ajustado o manipulador de conflito para resetar o rascunho e abrir o menu de datas do WhatsApp se houver conflito.
+
+#### 9. Re-exibição dos Botões de Confirmação na Mensagem de Sucesso
+- **Sintoma:** Após o agendamento ser gravado com sucesso, a mensagem final de confirmação voltava a exibir os botões `["Confirmar", "Agendar p/ Outro", "Alterar"]`. Ao clicar em "Confirmar" novamente, o bot pedia para recomeçar o processo.
+- **Causa Raiz:** O método `setDraft(phone, null, clinicId)` limpava o rascunho no Supabase, mas o objeto `draft` na memória local da requisição ainda continha os valores antigos. A máquina de estados no final da função avaliava o rascunho como completo e anexava os 3 botões de confirmação.
+- **Resolução:** Adicionada a limpeza das propriedades do objeto `draft` em memória (`draft.type = null; draft.date = null; draft.time = null...`) imediatamente após `calendarService.scheduleAppointment`, garantindo que a mensagem de sucesso não exiba botões de confirmação redundantes.
