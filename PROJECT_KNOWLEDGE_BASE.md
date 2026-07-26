@@ -1,83 +1,106 @@
-# 🧠 ClinicaBot SaaS Pro — Base Completa de Conhecimento e Estado do Projeto (Master Knowledge Base)
+# 🧠 ClinicaBot SaaS Pro — Mapa Mestre de Regras e Arquitetura (v11.0 Master Knowledge Base)
 
-> **Documento de Transferência de Contexto para Novas Conversas e Agentes**  
-> **Última Atualização:** 21 de Julho de 2026  
-> **Status Geral do Projeto:** 🟢 **100% Auditado, Testado e Produção-Ready**
+> **Documento Canônico de Conhecimento e Regras de Negócio Invioláveis**  
+> **Última Atualização:** 26 de Julho de 2026  
+> **Status Geral do Sistema:** 🟢 **v11.0 — Multi-Tenant RLS Aprovado & Blindado contra Injeções**
 
 ---
 
-## 1. 📐 Visão Geral da Arquitetura & Stack
+## 1. 📐 Visão Geral da Arquitetura & Stack Tecnológica
 
-* **Nome do Sistema:** ClinicaBot SaaS Pro (Multi-Tenant)
+* **Nome do Sistema:** ClinicaBot SaaS Pro (Arquitetura Multi-Tenant)
 * **Backend:** Node.js / Express (`clinic-bot-backend/server.js`, porta `3000`)
-* **Banco de Dados:** Supabase (PostgreSQL Multi-Tenant com RLS e idempotência)
+* **Banco de Dados:** Supabase (PostgreSQL Multi-Tenant com RLS, constraint composta e idempotência)
 * **Inteligência Artificial:** Google Gemini 2.0 / 1.5 Flash (IA Conversacional "Ana")
-* **Mensageria:** Meta WhatsApp Cloud API (Simulador web local em `clinic-bot-simulator/index.html`)
-* **Frontend Recepção:** HTML/JS puro purificado contra XSS (`dashboard.html` em `/public`)
-* **Criptografia LGPD:** AES-256-GCM para CPFs de pacientes via `CPF_ENCRYPTION_KEY`
+* **Mensageria:** Meta WhatsApp Cloud API (Credenciais ativas em `.env` + suporte a múltiplos tokens por clínica)
+* **Servidor de Produção Nuvem:** Render (`https://clinic-bot-zksc.onrender.com`) — Status: 🟢 Live
+* **URL do Webhook Meta WhatsApp:** `https://clinic-bot-zksc.onrender.com/api/webhook`
+* **URL do Dashboard de Recepção:** `https://clinic-bot-zksc.onrender.com/dashboard`
+* **URL do Health Check:** `https://clinic-bot-zksc.onrender.com/health`
+* **Criptografia LGPD:** AES-256-GCM para CPFs via `CPF_ENCRYPTION_KEY` + HMAC-SHA256 Blind Indexing (`cpf_hash`)
 
 ---
 
-## 2. 🔐 Regras de Segurança e Conformidade Implementadas
+## 2. 🛡️ Regras de Negócio & Diretrizes Invioláveis (Core Rules)
 
-1. **Proteção contra XSS no Frontend:**
-   * Todas as variáveis dinâmicas interpoladas no HTML utilizam a função sanitizadora `esc(str)`.
-   * Substituição de todos os atributos inline `onclick="fn('${id}')"` por **Event Delegation** via dataset `data-*`.
-   * Todos os links `target="_blank"` incluem obrigatoriamente `rel="noopener noreferrer"`.
-   * Exportação CSV sanitizada contra Excel/Sheets Formula Injection (`=`, `+`, `-`, `@`).
+1. **Persona "Ana" & Recepção:**
+   * Apresentar-se como "Ana" acompanhada do emoji `😊` na 1ª mensagem de cada atendimento.
+   * Tom empático, profissional e resolutivo. Preços exatos de procedimentos complexos não são revelados sem avaliação (Regra CFO).
 
-2. **Segurança de APIs e Webhooks:**
-   * Validação rigorosa de assinatura HMAC (`X-Hub-Signature-256`) Meta WhatsApp em todas as rotas `/webhook` (retorna HTTP 403 se forjada).
-   * Mascaramento estrito de LGPD no endpoint `/api/dashboard/data` (retorna `cpfMasked` e omite o campo `cpf` bruto).
-   * Exigência de Bearer Token JWT para todas as rotas do Dashboard.
-   * Chave de serviço Supabase rotacionada e isolada em `process.env.SUPABASE_SERVICE_KEY` sem vazamentos.
+2. **Fuso Horário BRT (`America/Sao_Paulo`):**
+   * **NUNCA** utilizar `.toISOString().split('T')[0]` para cálculos de datas locais.
+   * Usar padronização explícita: `new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })`.
+   * Toda data apresentada ao paciente deve estar obrigatoriamente no formato brasileiro `DD/MM/YYYY`.
+
+3. **Sincronização Dashboard → WhatsApp:**
+   * Qualquer alteração de status feita pela secretária no Dashboard (Confirmar / Cancelar / Reagendar) deve disparar notificação automática via WhatsApp ao paciente.
+
+4. **Conformidade LGPD & Criptografia:**
+   * **NUNCA** expor CPF bruto em respostas de APIs públicas ou do Dashboard. O endpoint `/api/dashboard/data` retorna exclusivamente `cpfMasked` (`•••.•••.•••-••`).
+   * CPFs de terceiros fornecidos sob o mesmo telefone exigem Handoff Humano imediato.
+
+5. **Validação de Webhooks & Segurança Meta:**
+   * Todas as rotas `/webhook` e `/api/webhook` executam obrigatoriamente `verifySignature(req)` via `crypto.timingSafeEqual` contra `APP_SECRET`.
+   * Rejeita payloads forjados com HTTP 403 Forbidden.
+
+6. **Frontend & Prevenção XSS / Formula Injection:**
+   * Toda interpolação dinâmica em `innerHTML` passa obrigatoriamente por `esc(str)`.
+   * Proibição de `onclick` inline interpolado — uso exclusivo de `data-*` + Event Delegation.
+   * Todos os links `target="_blank"` contêm `rel="noopener noreferrer"`.
+   * Exportação CSV sanitizada prefixando `=`, `+`, `-`, `@`, `\t`, `\r` com aspas simples (`'`).
 
 ---
 
-## 3. 🕒 Fuso Horário e Serviços Backend
+## 3. 🏢 Arquitetura Multi-Tenant & Provisionamento de Clínicas
 
-1. **Fuso Horário BRT (`America/Sao_Paulo`):**
-   * Padronizado via `new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })` no `dashboardController.js` e `calendarService.js` para evitar virada de data prematura às 21:00 UTC.
+1. **Constraint de Banco de Dados (`patients_phone_clinic_unique`):**
+   * A tabela `patients` utiliza a constraint composta `UNIQUE (phone, clinic_id)`.
+   * Garante que o mesmo telefone pode ser cadastrado em clínicas diferentes mantendo o isolamento total.
 
-2. **Módulo de Lembretes Automáticos (`services/reminderService.js`):**
-   * Consulta os agendamentos do dia no fuso BRT.
-   * Dispara mensagens personalizadas via WhatsApp solicitando *CONFIRMAR* ou *REMARCAR*.
-   * Idempotência garantida via `Set` de chave por dia (evita envios duplicados no mesmo dia).
+2. **Provisionamento Automatizado de Tenants (`scripts/onboard_tenant.js`):**
+   * Permite cadastrar novas clínicas via CLI ou módulo Node.js:
+   ```bash
+   node scripts/onboard_tenant.js --name "Clínica Exemplo" --slug "clinica-exemplo" --phone-id "ID_META" --token "TOKEN_META"
+   ```
+   * Provisiona a clínica na tabela `clinics` e gera automaticamente a grade de horários padrão em `clinic_hours`.
+
+3. **Isolamento de Dados (RLS):**
+   * Todas as consultas a `patients`, `appointments` e `clinic_hours` são filtradas por `clinic_id`.
+   * Teste de RLS (`tests/test_tenant_rls_isolation.js`) comprova vazamento 0 entre organizações.
 
 ---
 
-## 4. 🧪 Suíte Completa de Testes Automatizados
+## 4. 🧪 Suíte Completa de Testes & Auditorias Automatizadas
 
-O projeto possui **24 testes unitários e de integração + teste de carga** que podem ser rodados a qualquer momento no terminal:
+Para validar a integridade do sistema a qualquer momento, execute no diretório `clinic-bot-backend`:
 
 ```bash
-# Executa a suíte principal de testes de segurança, backend e frontend (20/20 PASS)
+# 1. Suíte Principal Overnight (20 testes de segurança, frontend e backend)
 node tests/overnight_test_suite.js
 
-# Executa os testes unitários do serviço de lembretes (4/4 PASS)
+# 2. Testes de Lembretes Automáticos e Fuso BRT (4 testes)
 node tests/test_reminders.js
 
-# Executa o teste de estresse de 100 requisições simultâneas concorrentes (100/100 HTTP 200)
+# 3. Teste de Isolamento RLS Multi-Tenant (Prova de 0 vazamentos)
+node tests/test_tenant_rls_isolation.js
+
+# 4. Auditoria Red-Team do Webhook HMAC SHA-256 (6 cenários de ataque)
+node tests/test_hmac_webhook_injection.js
+
+# 5. Teste de Carga e Estresse (100 requisições simultâneas concorrentes)
 node tests/stress_test.js
 ```
 
 ---
 
-## 5. 🛠️ Branch Git & Histórico de Commits
+## 5. 📂 Estrutura de Arquivos Principais
 
-* **Branch Atual:** `overnight-qa-2026-07-20`
-* **Commits Realizados:**
-  1. `d26b7a8` — `fix(timezone): padronizacao para America/Sao_Paulo no calculo da data de hoje no dashboard e calendarService`
-  2. `139388e` — `fix(security): remocao de chave de servico hardcoded em migrate_cpf.js para uso de variaveis de ambiente`
-  3. `13a1d52` — `fix(security): remocao do campo de CPF bruto das respostas da API do dashboard para conformidade LGPD`
-  4. `1252387` — `feat(qa): adicao da suite automatizada de testes overnight e reforco de HMAC webhook`
-  5. `155ab02` — `feat(reminders): criacao do servico de lembretes diarios por whatsapp com fuso BRT e testes unitarios`
-  6. `01650d6` — `feat(qa): adicao da suite de teste de carga (stress_test.js) com 100 requisicoes concorrentes 100% aprovadas`
+* **[server.js](file:///c:/Users/letic/OneDrive/Desktop/ClinicaBot/clinic-bot-backend/server.js):** Ponto de entrada, rotas do servidor, validação HMAC e cron de lembretes.
+* **[databaseService.js](file:///c:/Users/letic/OneDrive/Desktop/ClinicaBot/clinic-bot-backend/services/databaseService.js):** Camada de dados Supabase com suporte RLS, AES-256 e Blind Indexing.
+* **[aiService.js](file:///c:/Users/letic/OneDrive/Desktop/ClinicaBot/clinic-bot-backend/services/aiService.js):** Integração Gemini IA (Persona Ana, prompts e contexto).
+* **[conversationController.js](file:///c:/Users/letic/OneDrive/Desktop/ClinicaBot/clinic-bot-backend/controllers/conversationController.js):** Máquina de estados conversacional do bot.
+* **[dashboard.html](file:///c:/Users/letic/OneDrive/Desktop/ClinicaBot/clinic-bot-backend/public/dashboard.html):** Painel da recepção em Vanilla JS/CSS com proteção XSS e Long Polling.
+* **[onboard_tenant.js](file:///c:/Users/letic/OneDrive/Desktop/ClinicaBot/clinic-bot-backend/scripts/onboard_tenant.js):** Script de onboarding de novas clínicas.
 
 ---
-
-## 6. 🚀 Próximos Passos Sugeridos
-
-1. Fazer merge da branch `overnight-qa-2026-07-20` para a `main`.
-2. Ativar o agendador automático (cron job) do `reminderService.processDailyReminders()` no boot do `server.js` (ex: todos os dias às 08:00).
-3. Realizar o deploy do servidor Node.js e conectar com as credenciais oficiais da Meta WhatsApp Cloud API em produção.
+*Este documento é a referência única da verdade para todos os agentes e desenvolvedores do ClinicaBot SaaS Pro.*
