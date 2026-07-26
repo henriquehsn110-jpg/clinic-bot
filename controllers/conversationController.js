@@ -279,7 +279,7 @@ class ConversationController {
                             await db.sessions.set(phone, history, clinicId);
 
                             if (!isSimulation) {
-                                await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
+                                await whatsappService.sendTextMessage(phone, conflictText, phoneId, clinicToken).catch(() => {});
                             }
 
                             return {
@@ -493,7 +493,7 @@ class ConversationController {
                                 transferToHuman: true
                             };
                         } else {
-                            if (isFamilyBooking) {
+                            if (draft?.is_family_booking) {
                                 logger.info('FAMILY_BOOKING', `Agendamento familiar autorizado para CPF ${rawCpf} pelo telefone ${phone}`);
                                 processedText = `${sanitizedText}\n[SISTEMA: Agendamento familiar/dependente detectado e autorizado.]`;
                             } else {
@@ -513,7 +513,7 @@ class ConversationController {
 
                     const failText = "Estamos com uma instabilidade técnica temporária. Vou te transferir para um de nossos atendentes continuar seu atendimento.";
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
+                        await whatsappService.sendTextMessage(phone, failText, phoneId, clinicToken).catch(() => {});
                     }
 
                     return {
@@ -708,7 +708,7 @@ class ConversationController {
                 } catch (sendError) {
                     logger.error('WHATSAPP_SEND', `Falha ao enviar mensagem via WhatsApp API: ${sendError.message}`, sendError.stack);
                     responseText = 'Desculpe, estou com dificuldades técnicas. Retorno em breve.';
-                    await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
+                    await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken).catch(() => {});
                 }
             }
 
