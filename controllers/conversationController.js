@@ -298,9 +298,42 @@ class ConversationController {
                         throw dbErr;
                     }
                 } else {
+                    // Verifica se o paciente já possui agendamento recém-criado (evita falso alerta em clique duplo)
+                    let activeAppt = null;
+                    if (patient && patient.id) {
+                        const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(() => []);
+                        activeAppt = appts.find(a => a.status === 'pending' || a.status === 'confirmed');
+                    }
+
+                    if (activeAppt) {
+                        const dateFmt = activeAppt.appointment_date.split('-').reverse().join('/');
+                        const timeFmt = activeAppt.appointment_time.substring(0, 5);
+                        const confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊`;
+                        
+                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                        history.push({ role: 'model', parts: [{ text: confirmText }] });
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text: confirmText,
+                            buttons: ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"],
+                            showCalendar: false,
+                            showTimeSlots: false,
+                            showProceduresList: false,
+                            requireCpf: false,
+                            procedures: null,
+                            availableSlots: null,
+                            transferToHuman: false
+                        };
+                    }
+
                     logger.warn('SCHEDULING_CONFIRMATION_FAILED', `Rascunho incompleto durante confirmação para [${phone}]: ${JSON.stringify(draft)}`);
                     
-                    const errText = 'Não consegui localizar todos os dados da sua consulta. Vamos recomeçar a escolha?';
+                    const errText = 'Não consegui localizar os dados do agendamento. Que tal escolher o procedimento novamente abaixo?';
                     
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                     history.push({ role: 'model', parts: [{ text: `${errText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
