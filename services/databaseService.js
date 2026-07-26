@@ -464,11 +464,15 @@ const sessions = {
             return data;
         });
 
+        // DEBUG TEMPORÁRIO — remover após diagnóstico
+        console.log(`🔍 [SESSION_DEBUG] get(${phone}, ${clinicId}) => found: ${!!data}, histLen: ${data?.history?.length || 0}`);
+
         if (!data) return [];
 
         // Verifica TTL manualmente (o cron limpa, mas aqui garantimos consistência)
         const diffMs = Date.now() - new Date(data.last_activity).getTime();
         if (diffMs > SESSION_TTL_MINUTES * 60 * 1000) {
+            console.log(`🔍 [SESSION_DEBUG] TTL expirado (${Math.round(diffMs/60000)} min). Deletando sessão.`);
             await sessions.delete(phone, clinicId);
             return [];
         }
@@ -493,17 +497,26 @@ const sessions = {
                 .select()
                 .maybeSingle();
 
-            if (updateErr) throw new Error(`sessions.set (update): ${updateErr.message}`);
+            if (updateErr) {
+                console.error(`🔍 [SESSION_DEBUG] set UPDATE error: ${updateErr.message}`);
+                throw new Error(`sessions.set (update): ${updateErr.message}`);
+            }
 
             // 2. Se a sessão já existia e foi atualizada, retorna
-            if (data) return data;
+            if (data) {
+                console.log(`🔍 [SESSION_DEBUG] set(${phone}) => UPDATE OK, histLen: ${history.length}`);
+                return data;
+            }
 
             // 3. Se não existia, insere uma nova sessão
-            const { error: insertErr } = await supabase
+            const { data: insertData, error: insertErr } = await supabase
                 .from('sessions')
-                .insert({ phone, clinic_id: clinicId, history, last_activity });
+                .insert({ phone, clinic_id: clinicId, history, last_activity })
+                .select('id')
+                .single();
 
             if (insertErr) {
+                console.error(`🔍 [SESSION_DEBUG] set INSERT error: code=${insertErr.code} msg=${insertErr.message}`);
                 // Se houve conflito de concorrência (23505), tenta update de novo
                 if (insertErr.code === '23505') {
                     const { error: retryErr } = await supabase
@@ -515,6 +528,7 @@ const sessions = {
                 }
                 throw new Error(`sessions.set (insert): ${insertErr.message}`);
             }
+            console.log(`🔍 [SESSION_DEBUG] set(${phone}) => INSERT OK, id: ${insertData?.id}, histLen: ${history.length}`);
         });
     },
 
