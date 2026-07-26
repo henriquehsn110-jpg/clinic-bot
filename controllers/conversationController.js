@@ -266,6 +266,9 @@ class ConversationController {
                             logger.info('SCHEDULING', `Agendamento criado com sucesso via WhatsApp/Simulador para [${phone}] - ${draft.date} ${draft.time}`);
                         }
 
+                        const apptDate = draft.date;
+                        const apptTime = draft.time;
+
                         // Limpa o rascunho após criação com sucesso (no banco e na memória local da requisição)
                         draft.type = null;
                         draft.date = null;
@@ -273,6 +276,29 @@ class ConversationController {
                         draft.name = null;
                         draft.notes = null;
                         await db.sessions.setDraft(phone, null, clinicId);
+
+                        const dateFmt = apptDate.split('-').reverse().join('/');
+                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
+
+                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                        history.push({ role: 'model', parts: [{ text: confirmText }] });
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text: confirmText,
+                            buttons: [],
+                            showCalendar: false,
+                            showTimeSlots: false,
+                            showProceduresList: false,
+                            requireCpf: false,
+                            procedures: null,
+                            availableSlots: null,
+                            transferToHuman: false
+                        };
 
                     } catch (dbErr) {
                         if (dbErr.code === '23505' || dbErr.message.includes('23505') || dbErr.message.includes('unique_violation')) {
