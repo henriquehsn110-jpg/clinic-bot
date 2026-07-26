@@ -91,3 +91,8 @@
 - **Sintoma:** Após o agendamento ser gravado com sucesso, a mensagem final de confirmação voltava a exibir os botões `["Confirmar", "Agendar p/ Outro", "Alterar"]`. Ao clicar em "Confirmar" novamente, o bot pedia para recomeçar o processo.
 - **Causa Raiz:** O método `setDraft(phone, null, clinicId)` limpava o rascunho no Supabase, mas o objeto `draft` na memória local da requisição ainda continha os valores antigos. A máquina de estados no final da função avaliava o rascunho como completo e anexava os 3 botões de confirmação.
 - **Resolução:** Adicionada a limpeza das propriedades do objeto `draft` em memória (`draft.type = null; draft.date = null; draft.time = null...`) imediatamente após `calendarService.scheduleAppointment`, garantindo que a mensagem de sucesso não exiba botões de confirmação redundantes.
+
+#### 10. Fallthrough Sem Retorno no `isConfirming` Gerando Mensagem Falsa de CPF Inválido
+- **Sintoma:** Ao clicar em "Confirmar", a consulta era criada com 100% de sucesso no banco Supabase, mas o texto da resposta enviada ao WhatsApp do paciente trazia a mensagem `"O CPF informado é inválido. Por favor, informe seu CPF de 11 dígitos para prosseguirmos."`.
+- **Causa Raiz:** No `conversationController.js`, o bloco `if (isConfirming)` efetuava o agendamento no Supabase e limpava o rascunho, porém não possuía um `return` explícito ao final da criação. A execução continuava e caía nas verificações seguintes de extração de CPF. Como a palavra `"Confirmar"` não é um CPF de 11 dígitos, a resposta era sobrescrita com o erro de CPF.
+- **Resolução:** Inserido o `return` explícito com o payload completo e estruturado da mensagem de confirmação de agendamento ao finalizar a gravação no `isConfirming`.
