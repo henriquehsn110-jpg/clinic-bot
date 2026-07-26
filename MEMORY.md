@@ -71,3 +71,8 @@
 - **Sintoma:** Código ambíguo ao validar se o horário selecionado estava vago.
 - **Causa Raiz:** A variável que recebia os horários **disponíveis** retornados por `calendarService.getAvailableSlots` chamava-se `occupied`.
 - **Resolução:** Renomeada a variável para `availableSlots` nas linhas 283-287, refletindo a semântica correta do método.
+
+#### 6. Trava Determinística de Estado para Exibição do Calendário (`showCalendar`)
+- **Sintoma:** Em variações da resposta da LLM, o campo `showCalendar` vinha como `false` ao selecionar uma especialidade (ex: "Consulta geral") ou clicar em "Outras datas...", fazendo o bot responder apenas em texto em vez de enviar o menu de datas do WhatsApp.
+- **Causa Raiz:** Dependência exclusiva da saída probabilística da LLM para acionar componentes visuais da Meta WhatsApp API.
+- **Resolução:** Inserida trava determinística no `conversationController.js`: ao identificar a escolha de um procedimento ou o clique em "Outras datas...", o estado `aiResponse.showCalendar` é forçado para `true` garantindo o envio do menu interativo de datas.
