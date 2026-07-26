@@ -1,3 +1,12 @@
+
+function chunkArray(array, size) {
+    const chunked = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunked.push(array.slice(i, i + size));
+    }
+    return chunked;
+}
+
 /**
  * ClinicaBot SaaS Pro — Módulo de Lembretes Automáticos de Consultas
  * 
@@ -45,56 +54,90 @@ class ReminderService {
         };
 
         try {
-            const todayAppts = await calendarService.getTodayAppointments();
-            stats.totalToday = todayAppts ? todayAppts.length : 0;
+            const clinics = await db.clinics.getAll();
+            
+            for (const clinic of clinics) {
+                const todayAppts = await calendarService.getTodayAppointments(clinic.id);
+                if (!todayAppts || todayAppts.length === 0) continue;
+                
+                stats.totalToday += todayAppts.length;
 
-            if (!todayAppts || todayAppts.length === 0) {
-                logger.info('REMINDERS', 'Nenhum agendamento encontrado para o dia de hoje.');
-                return stats;
-            }
+                for (const appt of todayAppts) {
+                    const reminderKey = `${appt.id}_${todayStr}`;
 
-            for (const appt of todayAppts) {
-                const reminderKey = `${appt.id}_${todayStr}`;
-
-                // Evita disparo duplicado no mesmo dia
-                if (this.processedReminders.has(reminderKey)) {
-                    stats.skipped++;
-                    stats.details.push({ id: appt.id, status: 'skipped', reason: 'Já enviado hoje' });
-                    continue;
-                }
-
-                const patientName = appt.patients?.name || 'Paciente';
-                const phone = appt.patients?.phone || appt.phone;
-                const time = (appt.appointment_time || '').substring(0, 5);
-                const procType = appt.type || 'Consulta';
-
-                if (!phone) {
-                    stats.skipped++;
-                    stats.details.push({ id: appt.id, status: 'skipped', reason: 'Telefone não encontrado' });
-                    continue;
-                }
-
-                const reminderMsg = `Olá, ${patientName}! 😊 Passando para lembrar da sua consulta de *${procType}* agendada para hoje às *${time}* na clínica.\n\nPor favor, responda *CONFIRMAR* se puder comparecer ou digite *REMARCAR* caso precise alterar seu horário.`;
-
-                try {
-                    if (!isSimulation) {
-                        if (process.env.USE_WHATSAPP_TEMPLATES === 'true') {
-                            const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE || 'lembrete_consulta_clinica';
-                            await whatsappService.sendTemplateMessage(phone, templateName, 'pt_BR', [patientName, procType, time]);
-                        } else {
-                            await whatsappService.sendTextMessage(phone, reminderMsg);
-                        }
+                    // Evita disparo duplicado no mesmo dia
+                    // 1. Check in-memory
+                    if (this.processedReminders.has(reminderKey)) {
+                        stats.skipped++;
+                        stats.details.push({ id: appt.id, status: 'skipped', reason: 'Já enviado hoje (memória)' });
+                        continue;
                     }
 
-                    this.processedReminders.add(reminderKey);
-                    stats.sent++;
-                    stats.details.push({ id: appt.id, phone, time, status: 'sent' });
-                    logger.info('REMINDER_SENT', `Lembrete enviado com sucesso para [${phone}] - consulta ${time}`);
+                    // 2. Check DB (Durabilidade P5)
+                    const { data: alreadySent } = await db.supabase
+                        .from('reminder_logs')
+                        .select('id')
+                        .eq('appointment_id', appt.id)
+                        .eq('clinic_id', clinic.id)
+                        .gte('sent_at', `${todayStr}T00:00:00Z`)
+                        .lte('sent_at', `${todayStr}T23:59:59Z`)
+                        .maybeSingle();
 
-                } catch (sendErr) {
-                    stats.failed++;
-                    stats.details.push({ id: appt.id, phone, status: 'failed', error: sendErr.message });
-                    logger.error('REMINDER_FAILED', `Falha ao enviar lembrete para [${phone}]: ${sendErr.message}`, sendErr.stack);
+                    if (alreadySent) {
+                        this.processedReminders.add(reminderKey); // Sync in-memory cache
+                        stats.skipped++;
+                        stats.details.push({ id: appt.id, status: 'skipped', reason: 'Já enviado hoje (banco)' });
+                        continue;
+                    }
+
+                    const patientName = appt.patients?.name || 'Paciente';
+                    const phone = appt.patients?.phone || appt.phone;
+                    const time = (appt.appointment_time || '').substring(0, 5);
+                    const procType = appt.type || 'Consulta';
+
+                    if (!phone) {
+                        stats.skipped++;
+                        stats.details.push({ id: appt.id, status: 'skipped', reason: 'Telefone não encontrado' });
+                        continue;
+                    }
+
+                    const reminderMsg = `Olá, ${patientName}! 😊 Passando para lembrar da sua consulta de *${procType}* agendada para hoje às *${time}* na clínica.\n\nPor favor, responda *CONFIRMAR* se puder comparecer ou digite *REMARCAR* caso precise alterar seu horário.`;
+
+                    try {
+                        if (!isSimulation) {
+                            const clinicToken = clinic.whatsapp_token || clinic.token || null;
+                            if (process.env.USE_WHATSAPP_TEMPLATES === 'true') {
+                                const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE || 'lembrete_consulta_clinica';
+                                await whatsappService.sendTemplateMessage(phone, templateName, 'pt_BR', [patientName, procType, time], clinic.phone_number_id, clinicToken);
+                            } else {
+                                await whatsappService.sendTextMessage(phone, reminderMsg, clinic.phone_number_id, clinicToken);
+                            }
+                        }
+
+                        this.processedReminders.add(reminderKey);
+                        stats.sent++;
+                        
+                        // Grava no banco de dados para garantir que não haverá reenvio mesmo com restart
+                        try {
+                            const { error: logErr } = await db.supabase.from('reminder_logs').insert({
+                                appointment_id: appt.id,
+                                clinic_id: clinic.id,
+                                sent_at: new Date().toISOString()
+                            });
+                            if (logErr) {
+                                logger.error('REMINDER_LOG_FAILED', logErr.message);
+                            }
+                        } catch (e) {
+                            logger.error('REMINDER_LOG_FAILED', e.message);
+                        }
+                        stats.details.push({ id: appt.id, phone, time, status: 'sent' });
+                        logger.info('REMINDER_SENT', `Lembrete enviado com sucesso para [${phone}] (Clínica ${clinic.slug}) - consulta ${time}`);
+
+                    } catch (sendErr) {
+                        stats.failed++;
+                        stats.details.push({ id: appt.id, phone, status: 'failed', error: sendErr.message });
+                        logger.error('REMINDER_FAILED', `Falha ao enviar lembrete para [${phone}] (Clínica ${clinic.slug}): ${sendErr.message}`, sendErr.stack);
+                    }
                 }
             }
 

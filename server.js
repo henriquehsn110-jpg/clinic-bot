@@ -170,7 +170,14 @@ const processWebhookInbox = async () => {
                                 if (defaultClinic) {
                                     clinicId = defaultClinic.id;
                                     if (phoneNumberId) {
-                                        await db.supabase.from('clinics').update({ phone_number_id: phoneNumberId }).eq('id', defaultClinic.id).catch(() => {});
+                                        try {
+                                            const { error: updateErr } = await db.supabase.from('clinics').update({ phone_number_id: phoneNumberId }).eq('id', defaultClinic.id);
+                                            if (updateErr) {
+                                                logger.warn('WEBHOOK_INBOX', `Falha ao associar phone_number_id à clínica default: ${updateErr.message}`);
+                                            }
+                                        } catch (updateErr) {
+                                            logger.warn('WEBHOOK_INBOX', `Exceção inesperada ao atualizar clínica default: ${updateErr.message}`);
+                                        }
                                     }
                                 }
                             }
