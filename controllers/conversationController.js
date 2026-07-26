@@ -629,7 +629,7 @@ class ConversationController {
 
                         // Consulta disponibilidade de horários para todos os candidatos em paralelo para otimizar o tempo de resposta do lote
                         const availabilities = await Promise.all(
-                            candidateDates.map(d => calendarService.getAvailableSlots(d.formattedDate).catch(() => []))
+                            candidateDates.map(d => calendarService.getAvailableSlots(d.formattedDate, clinicId).catch(() => []))
                         );
 
                         // Seleciona até 6 dias (deixando 1 slot para a paginação, pois o teto da Meta é 10 e aqui exibimos 7 opções total)

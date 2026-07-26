@@ -1,5 +1,6 @@
 const db = require('../services/databaseService');
 const calendarService = require('../services/calendarService');
+const whatsappService = require('../services/whatsappService');
 const logger = require('../services/logger');
 const crypto = require('crypto');
 
@@ -118,28 +119,44 @@ class DashboardController {
         }
     }
 
-    // Retorna todos os dados da clínica de forma isolada e segura
+    // Retorna dados da clínica com suporte à Paginação e Isolamento Multi-Tenant (P8)
     async getDashboardData(req, res) {
         try {
-            const { clinicId, role } = req.user;
+            const { clinicId, role } = req.user || {};
+            const page = parseInt(req.query.page) || 1;
+            const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+            const offset = (page - 1) * limit;
 
-            // Busca Agendamentos, Pacientes e Sessões de forma resiliente no Supabase
+            // Resolve slug de clínica para UUID caso o login tenha retornado o slug (ex: 'clinica-modelo')
+            let targetClinicId = clinicId;
+            if (clinicId && clinicId !== 'all' && role !== 'superadmin') {
+                // Verifica se clinicId já é UUID válido ou se é slug
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
+                if (!isUuid) {
+                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
+                    if (cRow) targetClinicId = cRow.id;
+                }
+            }
+
+            let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)', { count: 'exact' }).is('deleted_at', null).order('appointment_date', { ascending: true }).range(offset, offset + limit - 1);
+            let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+            let sessionsQuery = db.supabase.from('sessions').select('*').is('deleted_at', null);
+
+            if (targetClinicId && targetClinicId !== 'all' && role !== 'superadmin') {
+                apptsQuery = apptsQuery.eq('clinic_id', targetClinicId);
+                patientsQuery = patientsQuery.eq('clinic_id', targetClinicId);
+                sessionsQuery = sessionsQuery.eq('clinic_id', targetClinicId);
+            }
+
             const [apptsRes, patientsRes, sessionsRes] = await Promise.all([
-                db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)').order('appointment_date', { ascending: true }),
-                db.supabase.from('patients').select('id, name, phone, cpf, created_at').order('created_at', { ascending: false }),
-                db.supabase.from('sessions').select('*')
+                apptsQuery,
+                patientsQuery,
+                sessionsQuery
             ]);
 
             let appts = apptsRes.data || [];
             let patientsList = patientsRes.data || [];
             let sessionsList = sessionsRes.data || [];
-
-            // Se houver multi-tenancy configurado com a coluna clinic_id, filtra por clínica
-            if (clinicId !== 'all' && role !== 'superadmin') {
-                if (appts.some(a => a.clinic_id)) appts = appts.filter(a => !a.clinic_id || a.clinic_id === clinicId);
-                if (patientsList.some(p => p.clinic_id)) patientsList = patientsList.filter(p => !p.clinic_id || p.clinic_id === clinicId);
-                if (sessionsList.some(s => s.clinic_id)) sessionsList = sessionsList.filter(s => !s.clinic_id || s.clinic_id === clinicId);
-            }
 
             // Sanitização LGPD de CPFs para exibição no frontend (mascara os números e remove CPF bruto)
             const safePatients = (patientsList || []).map(p => {
@@ -170,6 +187,12 @@ class DashboardController {
             ];
 
             res.json({
+                pagination: {
+                    page,
+                    limit,
+                    totalAppts: apptsRes.count || appts.length,
+                    totalPatients: patientsRes.count || safePatients.length
+                },
                 kpis: {
                     todayCount: todayAppts.length,
                     confirmedCount: confirmedAppts.length,
@@ -229,15 +252,23 @@ class DashboardController {
         try {
             const { patientId, patientName, patientPhone, type, appointmentDate, appointmentTime } = req.body;
             const { clinicId } = req.user;
+            let targetClinicId = clinicId;
+            if (clinicId && clinicId !== 'all') {
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
+                if (!isUuid) {
+                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
+                    if (cRow) targetClinicId = cRow.id;
+                }
+            }
 
             let targetPatientId = (patientId && typeof patientId === 'string' && patientId.trim().length > 10) ? patientId.trim() : null;
 
             // Se o usuário digitou o nome/telefone diretamente no formulário
             if (!targetPatientId && patientPhone && String(patientPhone).trim()) {
                 const cleanPhone = String(patientPhone).trim();
-                const p = await db.patients.findOrCreate(cleanPhone);
+                const p = await db.patients.findOrCreate(cleanPhone, targetClinicId);
                 if (patientName && String(patientName).trim()) {
-                    await db.patients.updateName(cleanPhone, String(patientName).trim());
+                    await db.patients.updateName(cleanPhone, String(patientName).trim(), targetClinicId);
                 }
                 if (p && p.id) {
                     targetPatientId = p.id;
@@ -249,17 +280,18 @@ class DashboardController {
             }
 
             // Checa disponibilidade de horário no calendarService
-            const occupied = await calendarService.getAvailableSlots(appointmentDate);
+            const availableSlots = await calendarService.getAvailableSlots(appointmentDate, targetClinicId);
             // Formata horário HH:MM
             const cleanTime = appointmentTime.substring(0, 5);
 
-            const isAvailable = occupied.includes(cleanTime);
+            const isAvailable = availableSlots.includes(cleanTime);
             if (!isAvailable) {
                 return res.status(409).json({ error: 'Este horário não está disponível para agendamento.' });
             }
 
             const appt = await db.appointments.create({
                 patient_id: targetPatientId,
+                clinic_id: targetClinicId,
                 type,
                 appointment_date: appointmentDate,
                 appointment_time: appointmentTime,
@@ -267,17 +299,9 @@ class DashboardController {
             });
 
             // Confirma o agendamento imediatamente
-            await db.appointments.updateStatus(appt.id, 'confirmed');
+            await db.appointments.updateStatus(appt.id, 'confirmed', targetClinicId);
 
-            if (clinicId && clinicId !== 'all') {
-                try {
-                    await db.supabase.from('appointments').update({ clinic_id: clinicId }).eq('id', appt.id);
-                } catch {
-                    // Coluna opcional de multi-tenancy ainda não criada no Supabase
-                }
-            }
-
-            logger.info('DASHBOARD_APPOINTMENT', `Agendamento criado via recepção: ID ${appt.id} em ${appointmentDate} ${appointmentTime}`);
+            logger.info('DASHBOARD_APPOINTMENT', `Agendamento criado via recepção: ID ${appt.id} em ${appointmentDate} ${appointmentTime} (Clínica ${clinicId})`);
             res.json({ success: true, appointment: appt });
 
         } catch (err) {
@@ -286,17 +310,71 @@ class DashboardController {
         }
     }
 
-    // Atualiza status do agendamento (confirmar / cancelar)
+    // Atualiza status do agendamento (confirmar / cancelar) e notifica o paciente via WhatsApp
     async updateAppointmentStatus(req, res) {
         try {
             const { id } = req.params;
             const { status } = req.body;
+            const { clinicId } = req.user || {};
+            let targetClinicId = clinicId;
+            if (clinicId && clinicId !== 'all') {
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
+                if (!isUuid) {
+                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
+                    if (cRow) targetClinicId = cRow.id;
+                }
+            }
 
             if (!['confirmed', 'cancelled', 'pending'].includes(status)) {
                 return res.status(400).json({ error: 'Status de agendamento inválido.' });
             }
 
-            const updated = await db.appointments.updateStatus(id, status);
+            // Busca o agendamento e o paciente associado de forma robusta
+            const { data: apptData } = await db.supabase
+                .from('appointments')
+                .select('*, patients(*)')
+                .eq('id', id)
+                .maybeSingle();
+
+            let clinicData = null;
+            if (apptData && apptData.clinic_id) {
+                const { data: cData } = await db.supabase
+                    .from('clinics')
+                    .select('*')
+                    .eq('id', apptData.clinic_id)
+                    .maybeSingle();
+                clinicData = cData;
+            }
+
+            const updated = await db.appointments.updateStatus(id, status, targetClinicId);
+
+            // Dispara notificação automática no WhatsApp do paciente em caso de confirmação ou cancelamento
+            if (apptData && apptData.patients && apptData.patients.phone) {
+                const pPhone = apptData.patients.phone;
+                const pName = apptData.patients.name || 'Paciente';
+                const dateParts = (apptData.appointment_date || '').split('-');
+                const brtDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : apptData.appointment_date;
+                const brtTime = (apptData.appointment_time || '').substring(0, 5);
+                const phoneId = clinicData?.phone_number_id || process.env.META_PHONE_NUMBER_ID || null;
+                const clinicToken = clinicData?.whatsapp_token || clinicData?.token || process.env.META_WHATSAPP_TOKEN || null;
+                const clinicName = clinicData?.name || 'Clínica Modelo';
+
+                if (status === 'cancelled') {
+                    const cancelMsg = `Olá, ${pName}! Informamos que sua consulta do dia ${brtDate} às ${brtTime} foi cancelada pela recepção da ${clinicName}. Se desejar remarcar, basta nos enviar uma mensagem por aqui! 😊`;
+                    logger.info('DASHBOARD_NOTIFY', `Enviando notificação de cancelamento para ${pPhone}...`);
+                    await whatsappService.sendTextMessage(pPhone, cancelMsg, phoneId, clinicToken).catch(err => {
+                        logger.warn('DASHBOARD_NOTIFY', `Erro ao notificar cancelamento via WhatsApp: ${err.message}`);
+                    });
+                } else if (status === 'confirmed') {
+                    const confirmMsg = `Olá, ${pName}! Sua consulta do dia ${brtDate} às ${brtTime} foi confirmada pela recepção da ${clinicName}. Esperamos por você! 😊`;
+                    logger.info('DASHBOARD_NOTIFY', `Enviando notificação de confirmação para ${pPhone}...`);
+                    await whatsappService.sendTextMessage(pPhone, confirmMsg, phoneId, clinicToken).catch(err => {
+                        logger.warn('DASHBOARD_NOTIFY', `Erro ao notificar confirmação via WhatsApp: ${err.message}`);
+                    });
+                }
+            }
+
+            logger.info('DASHBOARD_APPOINTMENT', `Status do agendamento ${id} alterado para ${status} via recepção.`);
             res.json({ success: true, appointment: updated });
 
         } catch (err) {
