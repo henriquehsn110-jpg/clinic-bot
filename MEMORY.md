@@ -81,3 +81,8 @@
 - **Sintoma:** O paciente selecionava especialidade, data e horário, mas ao clicar em "Confirmar", o bot falhava com `SCHEDULING_CONFIRMATION_FAILED: {}`.
 - **Causa Raiz:** Nas linhas 373, 380, 399, 416 e 432 do `conversationController.js`, a função `db.sessions.setDraft(phone, {}, clinicId)` era chamada com `{}` em vez do objeto `draft`. Isso impedia a gravação das escolhas do paciente no banco de dados.
 - **Resolução:** Substituídas todas as 5 ocorrências para `db.sessions.setDraft(phone, draft, clinicId)`, gravando os dados com 100% de sucesso.
+
+#### 8. Conflito por Registro Órfão com `clinic_id: null` (`SCHEDULING_CONFLICT`)
+- **Sintoma:** Ao tentar agendar para `2026-07-27 08:00`, a gravação no Supabase retornava erro `23505` (`appointments_active_slot_unique`), enquanto a busca de vagas continuava exibindo `08:00` como disponível.
+- **Causa Raiz:** Existia um agendamento antigo na tabela `appointments` com `clinic_id: null` para `2026-07-27 08:00:00`. A função `getOccupiedSlots` filtrava por `clinic_id = 'uuid'`, ignorando a linha órfã, enquanto a constraint única do PostgreSQL bloqueava qualquer novo insert para a mesma data/horário.
+- **Resolução:** Sanitizadas todas as linhas órfãs nas tabelas `patients` e `appointments` atribuindo o `clinic_id` correto (fazendo `08:00` ser devidamente filtrado das vagas disponíveis) e ajustado o manipulador de conflito para resetar o rascunho e abrir o menu de datas do WhatsApp se houver conflito.
