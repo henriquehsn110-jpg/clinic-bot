@@ -255,7 +255,7 @@ async function runTestSuite() {
     assert(auditPassed, `C1: Dynamic npm audit check passed (0 high/critical vulnerabilities found, actual: ${highOrCritical})`);
 
     // C2. Varredura de Segredos no Código
-    const migrateContent = fs.readFileSync(path.join(__dirname, '../migrate_cpf.js'), 'utf8');
+    const migrateContent = fs.readFileSync(path.join(__dirname, '../scripts/migrate_cpf.js'), 'utf8');
     assert(!migrateContent.includes("sb_secret_"), "C2: Chave de serviço removida de migrate_cpf.js (Uso exclusivo de process.env)");
 
     // C3. Mascaramento LGPD e Remoção do CPF Bruto no Endpoint /data
@@ -291,8 +291,8 @@ async function runTestSuite() {
     // ── SUÍTES ADICIONAIS DE QA & DB CHECKS ──────────────────────────────────
     console.log(`\n🔹 [SUÍTES ADICIONAIS] Executando check_db, test_reminders e stress_test`);
     try {
-        console.log(`\n--- 1. Running node check_db.js ---`);
-        const checkDbOut = execSync('node check_db.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+        console.log(`\n--- 1. Running node scripts/check_db.js ---`);
+        const checkDbOut = execSync('node scripts/check_db.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
         console.log(checkDbOut.trim());
     } catch (e) {
         console.error("Erro em check_db.js:", e.stdout || e.message);
@@ -307,11 +307,12 @@ async function runTestSuite() {
     }
 
     try {
-        console.log(`\n--- 3. Running node tests/stress_test.js ---`);
-        const stressOut = execSync('node tests/stress_test.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
-        console.log(stressOut.trim());
+        console.log(`\n--- 4. Running node tests/test_chat_dashboard_integration.js ---`);
+        const intOut = execSync('node tests/test_chat_dashboard_integration.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+        console.log(intOut.trim());
+        assert(true, "Teste de Integração E2E Chat ↔ Dashboard executado com 100% de sucesso!");
     } catch (e) {
-        console.error("Erro em stress_test.js:", e.stdout || e.message);
+        assert(false, "Falha no Teste de Integração E2E Chat ↔ Dashboard: " + (e.stdout || e.message));
     }
 
 
