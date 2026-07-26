@@ -76,3 +76,8 @@
 - **Sintoma:** Em variações da resposta da LLM, o campo `showCalendar` vinha como `false` ao selecionar uma especialidade (ex: "Consulta geral") ou clicar em "Outras datas...", fazendo o bot responder apenas em texto em vez de enviar o menu de datas do WhatsApp.
 - **Causa Raiz:** Dependência exclusiva da saída probabilística da LLM para acionar componentes visuais da Meta WhatsApp API.
 - **Resolução:** Inserida trava determinística no `conversationController.js`: ao identificar a escolha de um procedimento ou o clique em "Outras datas...", o estado `aiResponse.showCalendar` é forçado para `true` garantindo o envio do menu interativo de datas.
+
+#### 7. Rascunho Vazio no `setDraft` (`SCHEDULING_CONFIRMATION_FAILED: {}`)
+- **Sintoma:** O paciente selecionava especialidade, data e horário, mas ao clicar em "Confirmar", o bot falhava com `SCHEDULING_CONFIRMATION_FAILED: {}`.
+- **Causa Raiz:** Nas linhas 373, 380, 399, 416 e 432 do `conversationController.js`, a função `db.sessions.setDraft(phone, {}, clinicId)` era chamada com `{}` em vez do objeto `draft`. Isso impedia a gravação das escolhas do paciente no banco de dados.
+- **Resolução:** Substituídas todas as 5 ocorrências para `db.sessions.setDraft(phone, draft, clinicId)`, gravando os dados com 100% de sucesso.
