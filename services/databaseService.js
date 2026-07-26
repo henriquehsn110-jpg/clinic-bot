@@ -482,14 +482,39 @@ const sessions = {
     async set(phone, history, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.set');
         return withRetry(async () => {
-            const { error } = await supabase
+            const last_activity = new Date().toISOString();
+            
+            // 1. Tenta atualizar a sessão existente
+            const { data, error: updateErr } = await supabase
                 .from('sessions')
-                .upsert(
-                    { phone, clinic_id: clinicId, history, last_activity: new Date().toISOString() },
-                    { onConflict: 'phone,clinic_id' }
-                );
+                .update({ history, last_activity, deleted_at: null })
+                .eq('phone', phone)
+                .eq('clinic_id', clinicId)
+                .select()
+                .maybeSingle();
 
-            if (error) throw new Error(`sessions.set: ${error.message}`);
+            if (updateErr) throw new Error(`sessions.set (update): ${updateErr.message}`);
+
+            // 2. Se a sessão já existia e foi atualizada, retorna
+            if (data) return data;
+
+            // 3. Se não existia, insere uma nova sessão
+            const { error: insertErr } = await supabase
+                .from('sessions')
+                .insert({ phone, clinic_id: clinicId, history, last_activity });
+
+            if (insertErr) {
+                // Se houve conflito de concorrência (23505), tenta update de novo
+                if (insertErr.code === '23505') {
+                    const { error: retryErr } = await supabase
+                        .from('sessions')
+                        .update({ history, last_activity, deleted_at: null })
+                        .eq('phone', phone)
+                        .eq('clinic_id', clinicId);
+                    if (!retryErr) return;
+                }
+                throw new Error(`sessions.set (insert): ${insertErr.message}`);
+            }
         });
     },
 
