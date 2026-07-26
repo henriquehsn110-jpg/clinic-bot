@@ -272,15 +272,16 @@ class ConversationController {
                     } catch (dbErr) {
                         if (dbErr.code === '23505' || dbErr.message.includes('23505') || dbErr.message.includes('unique_violation')) {
                             logger.warn('SCHEDULING_CONFLICT', `Tentativa de agendamento em slot já preenchido: [${phone}] - ${draft.date} ${draft.time}`);
-                            const conflictText = "Esse horário acabou de ser preenchido por outro paciente. Por favor, selecione outra data e horário.";
+                            const conflictText = "Esse horário acabou de ser preenchido por outro paciente. Por favor, selecione outra data e horário nas opções abaixo:";
                             
+                            // Limpa horário e data conflitantes do rascunho para liberar nova escolha
+                            draft.time = null;
+                            draft.date = null;
+                            await db.sessions.setDraft(phone, draft, clinicId);
+
                             history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                             history.push({ role: 'model', parts: [{ text: `${conflictText}\n[SISTEMA: calendário exibido, aguardando data, offset=0]` }] });
                             await db.sessions.set(phone, history, clinicId);
-
-                            if (!isSimulation) {
-                                await whatsappService.sendTextMessage(phone, conflictText, phoneId, clinicToken).catch(() => {});
-                            }
 
                             return {
                                 text: conflictText,
