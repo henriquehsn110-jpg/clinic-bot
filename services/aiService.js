@@ -6,8 +6,7 @@ class AIService {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         // P5: Modelos ativos e de menor custo da API Gemini
         this.candidateModels = [
-            process.env.GEMINI_MODEL || 'gemini-2.0-flash',
-            'gemini-2.0-flash',
+            process.env.GEMINI_MODEL || 'gemini-flash-lite-latest',
             'gemini-flash-lite-latest',
             'gemini-1.5-flash-latest'
         ].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicatas

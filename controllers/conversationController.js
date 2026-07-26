@@ -547,12 +547,34 @@ class ConversationController {
 
             let aiResponse = await aiService.generateResponse(textForAI, history);
 
-            // Trava determinística: força a exibição do calendário quando um procedimento é escolhido ou 'Outras datas...' clicado
+            // ── MÁQUINA DE ESTADOS 100% DETERMINÍSTICA DO BACKEND ───────────────────
+            // Garante 100% de estabilidade navegacional no WhatsApp sem depender do output probabilístico da IA
             const isProcSelection = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
-            if ((isProcSelection || processedText.includes('Outras datas...')) && !draft.date && !aiResponse.transferToHuman) {
-                aiResponse.showCalendar = true;
-                aiResponse.showProceduresList = false;
-                aiResponse.showTimeSlots = false;
+            if (!aiResponse.transferToHuman) {
+                if (draft.type && draft.date && draft.time && (patient?.cpf || draft.cpf || rawCpf)) {
+                    // Passo 5: Todos os dados coletados -> Confirmação explícita
+                    aiResponse.buttons = ["Confirmar", "Agendar p/ Outro", "Alterar"];
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
+                    aiResponse.requireCpf = false;
+                } else if (draft.type && draft.date && draft.time && !patient?.cpf && !rawCpf) {
+                    // Passo 4: Falta CPF -> Solicita CPF
+                    aiResponse.requireCpf = true;
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
+                } else if (draft.type && draft.date && !draft.time) {
+                    // Passo 3: Data escolhida -> Exibe horários daquele dia
+                    aiResponse.showTimeSlots = true;
+                    aiResponse.showCalendar = false;
+                    aiResponse.showProceduresList = false;
+                } else if ((draft.type || isProcSelection || processedText.includes('Outras datas...')) && !draft.date) {
+                    // Passo 2: Procedimento escolhido -> Exibe calendário de datas
+                    aiResponse.showCalendar = true;
+                    aiResponse.showProceduresList = false;
+                    aiResponse.showTimeSlots = false;
+                }
             }
 
             history.push({ role: 'user', parts: [{ text: processedText }] });

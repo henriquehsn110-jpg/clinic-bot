@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node tests/overnight_test_suite.js"
+    "test": "node tests/overnight_test_suite.js",
+    "preflight": "node scripts/preflight_audit.js"
   },
   "keywords": [
     "whatsapp",
@@ -27,6 +28,10 @@
     "axios": "^1.18.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.0",
     "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.3.0"
   }
 }
