@@ -91,23 +91,112 @@ async function withRetry(operation, retries = 3, delay = 200) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CLINICS
+// ═══════════════════════════════════════════════════════════════════════════════
+const clinics = {
+    async findByPhoneNumberId(phoneNumberId) {
+        return withRetry(async () => {
+            const { data, error } = await supabase
+                .from('clinics')
+                .select('*')
+                .eq('phone_number_id', phoneNumberId)
+                .maybeSingle();
+            if (error) throw new Error(`clinics.findByPhoneNumberId: ${error.message}`);
+            return data;
+        });
+    },
+    async findBySlug(slug) {
+        return withRetry(async () => {
+            const { data, error } = await supabase
+                .from('clinics')
+                .select('*')
+                .eq('slug', slug)
+                .maybeSingle();
+            if (error) throw new Error(`clinics.findBySlug: ${error.message}`);
+            return data;
+        });
+    },
+    async getAll() {
+        return withRetry(async () => {
+            const { data, error } = await supabase
+                .from('clinics')
+                .select('*');
+            if (error) throw new Error(`clinics.getAll: ${error.message}`);
+            return data || [];
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PATIENTS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Registra uma operação sensível no banco de dados para conformidade com a LGPD (P2)
+ */
+async function auditLog(action, entityType, entityId, clinicId, changes) {
+    try {
+        await supabase.from('audit_logs').insert({
+            action,
+            entity_type: entityType,
+            entity_id: entityId,
+            clinic_id: clinicId,
+            changes
+        });
+    } catch (err) {
+        logger.error('AUDIT_LOG_FAILED', `Falha ao gravar auditoria (${action} ${entityType}): ${err.message}`);
+    }
+}
+
 const patients = {
 
     /**
-     * Busca paciente pelo telefone.
-     * Se não existir, cria automaticamente (upsert).
+     * Busca paciente pelo telefone e clínica.
+     * Se não existir, cria automaticamente (busca resiliente + inserção).
      */
-    async findOrCreate(phone) {
+    async findOrCreate(phone, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em patients.findOrCreate');
         return withRetry(async () => {
-            const { data, error } = await supabase
+            // 1. Tenta buscar o paciente por telefone e clínica
+            let { data, error } = await supabase
                 .from('patients')
-                .upsert({ phone }, { onConflict: 'phone', ignoreDuplicates: false })
+                .select('*')
+                .eq('phone', phone)
+                .eq('clinic_id', clinicId)
+                .maybeSingle();
+
+            if (error) throw new Error(`patients.findOrCreate (select): ${error.message}`);
+
+            if (data) {
+                if (data.cpf) data.cpf = decryptData(data.cpf);
+                return data;
+            }
+
+            // 2. Se não encontrou, insere novo paciente
+            const insertRes = await supabase
+                .from('patients')
+                .insert({ phone, clinic_id: clinicId })
                 .select()
                 .single();
 
-            if (error) throw new Error(`patients.findOrCreate: ${error.message}`);
+            if (insertRes.error) {
+                // Trata corrida de concorrência (código Postgres 23505 = conflito único)
+                if (insertRes.error.code === '23505') {
+                    const retryRes = await supabase
+                        .from('patients')
+                        .select('*')
+                        .eq('phone', phone)
+                        .eq('clinic_id', clinicId)
+                        .maybeSingle();
+                    if (retryRes.data) {
+                        if (retryRes.data.cpf) retryRes.data.cpf = decryptData(retryRes.data.cpf);
+                        return retryRes.data;
+                    }
+                }
+                throw new Error(`patients.findOrCreate (insert): ${insertRes.error.message}`);
+            }
+
+            data = insertRes.data;
             if (data && data.cpf) data.cpf = decryptData(data.cpf);
             return data;
         });
@@ -116,12 +205,14 @@ const patients = {
     /**
      * Atualiza o nome do paciente
      */
-    async updateName(phone, name) {
+    async updateName(phone, name, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em patients.updateName');
         return withRetry(async () => {
             const { data, error } = await supabase
                 .from('patients')
                 .update({ name })
                 .eq('phone', phone)
+                .eq('clinic_id', clinicId)
                 .select()
                 .single();
 
@@ -131,10 +222,8 @@ const patients = {
         });
     },
 
-    /**
-     * Atualiza o CPF do paciente (Criptografado e em Hash).
-     */
-    async updateCpf(phone, cpf) {
+    async updateCpf(phone, cpf, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em patients.updateCpf');
         return withRetry(async () => {
             const encryptedCpf = encryptData(cpf);
             const cpfHash = hashForSearch(cpf);
@@ -142,6 +231,7 @@ const patients = {
                 .from('patients')
                 .update({ cpf: encryptedCpf, cpf_hash: cpfHash })
                 .eq('phone', phone)
+                .eq('clinic_id', clinicId)
                 .select()
                 .single();
 
@@ -154,13 +244,14 @@ const patients = {
     /**
      * Busca paciente exclusivamente pelo CPF (via Blind Indexing Hash).
      */
-    async findByCpf(cpf) {
+    async findByCpf(cpf, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em patients.findByCpf');
         return withRetry(async () => {
             const cpfHash = hashForSearch(cpf);
             // Procura tanto pelo Hash (novo formato seguro) quanto pelo texto plano (retrocompatibilidade)
             const { data, error } = await supabase
-                .from('patients')
-                .select('*')
+                .from('patients').select('*').is('deleted_at', null)
+                .eq('clinic_id', clinicId)
                 .or(`cpf_hash.eq.${cpfHash},cpf.eq.${cpf}`)
                 .maybeSingle();
 
@@ -175,12 +266,13 @@ const patients = {
     /**
      * Busca paciente pelo telefone sem criar.
      */
-    async findByPhone(phone) {
+    async findByPhone(phone, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em patients.findByPhone');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('patients')
-                .select('*')
+                .from('patients').select('*').is('deleted_at', null)
                 .eq('phone', phone)
+                .eq('clinic_id', clinicId)
                 .maybeSingle(); // retorna null se não encontrar (sem erro)
 
             if (error) throw new Error(`patients.findByPhone: ${error.message}`);
@@ -197,14 +289,16 @@ const appointments = {
 
     /**
      * Cria um novo agendamento.
-     * @param {Object} data - { patient_id, appointment_date, appointment_time, type, notes? }
+     * @param {Object} data - { patient_id, clinic_id, appointment_date, appointment_time, type, notes? }
      */
     async create(data) {
+        if (!data.clinic_id) throw new Error('clinic_id é obrigatório em appointments.create');
         return withRetry(async () => {
             const { data: appointment, error } = await supabase
                 .from('appointments')
                 .insert({
                     patient_id:       data.patient_id,
+                    clinic_id:        data.clinic_id,
                     appointment_date: data.appointment_date,  // formato: "2025-12-20"
                     appointment_time: data.appointment_time,  // formato: "09:00:00"
                     type:             data.type,
@@ -227,12 +321,13 @@ const appointments = {
      * Retorna os horários JÁ OCUPADOS em uma data.
      * O calendarService usa isso para calcular os horários disponíveis.
      */
-    async getOccupiedSlots(dateStr) {
+    async getOccupiedSlots(dateStr, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em appointments.getOccupiedSlots');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('appointments')
-                .select('appointment_time')
+                .from('appointments').select('appointment_time').is('deleted_at', null)
                 .eq('appointment_date', dateStr)
+                .eq('clinic_id', clinicId)
                 .in('status', ['pending', 'confirmed']); // ignorar cancelados e no_show
 
             if (error) throw new Error(`appointments.getOccupiedSlots: ${error.message}`);
@@ -243,12 +338,13 @@ const appointments = {
     /**
      * Todos os agendamentos de um paciente (histórico).
      */
-    async findByPatient(patientId) {
+    async findByPatient(patientId, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em appointments.findByPatient');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('appointments')
-                .select('*')
+                .from('appointments').select('*').is('deleted_at', null)
                 .eq('patient_id', patientId)
+                .eq('clinic_id', clinicId)
                 .order('appointment_date', { ascending: false });
 
             if (error) throw new Error(`appointments.findByPatient: ${error.message}`);
@@ -259,15 +355,16 @@ const appointments = {
     /**
      * Agendamentos do dia para a clínica confirmar / organizar.
      */
-    async findByDate(dateStr) {
+    async findByDate(dateStr, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em appointments.findByDate');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('appointments')
-                .select(`
+                .from('appointments').select(`
                     *,
-                    patients (name, phone)
+                    patients (name, phone).is('deleted_at', null)
                 `)
                 .eq('appointment_date', dateStr)
+                .eq('clinic_id', clinicId)
                 .in('status', ['pending', 'confirmed'])
                 .order('appointment_time', { ascending: true });
 
@@ -280,16 +377,19 @@ const appointments = {
      * Atualiza o status de um agendamento.
      * Ex: 'pending' → 'confirmed' quando o paciente confirma pelo bot.
      */
-    async updateStatus(appointmentId, status) {
+    async updateStatus(appointmentId, status, clinicId = null) {
         return withRetry(async () => {
-            const { data, error } = await supabase
-                .from('appointments')
-                .update({ status })
-                .eq('id', appointmentId)
-                .select()
-                .single();
+            let query = supabase.from('appointments').update({ status }).eq('id', appointmentId);
+            if (clinicId) query = query.eq('clinic_id', clinicId);
+
+            const { data, error } = await query.select().maybeSingle();
 
             if (error) throw new Error(`appointments.updateStatus: ${error.message}`);
+
+            if (clinicId || data?.clinic_id) {
+                await auditLog('UPDATE', 'APPOINTMENT', appointmentId, clinicId || data.clinic_id, { status });
+            }
+
             return data;
         });
     },
@@ -297,16 +397,17 @@ const appointments = {
     /**
      * Próximo agendamento ativo de um paciente (para remarcações).
      */
-    async findNextByPatient(patientId) {
+    async findNextByPatient(patientId, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em appointments.findNextByPatient');
         return withRetry(async () => {
             const brtString = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
             const brtObj = new Date(brtString);
             const today = `${brtObj.getFullYear()}-${String(brtObj.getMonth() + 1).padStart(2, '0')}-${String(brtObj.getDate()).padStart(2, '0')}`;
 
             const { data, error } = await supabase
-                .from('appointments')
-                .select('*')
+                .from('appointments').select('*').is('deleted_at', null)
                 .eq('patient_id', patientId)
+                .eq('clinic_id', clinicId)
                 .in('status', ['pending', 'confirmed'])
                 .gte('appointment_date', today)
                 .order('appointment_date', { ascending: true })
@@ -321,12 +422,13 @@ const appointments = {
     /**
      * Localiza agendamento ativo específico de um paciente (para garantir idempotência de confirmação).
      */
-    async findActiveAppointment(patientId, dateStr, timeStr) {
+    async findActiveAppointment(patientId, dateStr, timeStr, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em appointments.findActiveAppointment');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('appointments')
-                .select('*')
+                .from('appointments').select('*').is('deleted_at', null)
                 .eq('patient_id', patientId)
+                .eq('clinic_id', clinicId)
                 .eq('appointment_date', dateStr)
                 .eq('appointment_time', timeStr)
                 .in('status', ['pending', 'confirmed'])
@@ -349,12 +451,13 @@ const sessions = {
     /**
      * Retorna o histórico da sessão ou [] se expirada/inexistente.
      */
-    async get(phone) {
+    async get(phone, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.get');
         const data = await withRetry(async () => {
             const { data, error } = await supabase
-                .from('sessions')
-                .select('history, last_activity')
+                .from('sessions').select('history, last_activity').is('deleted_at', null)
                 .eq('phone', phone)
+                .eq('clinic_id', clinicId)
                 .maybeSingle();
 
             if (error) throw new Error(`sessions.get: ${error.message}`);
@@ -366,7 +469,7 @@ const sessions = {
         // Verifica TTL manualmente (o cron limpa, mas aqui garantimos consistência)
         const diffMs = Date.now() - new Date(data.last_activity).getTime();
         if (diffMs > SESSION_TTL_MINUTES * 60 * 1000) {
-            await sessions.delete(phone);
+            await sessions.delete(phone, clinicId);
             return [];
         }
 
@@ -376,13 +479,14 @@ const sessions = {
     /**
      * Salva ou atualiza o histórico e renova o last_activity.
      */
-    async set(phone, history) {
+    async set(phone, history, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.set');
         return withRetry(async () => {
             const { error } = await supabase
                 .from('sessions')
                 .upsert(
-                    { phone, history, last_activity: new Date().toISOString() },
-                    { onConflict: 'phone' }
+                    { phone, clinic_id: clinicId, history, last_activity: new Date().toISOString() },
+                    { onConflict: 'phone,clinic_id' }
                 );
 
             if (error) throw new Error(`sessions.set: ${error.message}`);
@@ -392,12 +496,13 @@ const sessions = {
     /**
      * Retorna o rascunho de agendamento estruturado associado à sessão.
      */
-    async getDraft(phone) {
+    async getDraft(phone, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.getDraft');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('sessions')
-                .select('draft')
+                .from('sessions').select('draft').is('deleted_at', null)
                 .eq('phone', phone)
+                .eq('clinic_id', clinicId)
                 .maybeSingle();
 
             if (error) throw new Error(`sessions.getDraft: ${error.message}`);
@@ -408,19 +513,21 @@ const sessions = {
     /**
      * Atualiza o rascunho de forma atômica (merge JSONB via RPC).
      */
-    async setDraft(phone, draftPatch) {
+    async setDraft(phone, draftPatch, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.setDraft');
         return withRetry(async () => {
             if (draftPatch === null) {
                 // Se null, reseta o rascunho via update direto
                 const { error } = await supabase
                     .from('sessions')
                     .update({ draft: null, last_activity: new Date().toISOString() })
-                    .eq('phone', phone);
+                    .eq('phone', phone)
+                    .eq('clinic_id', clinicId);
                 if (error) throw new Error(`sessions.setDraft (reset): ${error.message}`);
                 return;
             }
 
-            const { error } = await supabase.rpc('merge_session_draft', { p_phone: phone, p_draft: draftPatch });
+            const { error } = await supabase.rpc('merge_session_draft_multitenant', { p_phone: phone, p_clinic_id: clinicId, p_draft: draftPatch });
             if (error) throw new Error(`sessions.setDraft (merge): ${error.message}`);
         });
     },
@@ -428,12 +535,14 @@ const sessions = {
     /**
      * Remove a sessão (logout / nova conversa forçada).
      */
-    async delete(phone) {
+    async delete(phone, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.delete');
         return withRetry(async () => {
             const { error } = await supabase
                 .from('sessions')
                 .delete()
-                .eq('phone', phone);
+                .eq('phone', phone)
+                .eq('clinic_id', clinicId);
 
             if (error) throw new Error(`sessions.delete: ${error.message}`);
         });
@@ -575,4 +684,4 @@ const webhooks = {
 };
 
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, patients, appointments, sessions, conversations, webhooks, cleanEnvVar };
+module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar };
