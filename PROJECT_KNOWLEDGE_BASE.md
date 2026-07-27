@@ -103,4 +103,61 @@ node tests/stress_test.js
 * **[onboard_tenant.js](file:///c:/Users/letic/OneDrive/Desktop/ClinicaBot/clinic-bot-backend/scripts/onboard_tenant.js):** Script de onboarding de novas clínicas.
 
 ---
+
+## 6. 🚀 Diretrizes e Melhores Práticas do Google Antigravity 2.0
+
+### 📐 6.1 Transição Arquitetural e Operação Desacoplada
+- **Ambiente Desacoplado:** O Antigravity 2.0 atua como plataforma desktop autônoma e centro de comando independente do IDE, permitindo orquestração síncrona e assíncrona de múltiplos agentes paralelos.
+- **Superfícies de Operação:** 
+  1. *Desktop App:* Orquestração principal de projetos, agendamento de tarefas e permissões granulares.
+  2. *Antigravity IDE:* Edição de código e entendimento contextual profundo.
+  3. *CLI (`agy`):* Interface TUI de alto desempenho para comandos rápidos no terminal.
+  4. *Python SDK:* Integração programática em pipelines de CI/CD e avaliação.
+
+### 🌳 6.2 Modos de Trabalho e Isolamento por Projeto
+- **Local Mode:** Atua diretamente na diretoria ativa e checkout Git atual. Recomendado para refatorações rápidas, correções pontuais e pair-programming.
+- **New Worktree Mode:** Cria automaticamente uma *Git Worktree* isolada para cada conversa/tarefa complexa. **Prática recomendada para tarefas paralelas e subagentes**, pois previne conflitos na branch principal e preserva o ambiente de desenvolvimento.
+- **Scratch Folder:** Pasta temporária com isolamento absoluto fora da estrutura de repositórios do utilizador.
+
+### 🛡️ 6.3 Motor de Permissões & Terminal Sandbox
+- **Hierarquia Estrita de Precedência:**  
+  `Deny` *(Bloqueio imediato imutável)* **>** `Ask` *(Interrupção para autorização no cartão interativo)* **>** `Allow` *(Execução autônoma)*.
+- **Sintaxe de Qualificadores:** `read_file`, `write_file`, `read_url`, `execute_url`, `command`, `unsandboxed`, `mcp`. `write_file` concede automaticamente autorização de leitura para o mesmo caminho.
+- **Terminal Sandbox:** Contenção em container no nível do OS (AppContainer no Windows, nsjail no Linux, sandbox-exec no macOS). Impedimento ativo contra exfiltração não autorizada de dados ou acesso indevido à rede.
+
+### 🤖 6.4 Arquitetura de Subagentes & Orquestração Dinâmica
+- **Preservação de Context Window:** Tarefas extensas (pesquisas na base de código, suites de teste, navegação web) devem ser delegadas a subagentes via `invoke_subagent`. O subagente é inicializado com janela de contexto totalmente limpa.
+- **Modos de Alocação:** `inherit` (mesmo repositório), `branch` (nova Worktree isolada), `share` (diretório compartilhado).
+- **Subagentes Nativos:** `research` (pesquisa sintática no código/web), `browser` (automação e inspeção de DOM via Chrome DevTools MCP com gravação webm), `self` (réplica idêntica do agente pai).
+- **Subagentes Customizados:** Definidos em `.agents/agents/<nome>.md` com YAML Frontmatter + system prompt. Limite estrito de aninhamento de **até 10 níveis**.
+
+### 🧩 6.5 Extensibilidade: Skills & Model Context Protocol (MCP)
+- **Skills (`.agents/skills/<nome>/SKILL.md`):** Pacotes declarativos de procedimentos e utilitários.
+- **Padrão de Divulgação Progressiva (Progressive Disclosure):**  
+  *Discovery* (leitura inicial de nome/descrição) ➔ *Activation* (leitura do SKILL.md completo quando o contexto for compatível) ➔ *Execution* (aplicação de diretrizes e execução de scripts auxiliares).
+- **Tratamento de Scripts Auxiliares:** Os scripts em `scripts/` devem ser tratados como "caixas-pretas" (executar com `--help` antes de tentar ler o código-fonte).
+- **Model Context Protocol (MCP):** Conecta a ferramentas e bancos externos via `mcp_config.json` (`command` stdio ou `serverUrl` remoto para SSE/HTTP).
+
+### ⚓ 6.6 Ciclo de Vida & Intercepção com JSON Hooks (`.agents/hooks.json`)
+- **PreInvocation:** Injeta avisos/passos no contexto antes da inferência da LLM.
+- **PreToolUse:** Suporta matcher regex para interceptar ferramentas e alterar autorização (`allow`, `deny`, `ask`, `force_ask`).
+- **PostToolUse:** Acionado após execução de ferramentas (ex: formatação automatica via linters/testes).
+- **PostInvocation:** Avalia resultados e define `terminationBehavior` (`force_continue` ou `terminate`).
+- **Stop:** Ao responder com `"decision": "continue"`, cancela o encerramento da sessão e força o agente a reentrar no ciclo até que todas as validações passem.
+
+### 🎯 6.7 Metodologia de Prompting & Ciclos de Verificação Fechados
+- **Fluxo em 3 Fases:**  
+  1. *Exploração:* Analisar arquitetura existente e mapear arquivos.  
+  2. *Planejamento:* Gerar e aprovar o *Implementation Plan*.  
+  3. *Execução:* Modificar código e validar.
+- **Ciclo de Verificação (Verification Loop):** Toda alteração de código DEVE ser acompanhada da execução de suites de teste locais (ex: `npm test` ou `node tests/overnight_test_suite.js`) até a confirmação de 100% de sucesso.
+- **Slash Commands Utilizáveis:**  
+  - `/goal`: Execução 100% autônoma até o objetivo final.  
+  - `/grill-me`: Alinhamento prévio via entrevista interativa.  
+  - `/schedule`: Agendamento de cronômetros e tarefas recorrentes.  
+  - `/browser`: Subagente de navegação web.  
+  - `Ctrl+M`: Transcrição de voz em tempo real.
+- **Memória de Regras (`AGENTS.md` / `PROJECT_KNOWLEDGE_BASE.md`):** Regras de estilo, segurança, LGPD e fuso horário são carregadas automaticamente ao iniciar.
+
+---
 *Este documento é a referência única da verdade para todos os agentes e desenvolvedores do ClinicaBot SaaS Pro.*
