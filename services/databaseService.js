@@ -467,15 +467,19 @@ const sessions = {
             return data;
         });
 
-        // DEBUG TEMPORÁRIO — remover após diagnóstico
-        console.log(`🔍 [SESSION_DEBUG] get(${phone}, ${clinicId}) => found: ${!!data}, histLen: ${data?.history?.length || 0}`);
+        // Log de Debug (exibido apenas em ambiente de desenvolvimento)
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`🔍 [SESSION_DEBUG] get(${phone}, ${clinicId}) => found: ${!!data}, histLen: ${data?.history?.length || 0}`);
+        }
 
         if (!data) return [];
 
         // Verifica TTL manualmente (o cron limpa, mas aqui garantimos consistência)
         const diffMs = Date.now() - new Date(data.last_activity).getTime();
         if (diffMs > SESSION_TTL_MINUTES * 60 * 1000) {
-            console.log(`🔍 [SESSION_DEBUG] TTL expirado (${Math.round(diffMs/60000)} min). Deletando sessão.`);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`🔍 [SESSION_DEBUG] TTL expirado (${Math.round(diffMs/60000)} min). Deletando sessão.`);
+            }
             await sessions.delete(phone, clinicId);
             return [];
         }
@@ -507,7 +511,9 @@ const sessions = {
 
             // 2. Se a sessão já existia e foi atualizada, retorna
             if (data) {
-                console.log(`🔍 [SESSION_DEBUG] set(${phone}) => UPDATE OK, histLen: ${history.length}`);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log(`🔍 [SESSION_DEBUG] set(${phone}) => UPDATE OK, histLen: ${history.length}`);
+                }
                 return data;
             }
 
@@ -531,7 +537,9 @@ const sessions = {
                 }
                 throw new Error(`sessions.set (insert): ${insertErr.message}`);
             }
-            console.log(`🔍 [SESSION_DEBUG] set(${phone}) => INSERT OK, id: ${insertData?.id}, histLen: ${history.length}`);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`🔍 [SESSION_DEBUG] set(${phone}) => INSERT OK, id: ${insertData?.id}, histLen: ${history.length}`);
+            }
         });
     },
 

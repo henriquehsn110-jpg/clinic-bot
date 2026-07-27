@@ -321,7 +321,7 @@ class DashboardController {
     async updateAppointmentStatus(req, res) {
         try {
             const { id } = req.params;
-            const { status } = req.body;
+            const { status, reason } = req.body;
             const { clinicId } = req.user || {};
             let targetClinicId = clinicId;
             if (clinicId && clinicId !== 'all') {
@@ -367,9 +367,14 @@ class DashboardController {
                 const clinicName = clinicData?.name || 'Clínica Modelo';
 
                 if (status === 'cancelled') {
-                    const cancelMsg = `Olá, ${pName}! Informamos que sua consulta do dia ${brtDate} às ${brtTime} foi cancelada pela recepção da ${clinicName}. Se desejar remarcar, basta nos enviar uma mensagem por aqui! 😊`;
-                    logger.info('DASHBOARD_NOTIFY', `Enviando notificação de cancelamento para ${pPhone}...`);
-                    await whatsappService.sendTextMessage(pPhone, cancelMsg, phoneId, clinicToken).catch(err => {
+                    let cancelMsg = `Olá, ${pName}! Informamos que sua consulta do dia ${brtDate} às ${brtTime} foi cancelada pela recepção da ${clinicName}.`;
+                    if (reason && reason.trim()) {
+                        cancelMsg += `\n\nMotivo: ${reason.trim()}`;
+                    }
+                    cancelMsg += `\n\nSe desejar escolher um novo horário, clique no botão abaixo para reagendar:`;
+                    
+                    logger.info('DASHBOARD_NOTIFY', `Enviando notificação de cancelamento com botão Reagendar para ${pPhone}...`);
+                    await whatsappService.sendButtonMessage(pPhone, cancelMsg, ["Reagendar Consulta"], phoneId, clinicToken).catch(err => {
                         logger.warn('DASHBOARD_NOTIFY', `Erro ao notificar cancelamento via WhatsApp: ${err.message}`);
                     });
                 } else if (status === 'confirmed') {

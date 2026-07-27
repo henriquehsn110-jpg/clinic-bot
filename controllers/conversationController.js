@@ -322,7 +322,12 @@ class ConversationController {
                         await db.sessions.setDraft(phone, null, clinicId);
 
                         const dateFmt = apptDate.split('-').reverse().join('/');
-                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
+                        const startDateISO = `${apptDate.replace(/-/g, '')}T${apptTime.replace(/:/g, '').substring(0, 4)}00`;
+                        const endHour = String(parseInt(apptTime.substring(0, 2)) + 1).padStart(2, '0');
+                        const endDateISO = `${apptDate.replace(/-/g, '')}T${endHour}${apptTime.substring(3, 5)}00`;
+                        const calUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Consulta Médica')}&dates=${startDateISO}/${endDateISO}&details=${encodeURIComponent('Consulta confirmada')}&location=${encodeURIComponent('Av. Paulista, 1000 - 12º andar, São Paulo/SP')}`;
+
+                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📅 Adicionar ao Google Agenda:\n${calUrl}\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
 
                         history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                         history.push({ role: 'model', parts: [{ text: confirmText }] });
