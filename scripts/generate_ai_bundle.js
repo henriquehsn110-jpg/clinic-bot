@@ -35,8 +35,10 @@ filesToBundle.forEach(file => {
 
 const outPath1 = 'C:\\\\Users\\\\letic\\\\Downloads\\\\CODE_COMPLEMENT_FOR_CLAUDE.md';
 const outPath2 = 'C:\\\\Users\\\\letic\\\\Downloads\\\\CODE_COMPLEMENT_FOR_CLAUDE_V11.md';
+const outPath3 = path.join(rootDir, 'CODE_COMPLEMENT_FOR_CLAUDE.md');
 
 fs.writeFileSync(outPath1, bundleContent, 'utf8');
 fs.writeFileSync(outPath2, bundleContent, 'utf8');
+fs.writeFileSync(outPath3, bundleContent, 'utf8');
 
-console.log(`\n🎉 Pacote v11.0 gerado com sucesso nos caminhos:\n👉 ${outPath1}\n👉 ${outPath2}`);
+console.log(`\n🎉 Pacote v11.0 gerado com sucesso nos caminhos:\n👉 ${outPath1}\n👉 ${outPath2}\n👉 ${outPath3}`);
