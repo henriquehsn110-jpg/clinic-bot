@@ -221,24 +221,31 @@ class DashboardController {
                 return res.status(400).json({ error: 'Nome e telefone do paciente são obrigatórios.' });
             }
 
-            // Garante criação/atualização do paciente com criptografia backend
-            const patient = await db.patients.findOrCreate(phone);
-            await db.patients.updateName(phone, name);
+            let targetClinicId = clinicId;
+            if (clinicId && clinicId !== 'all' && req.user?.role !== 'superadmin') {
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
+                if (!isUuid) {
+                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
+                    if (cRow) targetClinicId = cRow.id;
+                }
+            } else if (!targetClinicId || targetClinicId === 'all') {
+                const { data: firstClinic } = await db.supabase.from('clinics').select('id').order('created_at', { ascending: true }).limit(1).maybeSingle();
+                if (firstClinic) targetClinicId = firstClinic.id;
+            }
+
+            if (!targetClinicId || targetClinicId === 'all') {
+                return res.status(400).json({ error: 'É necessário estar associado a uma clínica para cadastrar pacientes.' });
+            }
+
+            const cleanPhone = String(phone).trim();
+            const patient = await db.patients.findOrCreate(cleanPhone, targetClinicId);
+            await db.patients.updateName(cleanPhone, name, targetClinicId);
 
             if (cpf && cpf.replace(/\D/g, '').length === 11) {
-                await db.patients.updateCpf(phone, cpf);
+                await db.patients.updateCpf(cleanPhone, cpf, targetClinicId);
             }
 
-            // Associa a clínica se a coluna clinic_id existir no banco
-            if (clinicId && clinicId !== 'all') {
-                try {
-                    await db.supabase.from('patients').update({ clinic_id: clinicId }).eq('id', patient.id);
-                } catch {
-                    // Coluna opcional de multi-tenancy ainda não criada no Supabase
-                }
-            }
-
-            logger.info('DASHBOARD_PATIENT', `Paciente cadastrado manualmente via recepção: ${name} (${phone})`);
+            logger.info('DASHBOARD_PATIENT', `Paciente cadastrado manualmente via recepção: ${name} (${cleanPhone}) na clínica ${targetClinicId}`);
             res.json({ success: true, patient });
 
         } catch (err) {

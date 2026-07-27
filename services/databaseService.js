@@ -247,12 +247,13 @@ const patients = {
     async findByCpf(cpf, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.findByCpf');
         return withRetry(async () => {
-            const cpfHash = hashForSearch(cpf);
-            // Procura tanto pelo Hash (novo formato seguro) quanto pelo texto plano (retrocompatibilidade)
+            const cleanCpf = String(cpf || '').replace(/\D/g, '');
+            const cpfHash = hashForSearch(cleanCpf);
+            // Procura tanto pelo Hash (novo formato seguro) quanto pelo texto plano (sanitizado anti-injeção PostgREST)
             const { data, error } = await supabase
                 .from('patients').select('*').is('deleted_at', null)
                 .eq('clinic_id', clinicId)
-                .or(`cpf_hash.eq.${cpfHash},cpf.eq.${cpf}`)
+                .or(`cpf_hash.eq.${cpfHash},cpf.eq.${cleanCpf}`)
                 .maybeSingle();
 
             if (error) {

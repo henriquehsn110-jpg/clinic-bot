@@ -1,7 +1,7 @@
 require('dotenv').config();
 const axios = require('axios');
 const crypto = require('crypto');
-const db = require('./services/databaseService');
+const db = require('../../services/databaseService');
 
 const { createClient } = require('@supabase/supabase-js');
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
@@ -12,40 +12,45 @@ const phone2 = `5511900000011`;
 
 async function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+let testClinicId = null;
+
 async function setup() {
+    const clinics = await db.clinics.getAll();
+    testClinicId = clinics[0]?.id || 'b53600ce-7bb4-462d-89d6-7ead5fbc4568';
+
     // Apaga se já existir
     await sb.from('sessions').delete().in('phone', [phone1, phone2]);
     await sb.from('patients').delete().in('phone', [phone1, phone2]);
     
-    // Cadastra pacientes falsos para que não peça CPF
-    const p1 = await sb.from('patients').insert({ phone: phone1, name: 'Paciente A' }).select().single();
-    const p2 = await sb.from('patients').insert({ phone: phone2, name: 'Paciente B' }).select().single();
+    // Cadastra pacientes falsos com clinic_id para que não peça CPF
+    const p1 = await sb.from('patients').insert({ phone: phone1, name: 'Paciente A', clinic_id: testClinicId }).select().single();
+    const p2 = await sb.from('patients').insert({ phone: phone2, name: 'Paciente B', clinic_id: testClinicId }).select().single();
     
     // Injeta drafts forjados
     await db.sessions.set(phone1, [
         { role: 'user', parts: [{ text: 'Quero agendar' }] },
         { role: 'model', parts: [{ text: 'Você deseja confirmar o agendamento para 2026-12-20 às 09:00?' }] }
-    ]);
+    ], testClinicId);
     await db.sessions.setDraft(phone1, { 
         type: 'Avaliação', date: '2026-12-20', time: '09:00' 
-    });
+    }, testClinicId);
     
     await db.sessions.set(phone2, [
         { role: 'user', parts: [{ text: 'Quero agendar' }] },
         { role: 'model', parts: [{ text: 'Você deseja confirmar o agendamento para 2026-12-20 às 09:00?' }] }
-    ]);
+    ], testClinicId);
     await db.sessions.setDraft(phone2, { 
         type: 'Avaliação', date: '2026-12-20', time: '09:00' 
-    });
+    }, testClinicId);
     
     console.log(`Setup concluído para ${runId}. Iniciando simulação concorrente...`);
 }
 
-const controller = require('./controllers/conversationController');
+const controller = require('../../controllers/conversationController');
 
 async function simulateConfirm(phone) {
     try {
-        const response = await controller.handleIncomingMessage(phone, 'Confirmar', false);
+        const response = await controller.handleIncomingMessage(phone, 'Confirmar', false, testClinicId);
         return { text: response.text };
     } catch (e) {
         return { error: e.message };

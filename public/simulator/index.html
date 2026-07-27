@@ -565,7 +565,7 @@
             }
 
             if (resp.showCalendar) {
-                const todayIso = new Date().toISOString().split('T')[0];
+                const todayIso = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').reverse().join('-');
                 html += `
                     <div class="calendar-box">
                         <label>Escolha uma data no calendário abaixo:</label>

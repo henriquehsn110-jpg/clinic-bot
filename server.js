@@ -178,19 +178,28 @@ const processWebhookInbox = async () => {
                                 if (clinic) clinicId = clinic.id;
                             }
                             if (!clinicId) {
-                                const defaultClinic = await db.clinics.findBySlug('clinica-modelo') || (await db.clinics.getAll())[0];
+                                // Em ambiente de produção / SaaS Multi-Tenant, se o phone_number_id não for reconhecido,
+                                // rejeitamos o processamento em vez de cair na clínica default, evitando vazamento de mensagens entre clínicas.
+                                if (phoneNumberId && process.env.NODE_ENV === 'production') {
+                                    logger.warn('WEBHOOK_INBOX', `[MULTI-TENANT SECURITY] Webhook ignorado: phone_number_id (${phoneNumberId}) não está associado a nenhuma clínica cadastrada.`);
+                                    continue;
+                                }
+                                // No ambiente de desenvolvimento/teste local (ou no simulador onde phone_number_id pode não estar mapeado),
+                                // usamos a clínica modelo como fallback seguro de testes.
+                                const defaultClinic = await db.clinics.findBySlug('clinica-modelo');
                                 if (defaultClinic) {
                                     clinicId = defaultClinic.id;
-                                    if (phoneNumberId) {
+                                    // Associa automaticamente apenas em desenvolvimento local e se a clínica ainda não tiver ID setado
+                                    if (phoneNumberId && process.env.NODE_ENV !== 'production') {
                                         try {
-                                            const { error: updateErr } = await db.supabase.from('clinics').update({ phone_number_id: phoneNumberId }).eq('id', defaultClinic.id);
-                                            if (updateErr) {
-                                                logger.warn('WEBHOOK_INBOX', `Falha ao associar phone_number_id à clínica default: ${updateErr.message}`);
-                                            }
+                                            await db.supabase.from('clinics').update({ phone_number_id: phoneNumberId }).eq('id', defaultClinic.id);
                                         } catch (updateErr) {
-                                            logger.warn('WEBHOOK_INBOX', `Exceção inesperada ao atualizar clínica default: ${updateErr.message}`);
+                                            logger.warn('WEBHOOK_INBOX', `Falha ao associar phone_number_id em dev: ${updateErr.message}`);
                                         }
                                     }
+                                } else {
+                                    logger.error('WEBHOOK_INBOX', `Nenhuma clínica modelo encontrada para fallback no ambiente local.`);
+                                    continue;
                                 }
                             }
 
@@ -271,7 +280,7 @@ const processWebhookInbox = async () => {
 setInterval(processWebhookInbox, 10000);
 
 const handleIncomingWebhook = async (req, res) => {
-    const skipVerify = process.env.SKIP_WEBHOOK_VERIFY === 'true';
+    const skipVerify = process.env.SKIP_WEBHOOK_VERIFY === 'true' && process.env.NODE_ENV !== 'production';
     if (!skipVerify && !verifySignature(req)) {
         console.warn('⛔ Requisição rejeitada: assinatura HMAC inválida');
         return res.sendStatus(403);
