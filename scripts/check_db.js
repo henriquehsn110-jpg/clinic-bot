@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { cleanEnvVar } = require('./services/databaseService');
+const { cleanEnvVar } = require('../services/databaseService');
 const { createClient } = require('@supabase/supabase-js');
 const supabaseUrl = cleanEnvVar(process.env.SUPABASE_URL);
 const supabaseKey = cleanEnvVar(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY);
