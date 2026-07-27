@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador WhatsApp Web — ClinicaBot SaaS Pro</title>
+    <title>Simulador WhatsApp Smartphone — ClinicaBot SaaS Pro</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,14 +17,13 @@
             --wa-green-hover: #008f6f;
             --wa-teal: #075e54;
             --wa-bg: #efeae2;
-            --wa-header-bg: #f0f2f5;
+            --wa-header-bg: #075e54;
             --wa-msg-in: #ffffff;
-            --wa-msg-out: #d9fdd3;
+            --wa-msg-out: #e7ffdb;
             --wa-blue-tick: #53bdeb;
             --text-main: #111b21;
             --text-muted: #667781;
-            --text-subtle: #8696a0;
-            --font-wa: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            --font-wa: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
         }
 
         * {
@@ -36,188 +35,165 @@
         }
 
         body {
-            background-color: #111b21;
-            background-image: linear-gradient(180deg, #00a884 0%, #00a884 127px, #111b21 127px, #111b21 100%);
-            height: 100vh;
+            background: #0f172a;
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 0;
-            overflow: hidden;
+            padding: 20px;
         }
 
-        /* Container WhatsApp Web */
-        .web-container {
-            width: 100%;
-            max-width: 1200px;
-            height: 94vh;
-            background: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.26);
-            display: flex;
-            overflow: hidden;
+        /* Moldura de Smartphone (iPhone / Android Shell) */
+        .phone-frame {
+            width: 390px;
+            height: 780px;
+            background: #000000;
+            border-radius: 48px;
+            padding: 12px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(255, 255, 255, 0.1);
             position: relative;
-        }
-
-        /* Sidebar com lista de conversas */
-        .sidebar {
-            width: 380px;
-            background: #ffffff;
-            border-right: 1px solid #e9edef;
             display: flex;
             flex-direction: column;
         }
 
-        .sidebar-header {
-            height: 60px;
-            background: var(--wa-header-bg);
-            padding: 10px 16px;
+        /* Dynamic Island / Notch */
+        .phone-notch {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 110px;
+            height: 28px;
+            background: #000000;
+            border-radius: 20px;
+            z-index: 99;
             display: flex;
             align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+        }
+
+        .notch-camera {
+            width: 10px;
+            height: 10px;
+            background: #111827;
+            border-radius: 50%;
+            border: 1px solid #1f2937;
+        }
+
+        /* Tela do Smartphone */
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: var(--wa-bg);
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86edd832-73b2-11e7-85f5-f041b186d08a.png');
+            border-radius: 38px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Status Bar do Celular */
+        .status-bar {
+            height: 44px;
+            background: var(--wa-header-bg);
+            color: #ffffff;
+            display: flex;
             justify-content: space-between;
-            border-bottom: 1px solid #e9edef;
+            align-items: flex-end;
+            padding: 0 24px 8px 24px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 90;
+        }
+
+        .status-icons {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            font-size: 11px;
+        }
+
+        /* Header do WhatsApp */
+        .wa-header {
+            height: 56px;
+            background: var(--wa-header-bg);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            gap: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            z-index: 90;
+        }
+
+        .btn-back {
+            color: #ffffff;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .avatar-container {
+            position: relative;
         }
 
         .avatar-circle {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
-            background: #00a884;
-            color: white;
+            background: #ffffff;
+            color: var(--wa-teal);
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 18px;
             font-weight: 700;
-            font-size: 16px;
         }
 
-        .search-bar {
-            padding: 8px 12px;
-            background: #ffffff;
-            border-bottom: 1px solid #e9edef;
+        .online-dot {
+            width: 10px;
+            height: 10px;
+            background: #25D366;
+            border: 2px solid var(--wa-header-bg);
+            border-radius: 50%;
+            position: absolute;
+            bottom: 0;
+            right: 0;
         }
 
-        .search-input-wrapper {
-            background: #f0f2f5;
-            border-radius: 8px;
-            padding: 6px 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .search-input-wrapper input {
-            border: none;
-            background: transparent;
-            outline: none;
-            width: 100%;
-            font-size: 14px;
-        }
-
-        .chats-list {
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .chat-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            gap: 12px;
-            cursor: pointer;
-            border-bottom: 1px solid #f0f2f5;
-            transition: background 0.2s;
-        }
-
-        .chat-item:hover, .chat-item.active {
-            background: #f0f2f5;
-        }
-
-        .chat-info {
+        .contact-info {
             flex: 1;
         }
 
-        .chat-name-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2px;
-        }
-
-        .chat-name {
+        .contact-name {
             font-weight: 600;
-            color: var(--text-main);
             font-size: 15px;
+            line-height: 18px;
         }
 
-        .chat-time {
-            font-size: 12px;
-            color: var(--text-muted);
+        .contact-status {
+            font-size: 11px;
+            opacity: 0.85;
         }
 
-        .chat-preview {
-            font-size: 13px;
-            color: var(--text-muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 240px;
-        }
-
-        /* Área de Chat Principal */
-        .chat-area {
+        /* Área de Mensagens */
+        .chat-body {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: var(--wa-bg);
-            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86edd832-73b2-11e7-85f5-f041b186d08a.png');
-            position: relative;
-        }
-
-        .chat-header {
-            height: 60px;
-            background: var(--wa-header-bg);
-            padding: 10px 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #e9edef;
-            z-index: 10;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .header-title {
-            font-weight: 600;
-            color: var(--text-main);
-            font-size: 16px;
-        }
-
-        .header-status {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        /* Corpo do Chat / Mensagens */
-        .chat-messages {
-            flex: 1;
-            padding: 20px 32px;
+            padding: 16px 12px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
 
         .message-bubble {
-            max-width: 65%;
-            padding: 8px 12px;
-            border-radius: 7.5px;
-            font-size: 14px;
-            line-height: 19px;
+            max-width: 82%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 13.5px;
+            line-height: 18px;
             position: relative;
             box-shadow: 0 1px 0.5px rgba(11,20,26,0.13);
             word-wrap: break-word;
@@ -238,196 +214,234 @@
         }
 
         .msg-time {
-            font-size: 11px;
-            color: var(--text-subtle);
+            font-size: 10px;
+            color: var(--text-muted);
             float: right;
-            margin-left: 12px;
+            margin-left: 10px;
             margin-top: 4px;
         }
 
-        /* Botões / Componentes Interativos do WhatsApp */
-        .wa-btn-container {
+        /* Botões Interativos */
+        .buttons-container {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
             margin-top: 8px;
         }
 
-        .wa-button {
+        .btn-action {
             background: #ffffff;
-            border: 1px solid #e9edef;
+            border: 1px solid #00a884;
             color: #00a884;
-            padding: 8px 12px;
+            padding: 8px 10px;
             border-radius: 6px;
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 600;
             cursor: pointer;
             text-align: center;
-            transition: background 0.15s;
+            transition: all 0.15s;
         }
 
-        .wa-button:hover {
-            background: #f0f2f5;
+        .btn-action:hover, .btn-action:active {
+            background: #00a884;
+            color: #ffffff;
         }
 
-        /* Footer / Input de Mensagem */
-        .chat-footer {
-            min-height: 62px;
-            background: var(--wa-header-bg);
-            padding: 10px 16px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .input-wrapper {
-            flex: 1;
+        /* Widget de Seleção de Data */
+        .calendar-box {
             background: #ffffff;
             border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            border: 1px solid #e9edef;
+        }
+
+        .calendar-box label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .calendar-box input[type="date"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #00a884;
+            border-radius: 6px;
+            outline: none;
+            font-size: 13px;
+        }
+
+        /* Grid de Horários */
+        .slots-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .slot-btn {
+            background: #f0f2f5;
+            border: 1px solid #00a884;
+            color: #00a884;
+            padding: 6px 4px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .slot-btn:hover {
+            background: #00a884;
+            color: #ffffff;
+        }
+
+        /* Indicador de Digitando */
+        .typing-indicator {
+            align-self: flex-start;
+            background: #ffffff;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            display: none;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .dot {
+            width: 5px;
+            height: 5px;
+            background: #8696a0;
+            border-radius: 50%;
+            animation: bounce 1.3s infinite ease-in-out;
+        }
+        .dot:nth-child(2) { animation-delay: 0.15s; }
+        .dot:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-4px); }
+        }
+
+        /* Footer / Campo de Envio do WhatsApp */
+        .wa-footer {
+            min-height: 54px;
+            background: #f0f2f5;
+            padding: 6px 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-box {
+            flex: 1;
+            background: #ffffff;
+            border-radius: 20px;
             padding: 8px 14px;
             display: flex;
             align-items: center;
         }
 
-        .input-wrapper input {
+        .input-box input {
             width: 100%;
             border: none;
             outline: none;
-            font-size: 15px;
+            font-size: 14px;
         }
 
-        .btn-send {
-            width: 40px;
-            height: 40px;
+        .btn-mic-send {
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             background: #00a884;
-            color: white;
+            color: #ffffff;
             border: none;
-            outline: none;
-            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
-        }
-
-        .btn-send:hover {
-            background: var(--wa-green-hover);
-        }
-
-        /* Widget de Seleção de Data/Hora no Simulador */
-        .calendar-widget {
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        .calendar-widget input[type="date"] {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            outline: none;
-            margin-bottom: 8px;
-        }
-
-        .slots-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-        }
-
-        .slot-pill {
-            background: #f0f2f5;
-            border: 1px solid #00a884;
-            color: #00a884;
-            padding: 6px;
-            text-align: center;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 15px;
             cursor: pointer;
         }
 
-        .slot-pill:hover {
-            background: #00a884;
-            color: #ffffff;
+        /* Home Indicator (iPhone Line) */
+        .home-bar {
+            width: 120px;
+            height: 4px;
+            background: #ffffff;
+            border-radius: 2px;
+            position: absolute;
+            bottom: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
         }
     </style>
 </head>
 <body>
 
-    <div class="web-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <div class="avatar-circle">IA</div>
-                <div style="font-weight: 600; font-size: 14px;">Simulador ClinicaBot</div>
-                <i class="fa-solid fa-ellipsis-vertical" style="color: var(--text-muted); cursor: pointer;"></i>
-            </div>
-
-            <div class="search-bar">
-                <div class="search-input-wrapper">
-                    <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted);"></i>
-                    <input type="text" placeholder="Pesquisar ou começar nova conversa">
-                </div>
-            </div>
-
-            <div class="chats-list">
-                <div class="chat-item active">
-                    <div class="avatar-circle" style="background: #075e54;">🦷</div>
-                    <div class="chat-info">
-                        <div class="chat-name-row">
-                            <span class="chat-name">Clínica Modelo (WhatsApp)</span>
-                            <span class="chat-time" id="chat-time-now">Agora</span>
-                        </div>
-                        <div class="chat-preview" id="chat-last-preview">Olá! Sou a Ana, assistente virtual...</div>
-                    </div>
-                </div>
-            </div>
+    <div class="phone-frame">
+        <div class="phone-notch">
+            <div class="notch-camera"></div>
         </div>
 
-        <!-- Chat Main Area -->
-        <div class="chat-area">
-            <div class="chat-header">
-                <div class="header-left">
-                    <div class="avatar-circle" style="background: #075e54;">🦷</div>
-                    <div>
-                        <div class="header-title">Clínica Modelo Odontológica</div>
-                        <div class="header-status" id="header-status-text">online (Atendimento Virtual por IA)</div>
-                    </div>
-                </div>
-                <div>
-                    <i class="fa-solid fa-video" style="color: var(--text-muted); margin-right: 16px; cursor: pointer;"></i>
-                    <i class="fa-solid fa-phone" style="color: var(--text-muted); margin-right: 16px; cursor: pointer;"></i>
-                    <i class="fa-solid fa-ellipsis-vertical" style="color: var(--text-muted); cursor: pointer;"></i>
+        <div class="phone-screen">
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <span id="phone-clock">09:41</span>
+                <div class="status-icons">
+                    <i class="fa-solid fa-wifi"></i>
+                    <i class="fa-solid fa-signal"></i>
+                    <i class="fa-solid fa-battery-full"></i>
                 </div>
             </div>
 
-            <!-- Lista de Mensagens do Chat -->
-            <div class="chat-messages" id="chat-messages">
+            <!-- WhatsApp Header -->
+            <div class="wa-header">
+                <i class="fa-solid fa-arrow-left btn-back"></i>
+                <div class="avatar-container">
+                    <div class="avatar-circle">🦷</div>
+                    <div class="online-dot"></div>
+                </div>
+                <div class="contact-info">
+                    <div class="contact-name">Clínica Modelo Odonto</div>
+                    <div class="contact-status">online (Atendimento Virtual por IA)</div>
+                </div>
+                <i class="fa-solid fa-ellipsis-vertical" style="font-size: 16px; cursor: pointer;"></i>
+            </div>
+
+            <!-- Mensagens -->
+            <div class="chat-body" id="chat-body">
                 <div class="message-bubble incoming">
-                    Olá! Sou a Ana, assistente virtual da Clínica Modelo. Como posso te ajudar hoje? 😊
-                    <span class="msg-time">08:00</span>
-                    <div class="wa-btn-container">
-                        <button class="wa-button" onclick="sendQuickMessage('Agendar Consulta')">📅 Agendar Consulta</button>
-                        <button class="wa-button" onclick="sendQuickMessage('Remarcar/Cancelar')">🔄 Remarcar/Cancelar</button>
-                        <button class="wa-button" onclick="sendQuickMessage('Outras Dúvidas')">❓ Outras Dúvidas</button>
+                    Olá! Sou a Ana, assistente virtual da Clínica Modelo Odontológica 😊 Como posso te ajudar hoje?
+                    <span class="msg-time" id="init-time">09:41</span>
+                    <div class="buttons-container">
+                        <button class="btn-action" onclick="sendText('Agendar Consulta')">📅 Agendar Consulta</button>
+                        <button class="btn-action" onclick="sendText('Remarcar/Cancelar')">🔄 Remarcar/Cancelar</button>
+                        <button class="btn-action" onclick="sendText('Outras Dúvidas')">❓ Outras Dúvidas</button>
                     </div>
+                </div>
+
+                <div class="typing-indicator" id="typing-indicator">
+                    <span>Ana está digitando</span>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
                 </div>
             </div>
 
-            <!-- Footer / Input -->
-            <div class="chat-footer">
-                <i class="fa-regular fa-face-smile" style="font-size: 22px; color: var(--text-muted); cursor: pointer;"></i>
-                <i class="fa-solid fa-paperclip" style="font-size: 20px; color: var(--text-muted); cursor: pointer;"></i>
-                <div class="input-wrapper">
-                    <input type="text" id="user-input" placeholder="Digite uma mensagem..." onkeydown="handleKeyPress(event)">
+            <!-- Campo de Entrada -->
+            <div class="wa-footer">
+                <i class="fa-regular fa-face-smile" style="font-size: 20px; color: #8696a0; cursor: pointer; margin-left: 4px;"></i>
+                <div class="input-box">
+                    <input type="text" id="user-input" placeholder="Mensagem" onkeydown="handleKey(event)">
                 </div>
-                <button class="btn-send" onclick="sendMessage()"><i class="fa-solid fa-paper-plane"></i></button>
+                <button class="btn-mic-send" onclick="submitMessage()"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
+
+            <div class="home-bar"></div>
         </div>
     </div>
 
@@ -437,37 +451,41 @@
             : 'http://localhost:3000/api/webhook';
 
         const TEST_PHONE = '5511999998888';
-        const CLINIC_ID = 'e8f24abe-381d-499d-9596-252507b32194';
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const clockElem = document.getElementById('phone-clock');
+            if (clockElem) clockElem.innerText = timeStr;
+            const initTimeElem = document.getElementById('init-time');
+            if (initTimeElem) initTimeElem.innerText = timeStr;
+        }
+        updateClock();
 
         function getTimeStr() {
             return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         }
 
-        document.getElementById('chat-time-now').innerText = getTimeStr();
-
-        function handleKeyPress(e) {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
+        function handleKey(e) {
+            if (e.key === 'Enter') submitMessage();
         }
 
-        function sendQuickMessage(text) {
+        function sendText(text) {
             document.getElementById('user-input').value = text;
-            sendMessage();
+            submitMessage();
         }
 
-        async function sendMessage() {
+        async function submitMessage() {
             const input = document.getElementById('user-input');
             const text = input.value.trim();
             if (!text) return;
 
             input.value = '';
+            appendBubble(text, 'outgoing');
 
-            // Adiciona mensagem enviada do paciente na interface
-            appendMessage(text, 'outgoing');
+            showTyping(true);
 
             try {
-                // Envia para a API local do Webhook
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
@@ -482,7 +500,7 @@
                                 value: {
                                     messaging_product: 'whatsapp',
                                     metadata: { display_phone_number: '5511999998888', phone_number_id: '1240708369119720' },
-                                    contacts: [{ profile: { name: 'Paciente Simulador' }, wa_id: TEST_PHONE }],
+                                    contacts: [{ profile: { name: 'Paciente Simulador Smartphone' }, wa_id: TEST_PHONE }],
                                     messages: [{
                                         from: TEST_PHONE,
                                         id: 'wamid.' + Date.now(),
@@ -498,77 +516,82 @@
                 });
 
                 const data = await response.json();
+                showTyping(false);
+
                 if (data.responses && data.responses.length > 0) {
                     data.responses.forEach(resp => renderBotResponse(resp));
                 }
             } catch (err) {
-                console.error('Erro na chamada do simulador:', err);
-                appendMessage('⚠️ Erro de conexão com o servidor local do ClinicaBot.', 'incoming');
+                showTyping(false);
+                appendBubble('⚠️ Erro ao conectar com o servidor local do ClinicaBot.', 'incoming');
             }
         }
 
-        function appendMessage(text, type) {
-            const container = document.getElementById('chat-messages');
+        function appendBubble(text, type) {
+            const body = document.getElementById('chat-body');
+            const typing = document.getElementById('typing-indicator');
+
             const bubble = document.createElement('div');
             bubble.className = `message-bubble ${type}`;
             bubble.innerHTML = `${text.replace(/\n/g, '<br>')}<span class="msg-time">${getTimeStr()}</span>`;
-            container.appendChild(bubble);
-            container.scrollTop = container.scrollHeight;
-            document.getElementById('chat-last-preview').innerText = text;
+
+            body.insertBefore(bubble, typing);
+            body.scrollTop = body.scrollHeight;
         }
 
         function renderBotResponse(resp) {
-            const container = document.getElementById('chat-messages');
+            const body = document.getElementById('chat-body');
+            const typing = document.getElementById('typing-indicator');
+
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble incoming';
 
-            let contentHTML = resp.text ? resp.text.replace(/\n/g, '<br>') : '';
+            let html = resp.text ? resp.text.replace(/\n/g, '<br>') : '';
 
-            // Se o bot retornou botões
             if (resp.buttons && resp.buttons.length > 0) {
-                contentHTML += '<div class="wa-btn-container">';
-                resp.buttons.forEach(bText => {
-                    contentHTML += `<button class="wa-button" onclick="sendQuickMessage('${bText}')">${bText}</button>`;
+                html += '<div class="buttons-container">';
+                resp.buttons.forEach(b => {
+                    html += `<button class="btn-action" onclick="sendText('${b}')">${b}</button>`;
                 });
-                contentHTML += '</div>';
+                html += '</div>';
             }
 
-            // Se o bot retornou lista de procedimentos
             if (resp.showProceduresList && resp.procedures) {
-                contentHTML += '<div class="wa-btn-container">';
+                html += '<div class="buttons-container">';
                 resp.procedures.forEach(proc => {
-                    contentHTML += `<button class="wa-button" onclick="sendQuickMessage('${proc}')">${proc}</button>`;
+                    html += `<button class="btn-action" onclick="sendText('${proc}')">${proc}</button>`;
                 });
-                contentHTML += '</div>';
+                html += '</div>';
             }
 
-            // Se o bot pediu exibição de calendário visual
             if (resp.showCalendar) {
                 const todayIso = new Date().toISOString().split('T')[0];
-                contentHTML += `
-                    <div class="calendar-widget">
-                        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Selecione a data no calendário:</label>
-                        <input type="date" min="${todayIso}" id="cal-picker" onchange="onDateSelected(this.value)">
+                html += `
+                    <div class="calendar-box">
+                        <label>Escolha uma data no calendário abaixo:</label>
+                        <input type="date" min="${todayIso}" onchange="if(this.value) sendText('Selecionei a data: ' + this.value)">
                     </div>`;
             }
 
-            // Se o bot retornou horários disponíveis
             if (resp.showTimeSlots && resp.availableSlots) {
-                contentHTML += '<div class="calendar-widget"><div class="slots-grid">';
+                html += '<div class="slots-grid">';
                 resp.availableSlots.forEach(slot => {
-                    contentHTML += `<div class="slot-pill" onclick="sendQuickMessage('${slot}')">${slot}</div>`;
+                    html += `<div class="slot-btn" onclick="sendText('${slot}')">${slot}</div>`;
                 });
-                contentHTML += '</div></div>';
+                html += '</div>';
             }
 
-            bubble.innerHTML = `${contentHTML}<span class="msg-time">${getTimeStr()}</span>`;
-            container.appendChild(bubble);
-            container.scrollTop = container.scrollHeight;
+            bubble.innerHTML = `${html}<span class="msg-time">${getTimeStr()}</span>`;
+            body.insertBefore(bubble, typing);
+            body.scrollTop = body.scrollHeight;
         }
 
-        function onDateSelected(dateVal) {
-            if (dateVal) {
-                sendQuickMessage(`Selecionei a data: ${dateVal}`);
+        function showTyping(show) {
+            const typing = document.getElementById('typing-indicator');
+            if (typing) {
+                typing.style.display = show ? 'flex' : 'none';
+                const body = document.getElementById('chat-body');
+                body.scrollTop = body.scrollHeight;
             }
         }
     </script>
