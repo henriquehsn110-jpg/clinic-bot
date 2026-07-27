@@ -1,0 +1,15 @@
+{
+  "clinicabot-regression-guard": {
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "command": "node .agents/scripts/check_regressions.js",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

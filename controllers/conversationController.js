@@ -376,7 +376,7 @@ class ConversationController {
                     // Verifica se o paciente já possui agendamento recém-criado (evita falso alerta em clique duplo)
                     let activeAppt = null;
                     if (patient && patient.id) {
-                        const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(() => []);
+                        const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('FIND_BY_PATIENT_ERR', err.message); return []; });
                         activeAppt = appts.find(a => a.status === 'pending' || a.status === 'confirmed');
                     }
 
@@ -802,7 +802,7 @@ class ConversationController {
 
                         // Consulta disponibilidade de horários para todos os candidatos em paralelo para otimizar o tempo de resposta do lote
                         const availabilities = await Promise.all(
-                            candidateDates.map(d => calendarService.getAvailableSlots(d.formattedDate, clinicId).catch(() => []))
+                            candidateDates.map(d => calendarService.getAvailableSlots(d.formattedDate, clinicId).catch(err => { logger.error('CALENDAR_SLOTS_ERR', err.message); return []; }))
                         );
 
                         // Seleciona até 6 dias (deixando 1 slot para a paginação, pois o teto da Meta é 10 e aqui exibimos 7 opções total)
