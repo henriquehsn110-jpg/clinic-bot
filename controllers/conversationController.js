@@ -211,20 +211,20 @@ class ConversationController {
             );
 
             if (isHumanSupport) {
-                if (/\b(voltar|robô|robo|ia|inteligência artificial|reiniciar|menu|cancelar)\b/i.test(sanitizedText)) {
+                if (/\b(voltar|robô|robo|ia|inteligência artificial|reiniciar|menu|cancelar|falar com a ia)\b/i.test(sanitizedText)) {
                     logger.info('HUMAN_HANDOFF_CANCELED', `Paciente [${phone}] solicitou retorno à IA. Histórico e rascunho resetados.`);
                     history = [];
                     draft = {};
                     await db.sessions.set(phone, history, clinicId);
                     await db.sessions.setDraft(phone, null, clinicId);
                 } else {
-                    const responseText = "Você já está em atendimento com um de nossos atendentes no momento.";
+                    const responseText = "Sua mensagem foi encaminhada para a nossa recepção e em breve um atendente irá responder! 😊\n\nSe preferir voltar ao atendimento automático com a Ana, basta clicar no botão abaixo:";
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken).catch(() => {});
+                        await whatsappService.sendButtonMessage(phone, responseText, ["Falar com a IA (Ana)"], phoneId, clinicToken).catch(() => {});
                     }
                     return {
                         text: responseText,
-                        buttons: [],
+                        buttons: ["Falar com a IA (Ana)"],
                         showCalendar: false,
                         showTimeSlots: false,
                         showProceduresList: false,
