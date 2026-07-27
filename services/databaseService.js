@@ -445,7 +445,9 @@ const appointments = {
 // SESSIONS
 // Substitui o Map em memória. Mesma interface — o controller não precisa mudar.
 // ═══════════════════════════════════════════════════════════════════════════════
-const SESSION_TTL_MINUTES = 30;
+// Configuração de TTL de sessão: Padrão de 24 horas (1440 min) para permitir que pacientes
+// que demorem a responder durante o dia concluam seu agendamento sem reinício de conversa.
+const SESSION_TTL_MINUTES = parseInt(process.env.SESSION_TTL_MINUTES) || 1440;
 
 const sessions = {
 
