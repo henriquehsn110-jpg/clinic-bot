@@ -82,8 +82,22 @@ async function persistHumanHandoff(phone, patient, history, userText, extraNote 
 }
 
 function normalizeInputDate(text) {
-    // 1. Matches DD/MM/YYYY
-    const dmyRegex = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/;
+    // 0. Se o texto já contém "Selecionei a data: YYYY-MM-DD", preserva como está
+    //    (vem do calendário do frontend ou do WhatsApp List — NÃO deve ser reprocessado)
+    const alreadyIso = text.match(/Selecionei a data:\s*(\d{4}-\d{2}-\d{2})/i);
+    if (alreadyIso) {
+        return `Selecionei a data: ${alreadyIso[1]}`;
+    }
+
+    // 0b. Se o texto é puramente YYYY-MM-DD (sem prefixo), também preserva
+    const pureIso = text.match(/^\s*(\d{4})-(\d{2})-(\d{2})\s*$/);
+    if (pureIso) {
+        return `Selecionei a data: ${pureIso[1]}-${pureIso[2]}-${pureIso[3]}`;
+    }
+
+    // 1. Matches DD/MM/YYYY ou DD-MM-YYYY (input humano brasileiro)
+    //    Usa lookahead/lookbehind para NÃO casar com YYYY-MM-DD
+    const dmyRegex = /(?<!\d)(\d{1,2})[\/](\d{1,2})[\/](\d{4})(?!\d)/;
     const dmyMatch = text.match(dmyRegex);
     if (dmyMatch) {
         const day = dmyMatch[1].padStart(2, '0');
@@ -93,7 +107,8 @@ function normalizeInputDate(text) {
     }
     
     // 2. Matches DD/MM (Infere o ano dinamicamente para evitar corrupção em viradas de ano)
-    const dmRegex = /\b(\d{1,2})[\/\-](\d{1,2})\b/;
+    //    Usa apenas barra (/) como separador para não confundir com YYYY-MM-DD
+    const dmRegex = /(?<!\d)(\d{1,2})\/(\d{1,2})(?!\d)/;
     const dmMatch = text.match(dmRegex);
     if (dmMatch) {
         const day = parseInt(dmMatch[1]);
@@ -616,8 +631,10 @@ class ConversationController {
             // Garante 100% de estabilidade navegacional no WhatsApp sem depender do output probabilístico da IA
             const isProcSelection = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
             if (!aiResponse.transferToHuman) {
-                if (draft.type && draft.date && draft.time && (patient?.cpf || draft.cpf || rawCpf)) {
-                    // Passo 5: Todos os dados coletados -> Confirmação explícita
+                // Verifica se o paciente possui nome válido (não é apenas o número de telefone)
+                const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
+                if (draft.type && draft.date && draft.time && (patient?.cpf || draft.cpf || rawCpf) && hasPatientName) {
+                    // Passo 5: Todos os dados coletados (incluindo nome) -> Confirmação explícita
                     aiResponse.buttons = ["Confirmar", "Agendar p/ Outro", "Alterar"];
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
