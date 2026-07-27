@@ -96,3 +96,13 @@
 - **Sintoma:** Ao clicar em "Confirmar", a consulta era criada com 100% de sucesso no banco Supabase, mas o texto da resposta enviada ao WhatsApp do paciente trazia a mensagem `"O CPF informado é inválido. Por favor, informe seu CPF de 11 dígitos para prosseguirmos."`.
 - **Causa Raiz:** No `conversationController.js`, o bloco `if (isConfirming)` efetuava o agendamento no Supabase e limpava o rascunho, porém não possuía um `return` explícito ao final da criação. A execução continuava e caía nas verificações seguintes de extração de CPF. Como a palavra `"Confirmar"` não é um CPF de 11 dígitos, a resposta era sobrescrita com o erro de CPF.
 - **Resolução:** Inserido o `return` explícito com o payload completo e estruturado da mensagem de confirmação de agendamento ao finalizar a gravação no `isConfirming`.
+
+#### 11. Data Trocada no WhatsApp Real (`03/08/2026` → `08/03/2027`)
+- **Sintoma:** Ao selecionar `03/08/2026` (3 de agosto) na lista de datas do WhatsApp, o bot exibia `08/03/2027` (8 de março de 2027) — dia e mês invertidos e ano avançado.
+- **Causa Raiz:** A função `normalizeInputDate()` no `conversationController.js` não reconhecia o formato ISO `YYYY-MM-DD` que chega do WhatsApp List (`Selecionei a data: 2026-08-03`). O regex `dmRegex` (`/\b(\d{1,2})[\/\-](\d{1,2})\b/`) casava com `08-03` de dentro de `2026-08-03`, interpretando `08` como dia e `03` como mês (março). Como março (3) < julho (7, mês atual), incrementava o ano para 2027. Resultado: `2027-03-08` formatado como `08/03/2027`.
+- **Resolução:** (1) Adicionado reconhecimento explícito de `YYYY-MM-DD` / `Selecionei a data: YYYY-MM-DD` no início da função com short-circuit. (2) O regex `dmRegex` agora usa apenas barra `/` como separador (não mais `-`) e lookbehind `(?<!\d)` para não casar dentro de datas ISO. (3) 7/7 cenários de teste validados.
+
+#### 12. Botão [Confirmar] Aparecendo Antes de Coletar o Nome do Paciente
+- **Sintoma:** Após um paciente novo informar o CPF, a IA Gemini perguntava corretamente "Qual é o seu nome completo?", mas os botões `[Confirmar] [Agendar p/ Outro] [Alterar]` já apareciam — permitindo confirmar sem nome.
+- **Causa Raiz:** A máquina de estados determinística (linha 619 do `conversationController.js`) verificava apenas `draft.type && draft.date && draft.time && CPF` para exibir os botões de confirmação (Passo 5), sem verificar se o nome do paciente já havia sido coletado. Pacientes novos com CPF não localizado no banco não possuíam nome, mas a condição era satisfeita prematuramente.
+- **Resolução:** Adicionada verificação `hasPatientName` na condição do Passo 5: `const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone))`. Os botões de confirmação só aparecem quando o nome é válido.
