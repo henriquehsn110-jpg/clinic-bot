@@ -294,11 +294,39 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
         return prompt;
     }
 
+    /**
+     * Filtro Anti-Prompt Injection (MITRE ATLAS Defense)
+     * Detecta e neutraliza tentativas de sequestro de instrução ou extração de System Prompt.
+     */
+    sanitizeInputPrompt(text) {
+        if (!text || typeof text !== 'string') return '';
+        const lower = text.toLowerCase();
+        const injectionPatterns = [
+            /ignore\s+(all\s+)?(previous\s+)?instructions/i,
+            /esqueça\s+(todas\s+as\s+)?instruções/i,
+            /revela\s+(o\s+)?system\s+prompt/i,
+            /quais\s+são\s+(as\s+suas\s+)?regras\s+internas/i,
+            /você\s+agora\s+é\s+um/i,
+            /you\s+are\s+now\s+a/i
+        ];
+
+        for (const pattern of injectionPatterns) {
+            if (pattern.test(lower)) {
+                logger.warn('PROMPT_INJECTION_BLOCKED', `Tentativa de Prompt Injection detectada e neutralizada: "${text.substring(0, 50)}..."`);
+                return "[Mensagem de usuário neutralizada por violar políticas de segurança]";
+            }
+        }
+        return text;
+    }
+
     async generateResponse(userMessage, conversationHistory = [], clinicSettings = {}) {
         // P2: Verifica rate limit antes de chamar a API
         if (!this._checkRateLimit()) {
             throw new Error('RATE_LIMIT_EXCEEDED: Limite de chamadas por minuto atingido. Tente novamente em breve.');
         }
+
+        // Sanitização Anti-Prompt Injection (MITRE ATLAS Guard)
+        userMessage = this.sanitizeInputPrompt(userMessage);
 
         const maxRetries = 2;
         let lastError = null;

@@ -25,4 +25,7 @@ router.post('/handoff/return', (req, res) => dashboardController.returnHandoffTo
 // Configurações da Clínica & IA
 router.post('/settings', (req, res) => dashboardController.updateSettings(req, res));
 
+// Exportação / Stream de Logs para SIEM Corporativo (Item 68 da Matriz Bradesco GTI)
+router.get('/audit-stream', (req, res) => dashboardController.getAuditStream(req, res));
+
 module.exports = router;

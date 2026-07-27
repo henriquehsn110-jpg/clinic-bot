@@ -442,6 +442,36 @@ class DashboardController {
             res.status(500).json({ error: 'Erro ao salvar configurações no servidor.' });
         }
     }
+
+    // Endpoint de Integração SIEM Corporativo (Item 68 da Matriz Bradesco GTI)
+    // Permite que sistemas de SIEM (Datadog, Splunk, QRadar) consumam os logs de auditoria em tempo real
+    async getAuditStream(req, res) {
+        try {
+            const { clinicId } = req.user;
+            const limit = parseInt(req.query.limit) || 100;
+
+            if (db.supabase) {
+                let query = db.supabase
+                    .from('webhook_logs')
+                    .select('id, clinic_id, event_type, payload_summary, created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(limit);
+
+                if (clinicId && clinicId !== 'all') {
+                    query = query.eq('clinic_id', clinicId);
+                }
+
+                const { data, error } = await query;
+                if (error) throw new Error(`[DB_SIEM] Erro ao buscar logs: ${error.message}`);
+                return res.json({ format: "SIEM_JSON_v1", timestamp: new Date().toISOString(), events: data || [] });
+            }
+
+            return res.json({ format: "SIEM_JSON_v1", timestamp: new Date().toISOString(), events: [] });
+        } catch (err) {
+            logger.error('SIEM_STREAM_ERR', `Erro na exportação SIEM: ${err.message}`);
+            res.status(500).json({ error: 'Erro ao gerar stream SIEM.' });
+        }
+    }
 }
 
 module.exports = new DashboardController();
