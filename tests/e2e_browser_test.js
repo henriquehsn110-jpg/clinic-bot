@@ -2,7 +2,10 @@ const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 
-const INDEX_URL = 'file://' + path.resolve(__dirname, '../../index.html').replace(/\\/g, '/');
+const indexPath = fs.existsSync(path.resolve(__dirname, '../public/index.html')) 
+    ? path.resolve(__dirname, '../public/index.html') 
+    : path.resolve(__dirname, '../../index.html');
+const INDEX_URL = 'file://' + indexPath.replace(/\\/g, '/');
 const SCREENSHOT_DIR = path.resolve(__dirname, 'screenshots');
 
 async function runE2EBrowserTests() {

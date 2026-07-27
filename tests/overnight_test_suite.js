@@ -289,30 +289,34 @@ async function runTestSuite() {
     }
 
     // ── SUÍTES ADICIONAIS DE QA & DB CHECKS ──────────────────────────────────
-    console.log(`\n🔹 [SUÍTES ADICIONAIS] Executando check_db, test_reminders e stress_test`);
-    try {
-        console.log(`\n--- 1. Running node scripts/check_db.js ---`);
-        const checkDbOut = execSync('node scripts/check_db.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
-        console.log(checkDbOut.trim());
-    } catch (e) {
-        console.error("Erro em check_db.js:", e.stdout || e.message);
-    }
+    console.log(`\n🔹 [SUÍTES ADICIONAIS] Executando bateria completa de testes noturnos e auditoria`);
+    
+    const extraSuites = [
+        { name: 'check_db.js (Validação de Registros DB)', cmd: 'node scripts/check_db.js' },
+        { name: 'check_db_status.js (Status e Histórico DB)', cmd: 'node scripts/check_db_status.js' },
+        { name: 'check_health.js (Health Check Endpoint)', cmd: 'node scripts/check_health.js' },
+        { name: 'qa_static.js (Auditoria Estática de Segurança)', cmd: 'node scripts/qa_static.js' },
+        { name: 'qa_investigador_estados.js (Simulação de Fluxos da Ana)', cmd: 'node scripts/qa_investigador_estados.js' },
+        { name: 'test_reminders.js (Cron de Lembretes BRT)', cmd: 'node tests/test_reminders.js' },
+        { name: 'test_tenant_rls_isolation.js (Isolamento Multi-Tenant RLS)', cmd: 'node tests/test_tenant_rls_isolation.js' },
+        { name: 'test_hmac_webhook_injection.js (Auditoria HMAC SHA-256)', cmd: 'node tests/test_hmac_webhook_injection.js' },
+        { name: 'test_cpf.js (Validação Matemática CPF/LGPD)', cmd: 'node tests/unit/test_cpf.js' },
+        { name: 'test_race_condition.js (Concorrência Anti-Overbooking)', cmd: 'node tests/unit/test_race_condition.js' },
+        { name: 'test_chat_dashboard_integration.js (Integração E2E Chat ↔ Dashboard)', cmd: 'node tests/test_chat_dashboard_integration.js' },
+        { name: 'e2e_dashboard_test.js (Auditoria Visual Headless DOM)', cmd: 'node tests/e2e_dashboard_test.js' },
+        { name: 'e2e_browser_test.js (Auditoria Links Vendas & Breakpoints)', cmd: 'node tests/e2e_browser_test.js' },
+        { name: 'stress_test.js (Teste de Carga 100 Reqs Concorrentes)', cmd: 'node tests/stress_test.js' }
+    ];
 
-    try {
-        console.log(`\n--- 2. Running node tests/test_reminders.js ---`);
-        const remindersOut = execSync('node tests/test_reminders.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
-        console.log(remindersOut.trim());
-    } catch (e) {
-        console.error("Erro em test_reminders.js:", e.stdout || e.message);
-    }
-
-    try {
-        console.log(`\n--- 4. Running node tests/test_chat_dashboard_integration.js ---`);
-        const intOut = execSync('node tests/test_chat_dashboard_integration.js', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
-        console.log(intOut.trim());
-        assert(true, "Teste de Integração E2E Chat ↔ Dashboard executado com 100% de sucesso!");
-    } catch (e) {
-        assert(false, "Falha no Teste de Integração E2E Chat ↔ Dashboard: " + (e.stdout || e.message));
+    for (const suite of extraSuites) {
+        try {
+            console.log(`\n--- Executando: ${suite.name} ---`);
+            const out = execSync(suite.cmd, { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+            console.log(out.trim());
+            assert(true, `Suíte ${suite.name} executada com 100% de sucesso!`);
+        } catch (e) {
+            assert(false, `Falha em ${suite.name}: ${e.stdout || e.message}`);
+        }
     }
 
 

@@ -23,7 +23,7 @@ async function sim(msg) {
 async function run() {
     console.log('--- TESTE 1: Paciente Novo + Outro Flow ---');
     await new Promise((resolve, reject) => {
-        http.get('http://localhost:3000/api/simulate/reset?phone=5511999998888', (res) => {
+        http.get(`http://localhost:3000/api/simulate/reset?phone=${phone}`, (res) => {
             res.on('data', () => {});
             res.on('end', resolve);
         }).on('error', reject);
