@@ -1,7 +1,21 @@
-require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+
+// Garante a localização do node_modules do backend mesmo quando chamado da raiz
+const backendDir = fs.existsSync(path.join(__dirname, '../clinic-bot-backend')) 
+    ? path.join(__dirname, '../clinic-bot-backend') 
+    : path.join(__dirname, '..');
+
+const backendNodeModules = path.join(backendDir, 'node_modules');
+if (fs.existsSync(backendNodeModules)) {
+    module.paths.unshift(backendNodeModules);
+}
+
+require('dotenv').config({ path: path.join(backendDir, '.env') });
 const readline = require('readline');
-const conversationController = require('../clinic-bot-backend/controllers/conversationController');
-const databaseService = require('../clinic-bot-backend/services/databaseService');
+
+const conversationController = require(path.join(backendDir, 'controllers/conversationController'));
+const databaseService = require(path.join(backendDir, 'services/databaseService'));
 
 const TEST_PHONE = '5511999998888';
 const CLINIC_ID = 'e8f24abe-381d-499d-9596-252507b32194';
