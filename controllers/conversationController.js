@@ -144,6 +144,35 @@ function normalizeInputTime(text) {
     return null;
 }
 
+function extractCleanName(text) {
+    if (!text || typeof text !== 'string') return null;
+    let clean = text.trim();
+
+    // Remove marcadores de sistema se houver
+    clean = clean.replace(/\[\s*SISTEMA\s*:.*?\]/gi, '').trim();
+
+    // Se contiver palavras reservadas de comandos ou palavras da aplicação, não é nome
+    if (/Selecionei|CPF|confirmar|cancelar|remarcar|agendar|opções|opcao/i.test(clean)) return null;
+
+    // Remove prefixos comuns em português
+    clean = clean.replace(/^(meu\s+nome\s+é|meu\s+nome\s+e|sou\s+a|sou\s+o|me\s+chamo|chamo-me|pode\s+colocar|nome:\s*)\s*/i, '').trim();
+
+    // Bloqueia saudações e frases curtas genéricas de serem salvas como nome
+    const greetingBlocklist = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|obrigad[oa]|sim|não|nao|ok|beleza|valeu|tchau|confirmar|cancelar|remarcar|alterar|agendar|menu)$/i;
+    if (greetingBlocklist.test(clean)) return null;
+
+    // Um nome deve ter pelo menos 2 caracteres e conter letras
+    if (clean.length < 2 || !/[a-zA-ZáàâãéèêíïóôõúüçÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇ]/.test(clean)) return null;
+
+    // Capitalização adequada (primeiras letras maiúsculas)
+    const words = clean.split(/\s+/).map(w => {
+        if (w.length <= 2 && /^(de|da|do|dos|das|e)$/i.test(w)) return w.toLowerCase();
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    });
+
+    return words.join(' ');
+}
+
 class ConversationController {
 
     async handleIncomingMessage(phone, text, isSimulation = false, clinicId, phoneId) {
@@ -465,18 +494,48 @@ class ConversationController {
             for (let i = history.length - 1; i >= 0; i--) {
                 if (history[i].role === 'model') {
                     const modelText = history[i].parts?.[0]?.text || '';
-                    if (modelText.includes('Qual é o seu nome completo?')) {
+                    if (modelText.includes('Qual é o seu nome completo?') || modelText.includes('informe seu nome completo')) {
                         wasNameRequested = true;
                         break;
                     }
                 }
             }
-            if (wasNameRequested && sanitizedText.length > 2 && !sanitizedText.includes('CPF') && !sanitizedText.includes('Selecionei')) {
-                // Bloqueia saudações e frases curtas genéricas de serem salvas como nome
-                const greetingBlocklist = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|obrigad[oa]|sim|não|nao|ok|beleza|valeu|tchau|confirmar|cancelar|remarcar|alterar|agendar|menu)$/i;
-                if (!greetingBlocklist.test(sanitizedText.trim())) {
-                    draft.name = sanitizedText;
+
+            if (wasNameRequested) {
+                const extractedName = extractCleanName(sanitizedText);
+                if (extractedName) {
+                    draft.name = extractedName;
                     await db.sessions.setDraft(phone, draft, clinicId);
+                    // Atualiza imediatamente a tabela de pacientes no Supabase para sincronizar
+                    await db.patients.updateName(phone, extractedName, clinicId).catch(() => {});
+                    if (patient) patient.name = extractedName;
+                } else {
+                    // Se o paciente mandou saudação ou texto genérico ao invés do nome,
+                    // barramos de forma determinística e solicitamos o nome novamente
+                    const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
+                    if (!isBypass) {
+                        const nameErrText = "Para prosseguirmos com o agendamento, por favor me informe o seu nome completo.";
+                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                        history.push({ role: 'model', parts: [{ text: `${nameErrText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
+                        if (history.length > 20) history = history.slice(-20);
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, nameErrText, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text:            nameErrText,
+                            buttons:         [],
+                            showCalendar:    false,
+                            showTimeSlots:   false,
+                            showProceduresList: false,
+                            requireCpf:      false,
+                            procedures:      null,
+                            availableSlots:  null,
+                            transferToHuman: false
+                        };
+                    }
                 }
             }
 
@@ -620,8 +679,10 @@ class ConversationController {
                 textForAI = `[SISTEMA INVISÍVEL: Este paciente já é cadastrado no banco de dados. Nome: ${patient.name}, CPF: Validado.]\n` + processedText;
             }
 
-            if (draft.type || draft.date || draft.time) {
-                const draftInfoTag = `[SISTEMA INVISÍVEL: Dados do agendamento — Procedimento: ${draft.type || 'Consulta'}, Médico: ${doctorName}, Data: ${draft.date || 'a definir'}, Horário: ${draft.time || 'a definir'}. Na mensagem de confirmação, cite obrigatoriamente o procedimento ("${draft.type || 'Consulta'}") e o médico ("${doctorName}")].`;
+            const currentPatientName = draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone ? patient.name : null);
+
+            if (draft.type || draft.date || draft.time || currentPatientName) {
+                const draftInfoTag = `[SISTEMA INVISÍVEL: Dados do agendamento — Paciente: ${currentPatientName || 'a definir'}, Procedimento: ${draft.type || 'Consulta'}, Médico: ${doctorName}, Data: ${draft.date || 'a definir'}, Horário: ${draft.time || 'a definir'}. Na mensagem de confirmação, cite obrigatoriamente o nome do paciente ("${currentPatientName || 'a definir'}"), o procedimento ("${draft.type || 'Consulta'}") e o médico ("${doctorName}")].`;
                 textForAI = `${textForAI}\n${draftInfoTag}`;
             }
 
@@ -886,4 +947,6 @@ class ConversationController {
     }
 }
 
-module.exports = new ConversationController();
+const controllerInstance = new ConversationController();
+controllerInstance.extractCleanName = extractCleanName;
+module.exports = controllerInstance;
