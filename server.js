@@ -28,16 +28,28 @@ const localOnly = (req, res, next) => {
     next();
 };
 
-// 1. Serve o simulador web e o painel da clínica
+// 1. Serve o simulador web centralizado, a landing page e o painel da clínica
 if (process.env.NODE_ENV !== 'production') {
+    app.use('/simulator', localOnly, express.static(path.join(__dirname, '../simulators/whatsapp-web')));
     app.use('/simulator', localOnly, express.static(path.join(__dirname, '../clinic-bot-simulator')));
+    app.use('/simulator', localOnly, express.static(path.join(__dirname, 'public/simulator')));
 }
-app.use('/dashboard', express.static(path.join(__dirname, 'public'), {
+
+// Arquivos estáticos auxiliares
+app.use('/public', express.static(path.join(__dirname, 'public'), {
     setHeaders: (res) => {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
 }));
-app.get(['/', '/dashboard', '/dashboard.html', '/painel'], (req, res) => {
+
+// Rota da Landing Page de Vendas (Home)
+app.get(['/', '/landing', '/home'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(__dirname, 'public/index.html'));
+});
+
+// Rota Oficial do Painel da Clínica / Recepção
+app.get(['/dashboard', '/dashboard/', '/dashboard.html', '/painel'], (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(__dirname, 'public/dashboard.html'));
 });

@@ -8,7 +8,9 @@
     "dev": "node server.js",
     "test": "node tests/overnight_test_suite.js",
     "test:integration": "node tests/test_chat_dashboard_integration.js",
-    "preflight": "node scripts/preflight_audit.js"
+    "preflight": "node scripts/preflight_audit.js",
+    "simulator": "node ../simulators/cli-chat-simulator.js",
+    "sync:simulators": "node scripts/sync_simulators.js"
   },
   "keywords": [
     "whatsapp",
