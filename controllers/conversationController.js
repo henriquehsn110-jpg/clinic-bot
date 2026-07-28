@@ -1128,6 +1128,7 @@ class ConversationController {
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.requireCpf = false;
+                    aiResponse.text = "Perfeito! Selecione o profissional de sua preferência para o atendimento:";
                 }
             }
 
