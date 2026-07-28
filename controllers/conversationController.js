@@ -834,15 +834,38 @@ class ConversationController {
             }
 
             // 1b. Extração do Médico (se múltipla escolha foi ativada)
-            if (draft.needs_doctor && draft.available_doctors) {
-                const selectedDoc = draft.available_doctors.find(d => sanitizedText.toLowerCase() === d.name.toLowerCase());
-                if (selectedDoc) {
-                    draft.doctor_id = selectedDoc.id;
-                    draft.doctor_name = selectedDoc.name;
-                    draft.needs_doctor = false;
-                    // Limpa a lista de opções para não pesar o JSON
-                    draft.available_doctors = null; 
-                    await db.sessions.setDraft(phone, draft, clinicId);
+            if (draft.needs_doctor) {
+                let availDocs = draft.available_doctors;
+                if (!availDocs || availDocs.length === 0) {
+                    if (draft.type) {
+                        const { data: dbDocs } = await db.supabase
+                            .from('doctors')
+                            .select('id, name')
+                            .eq('clinic_id', clinicId)
+                            .contains('procedures', [draft.type]);
+                        availDocs = dbDocs || [];
+                    }
+                }
+
+                if (availDocs && availDocs.length > 0) {
+                    const cleanText = sanitizedText.replace(/^doc_/, '').trim().toLowerCase();
+                    const selectedDoc = availDocs.find(d => {
+                        const dName = d.name.toLowerCase();
+                        const dId = String(d.id).toLowerCase();
+                        if (dId === cleanText) return true;
+                        if (dName === cleanText) return true;
+                        if (cleanText.includes(dName) || dName.includes(cleanText)) return true;
+                        const parts = cleanText.split(/\s+/).filter(p => p.length > 2 && !['com', 'dra', 'dr.', 'dra.'].includes(p));
+                        return parts.some(p => dName.includes(p));
+                    });
+
+                    if (selectedDoc) {
+                        draft.doctor_id = selectedDoc.id;
+                        draft.doctor_name = selectedDoc.name;
+                        draft.needs_doctor = false;
+                        draft.available_doctors = null; 
+                        await db.sessions.setDraft(phone, draft, clinicId);
+                    }
                 }
             }
 
@@ -1038,7 +1061,7 @@ class ConversationController {
             const matchedProc = PROCEDURES_RICH.find(p => 
                 draft.type && (p.title.toLowerCase().includes(draft.type.toLowerCase()) || draft.type.toLowerCase().includes(p.title.toLowerCase()))
             );
-            const doctorName = matchedProc ? matchedProc.doctor : 'Dr. Carlos Eduardo / Dra. Juliana Mendes';
+            const doctorName = draft.doctor_name || (matchedProc && !matchedProc.doctor.includes('/') ? matchedProc.doctor : 'Profissional da Clínica');
 
             let textForAI = processedText;
             if (patient && patient.name && patient.cpf && !processedText.includes('[SISTEMA:')) {
