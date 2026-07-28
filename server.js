@@ -60,11 +60,16 @@ app.get('/c/:shortId', async (req, res) => {
         const shortId = req.params.shortId;
         if (!shortId || shortId.length < 6) return res.status(404).send("Link de agendamento inválido.");
         
+        const cleanShortId = shortId.trim().toLowerCase();
+        const minUuid = cleanShortId + '-0000-0000-0000-000000000000';
+        const maxUuid = cleanShortId + '-ffff-ffff-ffff-ffffffffffff';
+        
         const db = require('./services/databaseService');
         const { data: appt, error } = await db.supabase
             .from('appointments')
             .select('*, clinic:clinics(name, address)')
-            .ilike('id', `${shortId}%`)
+            .gte('id', minUuid)
+            .lte('id', maxUuid)
             .maybeSingle();
             
         if (error || !appt) {

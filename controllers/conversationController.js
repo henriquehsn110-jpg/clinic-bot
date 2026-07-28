@@ -646,12 +646,12 @@ class ConversationController {
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, confirmText, ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"], phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
                         }
 
                         return {
                             text: confirmText,
-                            buttons: ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"],
+                            buttons: [],
                             showCalendar: false,
                             showTimeSlots: false,
                             showProceduresList: false,
@@ -711,12 +711,12 @@ class ConversationController {
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, confirmText, ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"], phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
                         }
 
                         return {
                             text: confirmText,
-                            buttons: ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"],
+                            buttons: [],
                             showCalendar: false,
                             showTimeSlots: false,
                             showProceduresList: false,
