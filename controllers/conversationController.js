@@ -273,10 +273,13 @@ class ConversationController {
 
         let clinicToken = null;
         let clinicListTitle = "Opções de Agendamento";
+        let clinicSettings = {};
         try {
-            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token, whatsapp_list_title').eq('id', clinicId).maybeSingle();
+            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token, whatsapp_list_title, settings, name').eq('id', clinicId).maybeSingle();
             clinicToken = cData?.whatsapp_token || cData?.token || null;
             if (cData?.whatsapp_list_title) clinicListTitle = cData.whatsapp_list_title;
+            clinicSettings = cData?.settings || {};
+            if (!clinicSettings.name && cData?.name) clinicSettings.name = cData.name;
         } catch {}
         try {
             const patient = await db.patients.findOrCreate(phone, clinicId);
@@ -1095,7 +1098,7 @@ class ConversationController {
                 textForAI = `${textForAI}\n${draftInfoTag}`;
             }
 
-            let aiResponse = await aiService.generateResponse(textForAI, history);
+            let aiResponse = await aiService.generateResponse(textForAI, history, clinicSettings);
             logger.info('STATE_MACHINE', `text: ${sanitizedText}, draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
             console.log(`[DEBUG] draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
 

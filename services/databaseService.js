@@ -105,6 +105,17 @@ const clinics = {
             return data;
         });
     },
+    async findById(id) {
+        return withRetry(async () => {
+            const { data, error } = await supabase
+                .from('clinics')
+                .select('*')
+                .eq('id', id)
+                .maybeSingle();
+            if (error) throw new Error(`clinics.findById: ${error.message}`);
+            return data;
+        });
+    },
     async findBySlug(slug) {
         return withRetry(async () => {
             const { data, error } = await supabase
