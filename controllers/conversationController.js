@@ -1053,7 +1053,7 @@ class ConversationController {
             }
 
             let aiResponse = await aiService.generateResponse(textForAI, history);
-            require('fs').appendFileSync('debug_sm.txt', `[DEBUG] text: ${sanitizedText}, draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}\n`);
+            logger.info('STATE_MACHINE', `text: ${sanitizedText}, draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
             console.log(`[DEBUG] draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
 
             // ── MÁQUINA DE ESTADOS 100% DETERMINÍSTICA DO BACKEND ───────────────────
