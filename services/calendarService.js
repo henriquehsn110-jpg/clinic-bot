@@ -15,7 +15,7 @@ class CalendarService {
      * @param {string} clinicId - UUID da clínica
      * @returns {string[]} - ex: ["09:00", "14:30", "16:00"]
      */
-    async getAvailableSlots(dateStr, clinicId) {
+    async getAvailableSlots(dateStr, clinicId, doctorId = null) {
         if (!clinicId) throw new Error('clinicId é obrigatório em getAvailableSlots');
 
         try {
@@ -32,30 +32,57 @@ class CalendarService {
                 return []; // Nenhum horário disponível em feriados
             }
 
-            // 2. Busca grade de horários ocupados no banco
-            const occupied = await db.appointments.getOccupiedSlots(dateStr, clinicId);
+            // 2. Busca grade de horários ocupados no banco (considerando doctorId)
+            let occupiedQuery = db.supabase
+                .from('appointments')
+                .select('appointment_time')
+                .eq('clinic_id', clinicId)
+                .eq('appointment_date', dateStr)
+                .in('status', ['pending', 'confirmed'])
+                .is('deleted_at', null);
+            
+            if (doctorId) {
+                occupiedQuery = occupiedQuery.eq('doctor_id', doctorId);
+            }
+            
+            const { data: appts } = await occupiedQuery;
+            const occupied = (appts || []).map(a => a.appointment_time.substring(0, 5));
 
-            // 3. Tenta buscar grade de horários customizados da clínica se existir
+            // 3. Tenta buscar grade de horários customizados do médico ou clínica
             let baseSlots = DEFAULT_SLOTS;
             try {
                 const dateObj = new Date(`${dateStr}T12:00:00Z`);
                 const dayOfWeek = dateObj.getDay(); // 0-6
-                const { data: customHours } = await db.supabase
-                    .from('clinic_hours')
-                    .select('available_slots')
-                    .eq('clinic_id', clinicId)
-                    .eq('day_of_week', dayOfWeek)
-                    .maybeSingle();
+                
+                let customHours = null;
+                if (doctorId) {
+                    const { data } = await db.supabase
+                        .from('doctor_business_hours')
+                        .select('available_slots')
+                        .eq('doctor_id', doctorId)
+                        .eq('day_of_week', dayOfWeek)
+                        .maybeSingle();
+                    customHours = data;
+                }
+                
+                if (!customHours) {
+                    const { data } = await db.supabase
+                        .from('clinic_hours')
+                        .select('available_slots')
+                        .eq('clinic_id', clinicId)
+                        .eq('day_of_week', dayOfWeek)
+                        .maybeSingle();
+                    customHours = data;
+                }
 
                 if (customHours && Array.isArray(customHours.available_slots) && customHours.available_slots.length > 0) {
                     baseSlots = customHours.available_slots;
                 }
-            } catch {
-                // Se a tabela clinic_hours não existir, usa DEFAULT_SLOTS
+            } catch (err) {
+                logger.warn('CALENDAR', `Falha ao buscar horas costumizadas: ${err.message}`);
             }
 
-            return baseSlots.filter(slot => !occupied.includes(slot));
-
+            return baseSlots.filter(time => !occupied.includes(time));
         } catch (err) {
             logger.error('CALENDAR', `Erro ao buscar slots disponíveis: ${err.message}`, err.stack);
             const occupied = await db.appointments.getOccupiedSlots(dateStr, clinicId);
@@ -79,6 +106,7 @@ class CalendarService {
             return await db.appointments.create({
                 patient_id:       patient.id,
                 clinic_id:        targetClinicId,
+                doctor_id:        patientData.doctorId || null,
                 appointment_date: patientData.date,
                 appointment_time: patientData.time,
                 type:             patientData.type,

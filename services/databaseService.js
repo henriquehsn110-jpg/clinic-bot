@@ -300,6 +300,7 @@ const appointments = {
                 .insert({
                     patient_id:       data.patient_id,
                     clinic_id:        data.clinic_id,
+                    doctor_id:        data.doctor_id || null,
                     appointment_date: data.appointment_date,  // formato: "2025-12-20"
                     appointment_time: data.appointment_time,  // formato: "09:00:00"
                     type:             data.type,
@@ -682,13 +683,17 @@ const webhooks = {
      * Busca os próximos itens pendentes na fila (C7) de forma atômica
      */
     async fetchPending(limit = 10) {
-        const { data, error } = await supabase.rpc('claim_webhook_inbox', { p_limit: limit });
-        if (error) {
-            // Se o RPC falhar, loga o erro mas não quebra a aplicação inteira
-            logger.error('DATABASE', `Falha ao tentar usar atomic claim_webhook_inbox: ${error.message}`);
+        try {
+            const { data, error } = await supabase.rpc('claim_webhook_inbox', { p_limit: limit });
+            if (error) {
+                logger.error('DATABASE', `Falha ao tentar usar atomic claim_webhook_inbox (Erro Supabase): ${error.message}`);
+                return [];
+            }
+            return data || [];
+        } catch (err) {
+            logger.error('DATABASE', `Falha de rede ao tentar usar atomic claim_webhook_inbox (Exception): ${err.message}`);
             return [];
         }
-        return data || [];
     },
 
     /**

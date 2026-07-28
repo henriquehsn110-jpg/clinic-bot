@@ -414,7 +414,7 @@ class DashboardController {
     // Salva configurações personalizadas da clínica e da IA
     async updateSettings(req, res) {
         try {
-            const { name, personaName, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours } = req.body;
+            const { name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours } = req.body;
             const { clinicId } = req.user;
 
             const settings = {
@@ -435,6 +435,7 @@ class DashboardController {
                 await db.supabase.from('clinics').upsert({
                     id: clinicId,
                     name,
+                    whatsapp_list_title: whatsappListTitle || 'Tratamentos',
                     settings
                 });
             }

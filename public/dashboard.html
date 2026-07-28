@@ -718,6 +718,10 @@
                                     <input type="text" id="cfg-persona-name" value="Ana" onkeyup="updateLivePreview()" required>
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <label>Título do Menu do WhatsApp (Ex: Tratamentos, Especialidades, Opções)</label>
+                                <input type="text" id="cfg-list-title" value="Tratamentos" placeholder="Aparece no topo do menu de botões do WhatsApp">
+                            </div>
                         </div>
 
                         <div class="settings-card">
@@ -1614,6 +1618,7 @@
             e.preventDefault();
             const name = document.getElementById('cfg-clinic-name').value.trim();
             const personaName = document.getElementById('cfg-persona-name').value.trim();
+            const whatsappListTitle = document.getElementById('cfg-list-title').value.trim();
             const address = document.getElementById('cfg-clinic-address').value.trim();
             const phone = document.getElementById('cfg-clinic-phone').value.trim();
             const evalPrice = document.getElementById('cfg-clinic-eval-price').value;
@@ -1624,7 +1629,7 @@
 
             try {
                 await apiRequest('/settings', 'POST', {
-                    name, personaName, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours
+                    name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours
                 });
                 showToast(`✅ Configurações salvas no servidor! A IA (${personaName}) já atualizou seu atendimento.`);
             } catch (err) {

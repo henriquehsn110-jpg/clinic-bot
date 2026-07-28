@@ -82,37 +82,44 @@ async function persistHumanHandoff(phone, patient, history, userText, extraNote 
 }
 
 function normalizeInputDate(text) {
+    if (!text || typeof text !== 'string') return null;
+    const clean = text.trim();
+
     // 0. Se o texto já contém "Selecionei a data: YYYY-MM-DD", preserva como está
-    //    (vem do calendário do frontend ou do WhatsApp List — NÃO deve ser reprocessado)
-    const alreadyIso = text.match(/Selecionei a data:\s*(\d{4}-\d{2}-\d{2})/i);
+    const alreadyIso = clean.match(/Selecionei a data:\s*(\d{4}-\d{2}-\d{2})/i);
     if (alreadyIso) {
         return `Selecionei a data: ${alreadyIso[1]}`;
     }
 
-    // 0b. Se o texto é puramente YYYY-MM-DD (sem prefixo), também preserva
-    const pureIso = text.match(/^\s*(\d{4})-(\d{2})-(\d{2})\s*$/);
+    // 0b. Se o texto é puramente YYYY-MM-DD (sem prefixo), preserva
+    const pureIso = clean.match(/^\s*(\d{4})-(\d{2})-(\d{2})\s*$/);
     if (pureIso) {
         return `Selecionei a data: ${pureIso[1]}-${pureIso[2]}-${pureIso[3]}`;
     }
 
-    // 1. Matches DD/MM/YYYY ou DD-MM-YYYY (input humano brasileiro)
-    //    Usa lookahead/lookbehind para NÃO casar com YYYY-MM-DD
-    const dmyRegex = /(?<!\d)(\d{1,2})[\/](\d{1,2})[\/](\d{4})(?!\d)/;
-    const dmyMatch = text.match(dmyRegex);
+    // 1. Matches DD/MM/YYYY, DD-MM-YYYY, DD/MM/YY ou DD-MM-YY (input humano brasileiro, ex: 06/08/26 ou 06-08-2026)
+    const dmyRegex = /(?<!\d)(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})(?!\d)/;
+    const dmyMatch = clean.match(dmyRegex);
     if (dmyMatch) {
-        const day = dmyMatch[1].padStart(2, '0');
-        const month = dmyMatch[2].padStart(2, '0');
-        const year = dmyMatch[3];
-        return `Selecionei a data: ${year}-${month}-${day}`;
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10);
+        let year = parseInt(dmyMatch[3], 10);
+        if (dmyMatch[3].length === 2) {
+            year += 2000;
+        }
+        if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 2024 && year <= 2035) {
+            const formattedDay = day.toString().padStart(2, '0');
+            const formattedMonth = month.toString().padStart(2, '0');
+            return `Selecionei a data: ${year}-${formattedMonth}-${formattedDay}`;
+        }
     }
     
-    // 2. Matches DD/MM (Infere o ano dinamicamente para evitar corrupção em viradas de ano)
-    //    Usa apenas barra (/) como separador para não confundir com YYYY-MM-DD
-    const dmRegex = /(?<!\d)(\d{1,2})\/(\d{1,2})(?!\d)/;
-    const dmMatch = text.match(dmRegex);
+    // 2. Matches DD/MM ou DD-MM (Infere o ano dinamicamente para evitar corrupção em viradas de ano)
+    const dmRegex = /(?<!\d)(?:dia\s+)?(\d{1,2})[\/\.-](\d{1,2})(?!\d)/i;
+    const dmMatch = clean.match(dmRegex);
     if (dmMatch) {
-        const day = parseInt(dmMatch[1]);
-        const month = parseInt(dmMatch[2]);
+        const day = parseInt(dmMatch[1], 10);
+        const month = parseInt(dmMatch[2], 10);
         if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
             const formattedDay = day.toString().padStart(2, '0');
             const formattedMonth = month.toString().padStart(2, '0');
@@ -120,27 +127,109 @@ function normalizeInputDate(text) {
             const brtString = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
             const now = new Date(brtString);
             let year = now.getFullYear();
-            if (month < (now.getMonth() + 1)) {
+            if (month < (now.getMonth() + 1) && (now.getMonth() + 1 - month) > 1) {
                 year++; 
             }
             return `Selecionei a data: ${year}-${formattedMonth}-${formattedDay}`;
         }
     }
+
+    // 3. Matches datas por extenso: "6 de agosto", "dia 06 de setembro de 2026"
+    const monthsMap = {
+        'janeiro': 1, 'fevereiro': 2, 'março': 3, 'marco': 3, 'abril': 4,
+        'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8, 'setembro': 9,
+        'outubro': 10, 'novembro': 11, 'dezembro': 12
+    };
+    const extRegex = /\b(?:dia\s+)?(\d{1,2})\s+de\s+(janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\s+de\s+(\d{2,4}))?\b/i;
+    const extMatch = clean.match(extRegex);
+    if (extMatch) {
+        const day = parseInt(extMatch[1], 10);
+        const month = monthsMap[extMatch[2].toLowerCase()];
+        let year;
+        if (extMatch[3]) {
+            year = parseInt(extMatch[3], 10);
+            if (extMatch[3].length === 2) year += 2000;
+        } else {
+            const brtString = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+            const now = new Date(brtString);
+            year = now.getFullYear();
+            if (month < (now.getMonth() + 1) && (now.getMonth() + 1 - month) > 1) {
+                year++;
+            }
+        }
+        if (day >= 1 && day <= 31) {
+            return `Selecionei a data: ${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        }
+    }
+
+    // 4. Matches termos relativos: "hoje", "amanhã", "amanha", "depois de amanhã", "depois de amanha"
+    const relRegex = /^\s*(hoje|amanhã|amanha|depois\s+de\s+amanhã|depois\s+de\s+amanha)\s*$/i;
+    const relMatch = clean.match(relRegex);
+    if (relMatch) {
+        const brtString = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+        const targetDate = new Date(brtString);
+        const term = relMatch[1].toLowerCase();
+        if (term.includes('depois')) {
+            targetDate.setDate(targetDate.getDate() + 2);
+        } else if (term.includes('amanh')) {
+            targetDate.setDate(targetDate.getDate() + 1);
+        }
+        const y = targetDate.getFullYear();
+        const m = (targetDate.getMonth() + 1).toString().padStart(2, '0');
+        const d = targetDate.getDate().toString().padStart(2, '0');
+        return `Selecionei a data: ${y}-${m}-${d}`;
+    }
+
     return null;
 }
 
 function normalizeInputTime(text) {
-    const timeRegex = /\b(\d{1,2})[:hH](\d{2})?\b/;
-    const match = text.match(timeRegex);
-    if (match) {
-        const hour = parseInt(match[1]);
-        const min = parseInt(match[2] || '0');
+    if (!text || typeof text !== 'string') return null;
+    const clean = text.trim();
+
+    const alreadyTime = clean.match(/Selecionei o horário:\s*(\d{2}:\d{2})/i);
+    if (alreadyTime) {
+        return `Selecionei o horário: ${alreadyTime[1]}`;
+    }
+
+    // 1. Matches HH:MM ou H:MM (ex: 13:00, 9:30, 08:00)
+    const colonRegex = /\b(\d{1,2}):(\d{2})\b/;
+    const colonMatch = clean.match(colonRegex);
+    if (colonMatch) {
+        const hour = parseInt(colonMatch[1], 10);
+        const min = parseInt(colonMatch[2], 10);
         if (hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
-            const formattedHour = hour.toString().padStart(2, '0');
-            const formattedMin = min.toString().padStart(2, '0');
-            return `Selecionei o horário: ${formattedHour}:${formattedMin}`;
+            return `Selecionei o horário: ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
         }
     }
+
+    // 2. Matches HHh, HHhMM, Hhs, HH horas (ex: 13h, 14h30, 9h, 8 horas, 15hs, às 13h, as 14h)
+    const hRegex = /\b(\d{1,2})\s*[hH](?:oras|hs|s)?(?:\s*(\d{2}))?\b/;
+    const hMatch = clean.match(hRegex);
+    if (hMatch) {
+        const hour = parseInt(hMatch[1], 10);
+        const min = parseInt(hMatch[2] || '0', 10);
+        if (hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+            return `Selecionei o horário: ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        }
+    }
+
+    // 3. Matches termos descritivos: "2 da tarde", "8 da manhã", "10 da manha", "7 da noite"
+    const descRegex = /\b(\d{1,2})\s*(?:da|de|à|a|da\s+|de\s+)?\s*(manhã|manha|tarde|noite)\b/i;
+    const descMatch = clean.match(descRegex);
+    if (descMatch) {
+        let hour = parseInt(descMatch[1], 10);
+        const period = descMatch[2].toLowerCase();
+        if (period.includes('tarde') && hour >= 1 && hour <= 6) {
+            hour += 12;
+        } else if (period.includes('noite') && hour >= 7 && hour <= 11) {
+            hour += 12;
+        }
+        if (hour >= 0 && hour <= 23) {
+            return `Selecionei o horário: ${hour.toString().padStart(2, '0')}:00`;
+        }
+    }
+
     return null;
 }
 
@@ -183,9 +272,11 @@ class ConversationController {
         if (!clinicId) throw new Error('clinicId é obrigatório em handleIncomingMessage');
 
         let clinicToken = null;
+        let clinicListTitle = "Especialidades";
         try {
-            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token').eq('id', clinicId).maybeSingle();
+            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token, whatsapp_list_title').eq('id', clinicId).maybeSingle();
             clinicToken = cData?.whatsapp_token || cData?.token || null;
+            if (cData?.whatsapp_list_title) clinicListTitle = cData.whatsapp_list_title;
         } catch {}
         try {
             const patient = await db.patients.findOrCreate(phone, clinicId);
@@ -274,7 +365,7 @@ class ConversationController {
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken).catch(() => {});
+                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
                 }
 
                 return {
@@ -289,25 +380,246 @@ class ConversationController {
                     transferToHuman: false
                 };
             }
+
+            // 3. Atalho para botão "Agendar p/ Outro" (Agendamento para familiar/dependente)
+            if (sanitizedText.toLowerCase() === 'agendar p/ outro' || sanitizedText.toLowerCase() === 'agendar para outro' || sanitizedText.toLowerCase() === 'agendar para outra pessoa') {
+                logger.info('FAMILY_BOOKING', `Paciente [${phone}] iniciou agendamento para familiar/dependente.`);
+                draft.is_family_booking = true;
+                draft.name = null;
+                await db.sessions.setDraft(phone, { is_family_booking: true, name: null }, clinicId);
+
+                const familyText = "Com certeza! Para agendar para um familiar ou dependente, por favor me informe o nome completo da pessoa que irá passar em consulta:";
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: `${familyText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: familyText,
+                    buttons: [],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            // 4. Atalhos para botão "Alterar" e suas variações
+            if (sanitizedText.toLowerCase() === 'alterar' || sanitizedText.toLowerCase() === 'alterar agendamento') {
+                logger.info('ALTER_BOOKING', `Paciente [${phone}] solicitou alteração do agendamento em andamento.`);
+                const alterText = "Sem problemas! O que você gostaria de alterar no seu agendamento?";
+                const alterButtons = ["Alterar Data/Horário", "Alterar Especialidade", "Remarcar/Cancelar"];
+                
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: alterText }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendButtonMessage(phone, alterText, alterButtons, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: alterText,
+                    buttons: alterButtons,
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            if (sanitizedText.toLowerCase() === 'alterar data/horário' || sanitizedText.toLowerCase() === 'alterar data' || sanitizedText.toLowerCase() === 'alterar horário') {
+                draft.date = null;
+                draft.time = null;
+                await db.sessions.setDraft(phone, { date: null, time: null }, clinicId);
+
+                const calText = "Claro! Escolha uma nova data para a consulta no calendário abaixo:";
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: `${calText}\n[SISTEMA: calendário exibido, aguardando data, offset=0]` }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                return {
+                    text: calText,
+                    buttons: [],
+                    showCalendar: true,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            if (sanitizedText.toLowerCase() === 'alterar especialidade' || sanitizedText.toLowerCase() === 'alterar procedimento') {
+                draft.type = null;
+                draft.date = null;
+                draft.time = null;
+                await db.sessions.setDraft(phone, { type: null, date: null, time: null }, clinicId);
+
+                const procText = "Perfeito! Escolha qual especialidade ou procedimento você deseja agendar:";
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    const sections = [{
+                        title: "Tratamentos",
+                        rows: PROCEDURES_RICH
+                    }];
+                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: procText,
+                    buttons: [],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: true,
+                    requireCpf: false,
+                    procedures: PROCEDURES_LIST,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            // 5. Atalhos para reagendamento, remarcação e cancelamento
+            if (sanitizedText.toLowerCase() === 'reagendar consulta' || sanitizedText.toLowerCase() === 'reagendar' || sanitizedText.toLowerCase() === 'remarcar consulta' || sanitizedText.toLowerCase() === 'remarcar' || sanitizedText.toLowerCase() === 'agendar nova consulta') {
+                logger.info('RESCHEDULE_BOOKING', `Paciente [${phone}] iniciou reagendamento de consulta.`);
+                draft.date = null;
+                draft.time = null;
+                await db.sessions.setDraft(phone, { date: null, time: null }, clinicId);
+
+                const procText = "Com certeza! Vamos agendar seu novo horário. Escolha abaixo qual especialidade ou procedimento você gostaria de agendar:";
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    const sections = [{
+                        title: "Tratamentos",
+                        rows: PROCEDURES_RICH
+                    }];
+                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: procText,
+                    buttons: [],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: true,
+                    requireCpf: false,
+                    procedures: PROCEDURES_LIST,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            if (sanitizedText.toLowerCase() === 'remarcar/cancelar') {
+                const rcText = "Sem problemas! Você prefere remarcar para uma nova data ou cancelar seu agendamento atual?";
+                const rcButtons = ["Remarcar Consulta", "Cancelar Consulta", "Manter Consulta"];
+                
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: rcText }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendButtonMessage(phone, rcText, rcButtons, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: rcText,
+                    buttons: rcButtons,
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            if (sanitizedText.toLowerCase() === 'cancelar consulta' || sanitizedText.toLowerCase() === 'cancelar' || sanitizedText.toLowerCase() === 'sim, cancelar') {
+                logger.info('CANCEL_BOOKING', `Paciente [${phone}] solicitou cancelamento da consulta.`);
+                let activeAppt = null;
+                if (patient && patient.id) {
+                    const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('FIND_BY_PATIENT_ERR', err.message); return []; });
+                    activeAppt = appts.find(a => a.status === 'pending' || a.status === 'confirmed');
+                }
+
+                if (activeAppt) {
+                    await db.appointments.updateStatus(activeAppt.id, 'cancelled', clinicId);
+                    logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${activeAppt.id} cancelada com sucesso via chat.`);
+                }
+
+                draft.date = null;
+                draft.time = null;
+                await db.sessions.setDraft(phone, { date: null, time: null }, clinicId);
+
+                const cancelText = activeAppt 
+                    ? "Sua consulta foi cancelada com sucesso! ❌ Se no futuro você quiser agendar um novo horário, basta clicar no botão abaixo para reagendar:"
+                    : "Entendido! O agendamento foi cancelado. Se quiser escolher um novo horário no futuro, basta clicar no botão abaixo para reagendar:";
+                const cancelButtons = ["Reagendar Consulta"];
+
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: cancelText }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: cancelText,
+                    buttons: cancelButtons,
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
             const isConfirming = sanitizedText.toLowerCase() === 'confirmar';
             if (isConfirming) {
                 if (draft.date && draft.time && draft.type) {
                     try {
+                        let newApptId = null;
                         // Verifica primeiro se já não existe exatamente esse agendamento ativo para esse paciente (idempotência de reentrega)
-                        const existing = await db.appointments.findActiveAppointment(patient.id, draft.date, draft.time, clinicId);
+                        const existing = await db.appointments.findActiveAppointment(patient.id, draft.date, draft.time, clinicId).catch(() => null);
                         if (existing) {
+                            newApptId = existing.id;
                             logger.info('SCHEDULING', `Agendamento idempotente detectado para [${phone}] - ${draft.date} ${draft.time}`);
                         } else {
-                            await calendarService.scheduleAppointment({
-                                clinicId,
-                                phone,
-                                name: draft.name || null,
-                                date: draft.date,
-                                time: draft.time,
-                                type: draft.type,
-                                notes: draft.notes || null
-                            });
-                            logger.info('SCHEDULING', `Agendamento criado com sucesso via WhatsApp/Simulador para [${phone}] - ${draft.date} ${draft.time}`);
+                            if (!isSimulation) {
+                                const newAppt = await calendarService.scheduleAppointment({
+                                    clinicId,
+                                    phone,
+                                    name: draft.name || null,
+                                    date: draft.date,
+                                    time: draft.time,
+                                    type: draft.type,
+                                    notes: draft.notes || null
+                                });
+                                newApptId = newAppt.id;
+                                logger.info('SCHEDULING', `Agendamento criado com sucesso via WhatsApp para [${phone}] - ${draft.date} ${draft.time}`);
+                            } else {
+                                newApptId = 'simulat0r-id';
+                                logger.info('SCHEDULING', `Agendamento criado com sucesso via Simulador para [${phone}] - ${draft.date} ${draft.time}`);
+                            }
                         }
 
                         const apptDate = draft.date;
@@ -322,10 +634,9 @@ class ConversationController {
                         await db.sessions.setDraft(phone, null, clinicId);
 
                         const dateFmt = apptDate.split('-').reverse().join('/');
-                        const startDateISO = `${apptDate.replace(/-/g, '')}T${apptTime.replace(/:/g, '').substring(0, 4)}00`;
-                        const endHour = String(parseInt(apptTime.substring(0, 2)) + 1).padStart(2, '0');
-                        const endDateISO = `${apptDate.replace(/-/g, '')}T${endHour}${apptTime.substring(3, 5)}00`;
-                        const calUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Consulta Médica')}&dates=${startDateISO}/${endDateISO}&details=${encodeURIComponent('Consulta confirmada')}&location=${encodeURIComponent('Av. Paulista, 1000 - 12º andar, São Paulo/SP')}`;
+                        const shortId = newApptId ? newApptId.substring(0, 8) : '00000000';
+                        const appHost = process.env.RENDER_EXTERNAL_URL || 'https://clinic-bot-zksc.onrender.com';
+                        const calUrl = `${appHost}/c/${shortId}`;
 
                         const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📅 Adicionar ao Google Agenda:\n${calUrl}\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
 
@@ -334,12 +645,12 @@ class ConversationController {
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendButtonMessage(phone, confirmText, ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"], phoneId, clinicToken).catch(() => {});
                         }
 
                         return {
                             text: confirmText,
-                            buttons: [],
+                            buttons: ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"],
                             showCalendar: false,
                             showTimeSlots: false,
                             showProceduresList: false,
@@ -388,14 +699,18 @@ class ConversationController {
                     if (activeAppt) {
                         const dateFmt = activeAppt.appointment_date.split('-').reverse().join('/');
                         const timeFmt = activeAppt.appointment_time.substring(0, 5);
-                        const confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊`;
+                        const shortId = activeAppt.id.substring(0, 8);
+                        const appHost = process.env.RENDER_EXTERNAL_URL || 'https://clinic-bot-zksc.onrender.com';
+                        const calUrl = `${appHost}/c/${shortId}`;
+                        
+                        const confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊\n\n📅 Adicionar ao Google Agenda:\n${calUrl}`;
                         
                         history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                         history.push({ role: 'model', parts: [{ text: confirmText }] });
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendButtonMessage(phone, confirmText, ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"], phoneId, clinicToken).catch(() => {});
                         }
 
                         return {
@@ -420,7 +735,11 @@ class ConversationController {
                     await db.sessions.set(phone, history, clinicId);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
+                        const sections = [{
+                            title: "Tratamentos",
+                            rows: PROCEDURES_RICH
+                        }];
+                        await whatsappService.sendListMessage(phone, errText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
                     }
 
                     return {
@@ -430,7 +749,7 @@ class ConversationController {
                         showTimeSlots: false,
                         showProceduresList: true,
                         requireCpf: false,
-                        procedures: PROCEDURES_RICH,
+                        procedures: PROCEDURES_LIST,
                         availableSlots: null,
                         transferToHuman: false
                     };
@@ -462,16 +781,16 @@ class ConversationController {
                 }
             }
 
-            // ── NORMALIZAÇÃO DE INPUT PARA WHATSAPP REAL ──────────────────────────
+            // ── NORMALIZAÇÃO DE INPUT PARA WHATSAPP REAL E SIMULADOR ─────────────
             let processedText = sanitizedText;
-            if (!isSimulation) {
-                if (wasCalendarShown) {
-                    const normalizedDate = normalizeInputDate(sanitizedText);
-                    if (normalizedDate) processedText = normalizedDate;
-                } else if (wasTimeSlotsShown) {
-                    const normalizedTime = normalizeInputTime(sanitizedText);
-                    if (normalizedTime) processedText = normalizedTime;
-                }
+            const normalizedDate = normalizeInputDate(sanitizedText);
+            const normalizedTime = normalizeInputTime(sanitizedText);
+            if (normalizedDate && normalizedTime) {
+                processedText = `${normalizedDate}\n${normalizedTime}`;
+            } else if (normalizedDate) {
+                processedText = normalizedDate;
+            } else if (normalizedTime) {
+                processedText = normalizedTime;
             }
 
             let offsetDays = 0;
@@ -484,11 +803,47 @@ class ConversationController {
             const selectedProc = PROCEDURES_LIST.find(p => sanitizedText.toLowerCase() === p.toLowerCase());
             if (selectedProc) {
                 draft.type = selectedProc;
+                
+                let clinicDoctors = [];
+                try {
+                    const { data } = await db.supabase.from('doctors').select('id, name, specialties').eq('clinic_id', clinicId).eq('is_active', true);
+                    if (data) clinicDoctors = data;
+                } catch(e) {}
+                
+                const matchingDoctors = clinicDoctors.filter(d => 
+                   selectedProc.toLowerCase() === 'consulta geral' ||
+                   !d.specialties || d.specialties.length === 0 || d.specialties.some(s => selectedProc.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(selectedProc.toLowerCase()))
+                );
+
+                if (matchingDoctors.length === 1) {
+                    draft.doctor_id = matchingDoctors[0].id;
+                    draft.doctor_name = matchingDoctors[0].name;
+                } else if (matchingDoctors.length > 1) {
+                    draft.needs_doctor = true;
+                    draft.available_doctors = matchingDoctors;
+                } else {
+                    draft.doctor_id = null;
+                }
+                
                 await db.sessions.setDraft(phone, draft, clinicId);
             }
 
+            // 1b. Extração do Médico (se múltipla escolha foi ativada)
+            if (draft.needs_doctor && draft.available_doctors) {
+                const selectedDoc = draft.available_doctors.find(d => sanitizedText.toLowerCase() === d.name.toLowerCase());
+                if (selectedDoc) {
+                    draft.doctor_id = selectedDoc.id;
+                    draft.doctor_name = selectedDoc.name;
+                    draft.needs_doctor = false;
+                    // Limpa a lista de opções para não pesar o JSON
+                    draft.available_doctors = null; 
+                    await db.sessions.setDraft(phone, draft, clinicId);
+                }
+            }
+
             // 2. Extração do Horário
-            const timeMatch = processedText.match(/Selecionei o horário:\s*(\d{2}:\d{2})/i) || processedText.match(/^\b(\d{2}:\d{2})\b$/);
+            const timeNorm = normalizeInputTime(sanitizedText) || normalizeInputTime(processedText) || processedText;
+            const timeMatch = timeNorm.match(/Selecionei o horário:\s*(\d{2}:\d{2})/i) || timeNorm.match(/\b(\d{2}:\d{2})\b/);
             if (timeMatch) {
                 draft.time = timeMatch[1];
                 await db.sessions.setDraft(phone, draft, clinicId);
@@ -564,7 +919,8 @@ class ConversationController {
             // ── Pré-verificação de disponibilidade de data e busca de CPF ─────────
             
             // 1. Interceptação de Data
-            const dateMatch = processedText.match(DATE_SELECTION_REGEX);
+            const dateNorm = normalizeInputDate(sanitizedText) || normalizeInputDate(processedText) || processedText;
+            const dateMatch = dateNorm.match(DATE_SELECTION_REGEX) || dateNorm.match(/\b(\d{4}-\d{2}-\d{2})\b/);
             if (dateMatch) {
                 const selectedDate = dateMatch[1];
                 const slots = await calendarService.getAvailableSlots(selectedDate, clinicId);
@@ -717,11 +1073,19 @@ class ConversationController {
                     aiResponse.showTimeSlots = true;
                     aiResponse.showCalendar = false;
                     aiResponse.showProceduresList = false;
+                    aiResponse.showDoctorList = false;
+                } else if (draft.type && draft.needs_doctor && !draft.doctor_id) {
+                    // Passo 1.5: Médico faltante -> Exibe opções de médicos
+                    aiResponse.showDoctorList = true;
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
                 } else if ((draft.type || isProcSelection || processedText.includes('Outras datas...')) && !draft.date) {
                     // Passo 2: Procedimento escolhido -> Exibe calendário de datas
                     aiResponse.showCalendar = true;
                     aiResponse.showProceduresList = false;
                     aiResponse.showTimeSlots = false;
+                    aiResponse.showDoctorList = false;
                 }
 
                 // ── TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS (FIX DEFINITIVO) ──
@@ -733,6 +1097,7 @@ class ConversationController {
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
+                    aiResponse.showDoctorList = false;
                 }
 
                 // Garante Exclusividade Mútua Estrita: Apenas 1 componente visual por resposta
@@ -740,14 +1105,22 @@ class ConversationController {
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.requireCpf = false;
+                    aiResponse.showDoctorList = false;
                 } else if (aiResponse.showTimeSlots) {
                     aiResponse.showCalendar = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.requireCpf = false;
+                    aiResponse.showDoctorList = false;
                 } else if (aiResponse.requireCpf) {
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
+                    aiResponse.showDoctorList = false;
+                } else if (aiResponse.showDoctorList) {
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
+                    aiResponse.requireCpf = false;
                 }
             }
 
@@ -787,7 +1160,7 @@ class ConversationController {
                 }
 
                 if (dateStr) {
-                    availableSlots = await calendarService.getAvailableSlots(dateStr, clinicId);
+                    availableSlots = await calendarService.getAvailableSlots(dateStr, clinicId, draft.doctor_id);
                 } else {
                     logger.warn('SCHEDULING_DATA', `showTimeSlots=true mas nenhuma data extraída da mensagem/histórico [${phone}]`);
                     availableSlots = [];
@@ -802,7 +1175,22 @@ class ConversationController {
                             title: "Tratamentos",
                             rows: PROCEDURES_RICH
                         }];
-                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken);
+                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken);
+                    } else if (aiResponse.showDoctorList) {
+                        if (draft.available_doctors && draft.available_doctors.length > 0) {
+                            const sections = [{
+                                title: "Profissionais",
+                                rows: draft.available_doctors.map(d => ({
+                                    id: `doc_${d.id}`,
+                                    title: d.name,
+                                    description: "Selecionar especialista"
+                                }))
+                            }];
+                            await whatsappService.sendListMessage(phone, responseText, "Ver Médicos", sections, "Especialistas", phoneId, clinicToken);
+                        } else {
+                            // Fallback caso dê erro e a lista esteja vazia
+                            await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken);
+                        }
                     } else if (aiResponse.showCalendar) {
                         const rows = [];
                         const brtString = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
@@ -869,7 +1257,7 @@ class ConversationController {
                             title: "Datas Disponíveis",
                             rows
                         }];
-                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken);
+                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken);
                     } else if (aiResponse.showTimeSlots) {
                         if (availableSlots && availableSlots.length > 0) {
                             // Limita a 4 opções por período para sobrar espaço para o botão "Outros horários..."
@@ -900,7 +1288,7 @@ class ConversationController {
                                 });
                             }
 
-                            await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, "Especialidades", phoneId, clinicToken);
+                            await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken);
                         } else {
                             await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken);
                         }

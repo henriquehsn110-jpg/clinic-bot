@@ -54,6 +54,45 @@ app.get(['/dashboard', '/dashboard/', '/dashboard.html', '/painel'], (req, res) 
     res.sendFile(path.join(__dirname, 'public/dashboard.html'));
 });
 
+// Encurtador de Link do Google Calendar Privado e Seguro (LGPD)
+app.get('/c/:shortId', async (req, res) => {
+    try {
+        const shortId = req.params.shortId;
+        if (!shortId || shortId.length < 6) return res.status(404).send("Link de agendamento inválido.");
+        
+        const db = require('./services/databaseService');
+        const { data: appt, error } = await db.supabase
+            .from('appointments')
+            .select('*, clinic:clinics(name, address)')
+            .ilike('id', `${shortId}%`)
+            .maybeSingle();
+            
+        if (error || !appt) {
+            return res.status(404).send("Agendamento não encontrado ou já expirado.");
+        }
+        
+        const title = encodeURIComponent(`Consulta: ${appt.type || 'Avaliação'}`);
+        const clinicName = appt.clinic && appt.clinic.name ? appt.clinic.name : 'Nossa Clínica';
+        const details = encodeURIComponent(`Consulta agendada via ClinicaBot\nClínica: ${clinicName}`);
+        const location = encodeURIComponent((appt.clinic && appt.clinic.address) ? appt.clinic.address : 'Consulte o endereço no WhatsApp');
+        
+        const dateRaw = appt.appointment_date.replace(/-/g, '');
+        const timeRaw = appt.appointment_time.substring(0, 5);
+        const startTm = timeRaw.replace(/:/g, '') + '00';
+        
+        // Adicionar 1 hora para o horário de término padrão
+        let endHour = parseInt(timeRaw.split(':')[0]) + 1;
+        let endTm = String(endHour).padStart(2, '0') + timeRaw.split(':')[1] + '00';
+        
+        const calUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateRaw}T${startTm}/${dateRaw}T${endTm}&details=${details}&location=${location}&ctz=America/Sao_Paulo`;
+        
+        res.redirect(302, calUrl);
+    } catch (err) {
+        console.error('[CALENDAR_REDIRECT_ERROR]', err);
+        res.status(500).send("Erro interno ao gerar o evento na agenda.");
+    }
+});
+
 // Captura o raw body em bytes antes do JSON.parse para validação do HMAC da Meta
 app.use(express.json({
     verify: (req, res, buf) => { req.rawBody = buf; }
