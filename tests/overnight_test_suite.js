@@ -298,6 +298,8 @@ async function runTestSuite() {
         { name: 'qa_static.js (Auditoria Estática de Segurança)', cmd: 'node scripts/qa_static.js' },
         { name: 'qa_investigador_estados.js (Simulação de Fluxos da Ana)', cmd: 'node scripts/qa_investigador_estados.js' },
         { name: 'test_reminders.js (Cron de Lembretes BRT)', cmd: 'node tests/test_reminders.js' },
+        { name: 'test_name_extraction.js (Sanitização do Nome do Paciente)', cmd: 'node tests/test_name_extraction.js' },
+        { name: 'test_component_exclusivity.js (Trava Absoluta Anti-Alucinação de Componentes)', cmd: 'node tests/test_component_exclusivity.js' },
         { name: 'test_tenant_rls_isolation.js (Isolamento Multi-Tenant RLS)', cmd: 'node tests/test_tenant_rls_isolation.js' },
         { name: 'test_hmac_webhook_injection.js (Auditoria HMAC SHA-256)', cmd: 'node tests/test_hmac_webhook_injection.js' },
         { name: 'test_cpf.js (Validação Matemática CPF/LGPD)', cmd: 'node tests/unit/test_cpf.js' },

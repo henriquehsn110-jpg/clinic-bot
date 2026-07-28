@@ -723,6 +723,32 @@ class ConversationController {
                     aiResponse.showProceduresList = false;
                     aiResponse.showTimeSlots = false;
                 }
+
+                // ── TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS (FIX DEFINITIVO) ──
+                // Se a IA ou a máquina de estados solicitou CPF ou Nome, NUNCA exiba calendário simultaneamente
+                const isAskingCpf = aiResponse.requireCpf || wasCpfRequested || /cpf/i.test(aiResponse.text);
+                const isAskingName = wasNameRequested || /nome completo/i.test(aiResponse.text);
+
+                if (isAskingCpf || isAskingName) {
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
+                }
+
+                // Garante Exclusividade Mútua Estrita: Apenas 1 componente visual por resposta
+                if (aiResponse.showCalendar) {
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
+                    aiResponse.requireCpf = false;
+                } else if (aiResponse.showTimeSlots) {
+                    aiResponse.showCalendar = false;
+                    aiResponse.showProceduresList = false;
+                    aiResponse.requireCpf = false;
+                } else if (aiResponse.requireCpf) {
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
+                }
             }
 
             history.push({ role: 'user', parts: [{ text: processedText }] });

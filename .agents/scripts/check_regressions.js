@@ -67,6 +67,18 @@ function checkMissingClinicId() {
     return null;
 }
 
+// 4. Verificação da Trava Absoluta Anti-Alucinação de Componentes Visuais
+function checkComponentExclusivityLock() {
+    const fileToCheck = path.join(backendDir, 'controllers/conversationController.js');
+    if (fs.existsSync(fileToCheck)) {
+        const content = fs.readFileSync(fileToCheck, 'utf8');
+        if (!content.includes('TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS') || !content.includes('isAskingCpf')) {
+            return `Regressão detectada em conversationController.js: Trava Absoluta Anti-Alucinação de Componentes Visuais removida! Mantenha a trava de exclusividade entre showCalendar e requireCpf/isAskingCpf.`;
+        }
+    }
+    return null;
+}
+
 // Execução das Verificações
 const silentCatchErr = checkSilentCatches();
 if (silentCatchErr) {
@@ -83,6 +95,12 @@ if (isoErr) {
 const clinicIdErr = checkMissingClinicId();
 if (clinicIdErr) {
     console.log(JSON.stringify({ decision: "deny", reason: clinicIdErr }));
+    process.exit(0);
+}
+
+const lockErr = checkComponentExclusivityLock();
+if (lockErr) {
+    console.log(JSON.stringify({ decision: "deny", reason: lockErr }));
     process.exit(0);
 }
 
