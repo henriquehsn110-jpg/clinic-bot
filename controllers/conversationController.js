@@ -1034,6 +1034,26 @@ class ConversationController {
                         processedText = `${sanitizedText}\n[SISTEMA: CPF não localizado. Novo cadastro iniciado para o número atual.]`;
                     }
                 } catch (err) {
+                    if (err.isCpfConflict || err.message.includes('CPF_CONFLICT') || err.message.includes('duplicate key')) {
+                        logger.warn('SECURITY', `Conflito de CPF duplicado [${rawCpf}] para o telefone [${phone}]. Transferindo para validação humana LGPD.`);
+                        await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
+                        const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken).catch(() => {});
+                        }
+                        return {
+                            text:            blockText,
+                            buttons:         [],
+                            showCalendar:    false,
+                            showTimeSlots:   false,
+                            showProceduresList: false,
+                            requireCpf:      false,
+                            procedures:      null,
+                            availableSlots:  null,
+                            transferToHuman: true
+                        };
+                    }
+
                     logger.error('DATABASE_COMMUNICATION', `Falha de comunicação com Supabase: ${err.message}`, err.stack);
 
                     // Persiste a falha técnica para evitar loop infinito

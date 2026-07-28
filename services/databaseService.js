@@ -235,7 +235,14 @@ const patients = {
                 .select()
                 .single();
 
-            if (error) throw new Error(`patients.updateCpf: ${error.message}`);
+            if (error) {
+                if (error.code === '23505' || error.message.includes('unique constraint') || error.message.includes('duplicate key')) {
+                    const conflictErr = new Error(`CPF_CONFLICT: O CPF informado já está vinculado a outro telefone.`);
+                    conflictErr.isCpfConflict = true;
+                    throw conflictErr;
+                }
+                throw new Error(`patients.updateCpf: ${error.message}`);
+            }
             if (data && data.cpf) data.cpf = decryptData(data.cpf);
             return data;
         });

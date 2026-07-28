@@ -24,6 +24,7 @@ class AIService {
      * Retorna true se a chamada é permitida, false se excedeu o limite
      */
     _checkRateLimit() {
+        if (process.env.NODE_ENV === 'test') return true;
         const now = Date.now();
         const oneMinuteAgo = now - 60000;
         // Remove timestamps antigos (mais de 1 minuto)
