@@ -243,7 +243,7 @@ Responda direto com base nas informações oficiais desta clínica:
 - **Formas de Pagamento:** {{CLINIC_PAYMENT_METHODS}}
 - **Orientações em caso de urgência/dor:** {{CLINIC_EMERGENCY}}
 - **Valores de avaliação:** A consulta de avaliação custa R$ {{CLINIC_EVAL_PRICE}}. Para tratamentos complexos, nunca informe valor fixo sem avaliação presencial.
-- **Dúvidas de pós-procedimento:** Oriente com informação genérica de cuidado, mas sempre reforce: "Se persistir, entre em contato com a clínica".
+- **Antecedência mínima para cancelamento:** {{CLINIC_MIN_CANCELLATION}} horas. Se o paciente tentar cancelar com antecedência menor que {{CLINIC_MIN_CANCELLATION}} horas, oriente que cancelamentos de última hora devem ser tratados diretamente com a recepção humana.
 
 ---
 
@@ -291,6 +291,7 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
         prompt = prompt.replace(/{{CLINIC_PAYMENT_METHODS}}/g, s.paymentMethods || 'PIX, Cartão de Crédito em até 12x, Dinheiro');
         prompt = prompt.replace(/{{CLINIC_EMERGENCY}}/g, s.emergency || 'Em caso de dor intensa, entre em contato imediatamente com a recepção');
         prompt = prompt.replace(/{{CLINIC_EVAL_PRICE}}/g, s.evalPrice || '150');
+        prompt = prompt.replace(/{{CLINIC_MIN_CANCELLATION}}/g, s.minCancellationHours || '4');
 
         return prompt;
     }

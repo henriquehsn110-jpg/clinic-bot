@@ -414,7 +414,7 @@ class DashboardController {
     // Salva configurações personalizadas da clínica e da IA
     async updateSettings(req, res) {
         try {
-            const { name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours } = req.body;
+            const { name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours } = req.body;
             const { clinicId } = req.user;
 
             const settings = {
@@ -427,6 +427,7 @@ class DashboardController {
                 paymentMethods,
                 emergency,
                 workHours,
+                minCancellationHours: minCancellationHours || '4',
                 updatedAt: new Date().toISOString()
             };
 

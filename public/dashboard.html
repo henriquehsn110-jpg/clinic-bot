@@ -517,6 +517,7 @@
                     <i class="fa-solid fa-user-shield" style="color: var(--accent-success);"></i>
                     <span id="user-display-name">Carregando perfil...</span>
                 </div>
+                <button class="btn" id="sound-btn" onclick="toggleSoundNotification()" title="Ativar/Desativar Alerta Sonoro do Painel"><i class="fa-solid fa-volume-high" id="sound-icon"></i> <span id="sound-text">Som Ativo</span></button>
                 <button class="btn btn-primary" onclick="openModal('modal-patient')"><i class="fa-solid fa-user-plus"></i> + Paciente</button>
                 <button class="btn btn-success" onclick="openModal('modal-appointment')"><i class="fa-solid fa-calendar-plus"></i> + Agendamento</button>
                 <button class="btn btn-danger" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
@@ -556,6 +557,11 @@
                 <div class="kpi-header"><span class="kpi-title">Transbordo Recepção</span><div class="kpi-icon warning"><i class="fa-solid fa-headset"></i></div></div>
                 <div class="kpi-value" id="stat-handoff-count">0</div>
                 <div class="kpi-subtitle">Aguardando atendente humano</div>
+            </div>
+            <div class="kpi-card" style="background: linear-gradient(135deg, rgba(37,99,235,0.05) 0%, rgba(124,58,237,0.05) 100%); border: 1px solid rgba(37,99,235,0.2);">
+                <div class="kpi-header"><span class="kpi-title">Taxa de Conversão IA</span><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div></div>
+                <div class="kpi-value" id="stat-conversion-rate" style="color: #2563eb;">100%</div>
+                <div class="kpi-subtitle" id="stat-funnel-sub">Agendamentos efetuados pela IA</div>
             </div>
         </div>
 
@@ -747,6 +753,15 @@
                             <div class="form-group">
                                 <label>Convênios / Planos de Saúde Aceitos pela Clínica</label>
                                 <textarea id="cfg-insurances" rows="2" onkeyup="updateLivePreview()">Bradesco Saúde, Amil Dental, SulAmérica e Atendimento Particular</textarea>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center;">
+                                    <span style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Adicionar Rápido:</span>
+                                    <button type="button" class="chip-btn" style="padding: 2px 8px; font-size: 11px;" onclick="addInsuranceTag('Bradesco Dental')">+ Bradesco</button>
+                                    <button type="button" class="chip-btn" style="padding: 2px 8px; font-size: 11px;" onclick="addInsuranceTag('Amil Dental')">+ Amil</button>
+                                    <button type="button" class="chip-btn" style="padding: 2px 8px; font-size: 11px;" onclick="addInsuranceTag('SulAmérica')">+ SulAmérica</button>
+                                    <button type="button" class="chip-btn" style="padding: 2px 8px; font-size: 11px;" onclick="addInsuranceTag('Unimed Odonto')">+ Unimed</button>
+                                    <button type="button" class="chip-btn" style="padding: 2px 8px; font-size: 11px;" onclick="addInsuranceTag('Porto Seguro')">+ Porto Seguro</button>
+                                    <button type="button" class="chip-btn" style="padding: 2px 8px; font-size: 11px;" onclick="addInsuranceTag('OdontoPrev')">+ OdontoPrev</button>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Formas de Pagamento Aceitas na Recepção</label>
@@ -763,17 +778,26 @@
                         </div>
 
                         <div class="settings-card">
-                            <div class="settings-card-title"><i class="fa-solid fa-clock"></i> 5. Horários de Atendimento & Expediente</div>
-                            <div style="display: flex; gap: 16px;">
-                                <div class="form-group" style="flex: 1;">
+                            <div class="settings-card-title"><i class="fa-solid fa-clock"></i> 5. Horários de Atendimento & Regras de Cancelamento</div>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <div class="form-group" style="flex: 1; min-width: 120px;">
                                     <label>Abertura *</label>
                                     <input type="time" id="cfg-time-start" value="08:00" required>
                                 </div>
-                                <div class="form-group" style="flex: 1;">
+                                <div class="form-group" style="flex: 1; min-width: 120px;">
                                     <label>Fechamento *</label>
                                     <input type="time" id="cfg-time-end" value="18:00" required>
                                 </div>
-                                <div class="form-group" style="flex: 1;">
+                                <div class="form-group" style="flex: 1; min-width: 160px;">
+                                    <label>Antecedência Mínima Cancelamento *</label>
+                                    <select id="cfg-min-cancellation">
+                                        <option value="2">2 Horas antes</option>
+                                        <option value="4" selected>4 Horas antes (Recomendado)</option>
+                                        <option value="12">12 Horas antes</option>
+                                        <option value="24">24 Horas antes</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1.5; min-width: 200px;">
                                     <label>Dias *</label>
                                     <select id="cfg-work-days">
                                         <option value="Segunda a Sexta-feira, das 08:00 às 18:00" selected>Segunda a Sexta</option>
@@ -1229,12 +1253,92 @@
             }
         }
 
+        let soundEnabled = true;
+        let previousHandoffCount = null;
+
+        function playNotificationChime() {
+            if (!soundEnabled) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc1 = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc1.type = 'sine';
+                osc2.type = 'sine';
+                osc1.frequency.setValueAtTime(587.33, ctx.currentTime);
+                osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc1.start(ctx.currentTime);
+                osc1.stop(ctx.currentTime + 0.12);
+                osc2.start(ctx.currentTime + 0.12);
+                osc2.stop(ctx.currentTime + 0.4);
+            } catch (e) {
+                console.warn('[AUDIO] Error playing chime:', e);
+            }
+        }
+
+        function toggleSoundNotification() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            const text = document.getElementById('sound-text');
+            if (soundEnabled) {
+                icon.className = 'fa-solid fa-volume-high';
+                text.innerText = 'Som Ativo';
+                showToast('🔊 Alerta sonoro ativado no painel!');
+                playNotificationChime();
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark';
+                text.innerText = 'Som Mudo';
+                showToast('🔇 Alerta sonoro silenciado.');
+            }
+        }
+
+        function addInsuranceTag(insuranceName) {
+            const textarea = document.getElementById('cfg-insurances');
+            if (!textarea) return;
+            const current = textarea.value.trim();
+            if (current.toLowerCase().includes(insuranceName.toLowerCase())) {
+                showToast(`ℹ️ Convênio "${insuranceName}" já está na lista!`);
+                return;
+            }
+            textarea.value = current ? `${current}, ${insuranceName}` : insuranceName;
+            updateLivePreview();
+            showToast(`➕ Convênio "${insuranceName}" adicionado!`);
+        }
+
         function updateKPIs(kpis) {
             if (!kpis) return;
+            const handoffCount = kpis.handoffCount || 0;
+            
+            // Alerta sonoro se novo paciente entrar em Transbordo Humano
+            if (previousHandoffCount !== null && handoffCount > previousHandoffCount) {
+                playNotificationChime();
+                showToast(`🔔 ALERTA: Novo paciente aguardando no Transbordo Humano!`);
+            }
+            previousHandoffCount = handoffCount;
+
             document.getElementById('stat-today-count').innerText = esc(kpis.todayCount || 0);
             document.getElementById('stat-confirmed-count').innerText = esc(kpis.confirmedCount || 0);
             document.getElementById('stat-patients-count').innerText = esc(kpis.patientsCount || 0);
-            document.getElementById('stat-handoff-count').innerText = esc(kpis.handoffCount || 0);
+            document.getElementById('stat-handoff-count').innerText = esc(handoffCount);
+
+            // Funil de Conversão
+            const totalAppts = allAppointments ? allAppointments.length : 0;
+            const confirmed = kpis.confirmedCount || 0;
+            const conversionRate = totalAppts > 0 ? Math.round((confirmed / totalAppts) * 100) : 100;
+            
+            const rateElem = document.getElementById('stat-conversion-rate');
+            const subElem = document.getElementById('stat-funnel-sub');
+            if (rateElem) rateElem.innerText = `${conversionRate}%`;
+            if (subElem) subElem.innerText = `${confirmed} confirmados de ${totalAppts} agendados`;
         }
 
         function filterByStatus(status, btnElem) {
@@ -1626,12 +1730,13 @@
             const paymentMethods = document.getElementById('cfg-payments').value.trim();
             const emergency = document.getElementById('cfg-emergency').value.trim();
             const workHours = document.getElementById('cfg-work-days').value;
+            const minCancellationHours = document.getElementById('cfg-min-cancellation')?.value || '4';
 
             try {
                 await apiRequest('/settings', 'POST', {
-                    name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours
+                    name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours
                 });
-                showToast(`✅ Configurações salvas no servidor! A IA (${personaName}) já atualizou seu atendimento.`);
+                showToast(`✅ Configurações salvas no servidor! A IA (${personaName}) atualizou a antecedência para ${minCancellationHours}h.`);
             } catch (err) {
                 showToast(`❌ Erro ao salvar configurações: ${err.message}`);
             }
