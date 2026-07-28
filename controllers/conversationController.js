@@ -272,7 +272,7 @@ class ConversationController {
         if (!clinicId) throw new Error('clinicId é obrigatório em handleIncomingMessage');
 
         let clinicToken = null;
-        let clinicListTitle = "Especialidades";
+        let clinicListTitle = "Opções de Agendamento";
         try {
             const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token, whatsapp_list_title').eq('id', clinicId).maybeSingle();
             clinicToken = cData?.whatsapp_token || cData?.token || null;
@@ -612,6 +612,7 @@ class ConversationController {
                                     date: draft.date,
                                     time: draft.time,
                                     type: draft.type,
+                                    doctor_id: draft.doctor_id || null,
                                     notes: draft.notes || null
                                 });
                                 newApptId = newAppt.id;
@@ -806,14 +807,18 @@ class ConversationController {
                 
                 let clinicDoctors = [];
                 try {
-                    const { data } = await db.supabase.from('doctors').select('id, name, specialties').eq('clinic_id', clinicId).eq('is_active', true);
+                    const { data, error } = await db.supabase.from('doctors').select('id, name, specialties').eq('clinic_id', clinicId).eq('is_active', true);
                     if (data) clinicDoctors = data;
-                } catch(e) {}
+                    console.log(`[DEBUG] Fetched ${clinicDoctors.length} doctors for clinicId ${clinicId}. Error:`, error);
+                } catch(e) {
+                    console.error(`[DEBUG] Error fetching doctors:`, e);
+                }
                 
                 const matchingDoctors = clinicDoctors.filter(d => 
                    selectedProc.toLowerCase() === 'consulta geral' ||
                    !d.specialties || d.specialties.length === 0 || d.specialties.some(s => selectedProc.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(selectedProc.toLowerCase()))
                 );
+                console.log(`[DEBUG] Matching doctors count: ${matchingDoctors.length}`);
 
                 if (matchingDoctors.length === 1) {
                     draft.doctor_id = matchingDoctors[0].id;
@@ -1048,6 +1053,8 @@ class ConversationController {
             }
 
             let aiResponse = await aiService.generateResponse(textForAI, history);
+            require('fs').appendFileSync('debug_sm.txt', `[DEBUG] text: ${sanitizedText}, draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}\n`);
+            console.log(`[DEBUG] draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
 
             // ── MÁQUINA DE ESTADOS 100% DETERMINÍSTICA DO BACKEND ───────────────────
             // Garante 100% de estabilidade navegacional no WhatsApp sem depender do output probabilístico da IA
@@ -1339,9 +1346,11 @@ class ConversationController {
                 showCalendar:    aiResponse.showCalendar,
                 showTimeSlots:   aiResponse.showTimeSlots,
                 showProceduresList: aiResponse.showProceduresList,
+                showDoctorList:  aiResponse.showDoctorList || false,
                 requireCpf:      aiResponse.requireCpf || false,
                 procedures,
                 availableSlots,
+                availableDoctors: draft.available_doctors || null,
                 transferToHuman: aiResponse.transferToHuman || false
             };
 

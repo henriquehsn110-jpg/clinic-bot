@@ -106,7 +106,7 @@ class CalendarService {
             return await db.appointments.create({
                 patient_id:       patient.id,
                 clinic_id:        targetClinicId,
-                doctor_id:        patientData.doctorId || null,
+                doctor_id:        patientData.doctor_id || patientData.doctorId || null,
                 appointment_date: patientData.date,
                 appointment_time: patientData.time,
                 type:             patientData.type,

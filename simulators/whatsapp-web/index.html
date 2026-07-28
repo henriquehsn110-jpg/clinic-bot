@@ -564,6 +564,14 @@
                 html += '</div>';
             }
 
+            if (resp.showDoctorList && resp.availableDoctors) {
+                html += '<div class="buttons-container">';
+                resp.availableDoctors.forEach(doc => {
+                    html += `<button class="btn-action" onclick="sendText('${doc.name}')">${doc.name}</button>`;
+                });
+                html += '</div>';
+            }
+
             if (resp.showCalendar) {
                 const todayIso = new Date().toISOString().split('T')[0];
                 html += `
