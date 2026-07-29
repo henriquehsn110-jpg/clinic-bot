@@ -46,6 +46,25 @@ function validateCpfChecksum(cpf) {
     return true;
 }
 
+// Verifica se uma data e horário de agendamento estão no futuro em fuso BRT (America/Sao_Paulo)
+function isUpcomingAppt(dateStr, timeStr) {
+    if (!dateStr) return false;
+    const nowBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const yyyy = nowBRT.getFullYear();
+    const mm = String(nowBRT.getMonth() + 1).padStart(2, '0');
+    const dd = String(nowBRT.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    if (dateStr < todayStr) return false;
+    if (dateStr === todayStr && timeStr) {
+        const hh = String(nowBRT.getHours()).padStart(2, '0');
+        const min = String(nowBRT.getMinutes()).padStart(2, '0');
+        const currentHHMM = `${hh}:${min}`;
+        if (timeStr < currentHHMM) return false;
+    }
+    return true;
+}
+
 // Função auxiliar para extrair e normalizar CPF (aceita com ou sem prefixo, formatado ou cru de 11 dígitos)
 function extractAndNormalizeCpf(text) {
     // Captura padrão formatado ou sequência bruta de 11 dígitos numéricos com bordas
@@ -553,46 +572,158 @@ class ConversationController {
                 };
             }
 
-            if (sanitizedText.toLowerCase() === 'cancelar consulta' || sanitizedText.toLowerCase() === 'cancelar' || sanitizedText.toLowerCase() === 'sim, cancelar') {
+            const lowerText = sanitizedText.toLowerCase();
+            const isCancelCommand = /^(cancelar consulta|cancelar|sim, cancelar|quero cancelar|opção 1|opção 2|opção 3|opcao 1|opcao 2|opcao 3)$/i.test(lowerText) || draft.pending_cancel_selection;
+
+            if (isCancelCommand) {
                 logger.info('CANCEL_BOOKING', `Paciente [${phone}] solicitou cancelamento da consulta.`);
-                let activeAppt = null;
+                let upcomingAppts = [];
                 if (patient && patient.id) {
                     const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('FIND_BY_PATIENT_ERR', err.message); return []; });
-                    activeAppt = appts.find(a => a.status === 'pending' || a.status === 'confirmed');
+                    upcomingAppts = (appts || []).filter(a => (a.status === 'pending' || a.status === 'confirmed') && isUpcomingAppt(a.appointment_date, a.appointment_time));
                 }
 
-                if (activeAppt) {
-                    await db.appointments.updateStatus(activeAppt.id, 'cancelled', clinicId);
-                    logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${activeAppt.id} cancelada com sucesso via chat.`);
+                // 1. Caso sem NENHUMA consulta futura agendada
+                if (upcomingAppts.length === 0) {
+                    draft.date = null; draft.time = null; draft.pending_cancel_selection = false;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+
+                    const cancelText = "Você não possui nenhuma consulta futura agendada no momento. Se quiser escolher um novo horário, basta clicar no botão abaixo para agendar:";
+                    const cancelButtons = ["Agendar Consulta"];
+
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: cancelText }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: cancelText,
+                        buttons: cancelButtons,
+                        showCalendar: false, showTimeSlots: false, showProceduresList: false, requireCpf: false, procedures: null, availableSlots: null, transferToHuman: false
+                    };
                 }
 
-                draft.date = null;
-                draft.time = null;
-                await db.sessions.setDraft(phone, { date: null, time: null }, clinicId);
+                // 2. Caso com EXATAMENTE 1 consulta futura agendada
+                if (upcomingAppts.length === 1) {
+                    const singleAppt = upcomingAppts[0];
+                    const dateFmt = singleAppt.appointment_date ? singleAppt.appointment_date.split('-').reverse().join('/') : '';
+                    const timeFmt = singleAppt.appointment_time ? singleAppt.appointment_time.substring(0, 5) : '';
 
-                const cancelText = activeAppt 
-                    ? "Sua consulta foi cancelada com sucesso! ❌ Se no futuro você quiser agendar um novo horário, basta clicar no botão abaixo para reagendar:"
-                    : "Entendido! O agendamento foi cancelado. Se quiser escolher um novo horário no futuro, basta clicar no botão abaixo para reagendar:";
-                const cancelButtons = ["Reagendar Consulta"];
+                    if (lowerText === 'sim, cancelar' || lowerText === 'cancelar consulta') {
+                        await db.appointments.updateStatus(singleAppt.id, 'cancelled', clinicId);
+                        logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${singleAppt.id} cancelada com sucesso via chat.`);
+                        draft.date = null; draft.time = null; draft.pending_cancel_selection = false;
+                        await db.sessions.setDraft(phone, draft, clinicId);
+
+                        const cancelText = `Sua consulta de ${singleAppt.type || 'avaliação'} (dia ${dateFmt} às ${timeFmt}) foi cancelada com sucesso! ❌\n\nSe no futuro você quiser agendar um novo horário, basta clicar no botão abaixo para reagendar:`;
+                        const cancelButtons = ["Reagendar Consulta"];
+
+                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                        history.push({ role: 'model', parts: [{ text: cancelText }] });
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text: cancelText, buttons: cancelButtons, showCalendar: false, showTimeSlots: false, showProceduresList: false, requireCpf: false, procedures: null, availableSlots: null, transferToHuman: false
+                        };
+                    } else {
+                        // Confirmação direta para a única consulta
+                        const confirmCancelText = `Encontrei sua consulta de ${singleAppt.type || 'avaliação'} agendada para o dia ${dateFmt} às ${timeFmt}.\n\nTem certeza que deseja cancelar esta consulta?`;
+                        const confirmButtons = ["Sim, cancelar", "Manter Consulta"];
+
+                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                        history.push({ role: 'model', parts: [{ text: confirmCancelText }] });
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text: confirmCancelText, buttons: confirmButtons, showCalendar: false, showTimeSlots: false, showProceduresList: false, requireCpf: false, procedures: null, availableSlots: null, transferToHuman: false
+                        };
+                    }
+                }
+
+                // 3. Caso com MÚLTIPLAS (2 ou mais) consultas futuras agendadas
+                let selectedIndex = -1;
+                if (draft.pending_cancel_selection) {
+                    const matchNum = lowerText.match(/\b([1-9])\b/);
+                    if (matchNum) {
+                        selectedIndex = parseInt(matchNum[1], 10) - 1;
+                    } else if (/opção 1|opcao 1|primeira/i.test(lowerText)) {
+                        selectedIndex = 0;
+                    } else if (/opção 2|opcao 2|segunda/i.test(lowerText)) {
+                        selectedIndex = 1;
+                    } else if (/opção 3|opcao 3|terceira/i.test(lowerText)) {
+                        selectedIndex = 2;
+                    }
+                }
+
+                if (selectedIndex >= 0 && selectedIndex < upcomingAppts.length) {
+                    const targetAppt = upcomingAppts[selectedIndex];
+                    await db.appointments.updateStatus(targetAppt.id, 'cancelled', clinicId);
+                    logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${targetAppt.id} cancelada com sucesso via seleção.`);
+
+                    draft.pending_cancel_selection = false;
+                    draft.date = null; draft.time = null;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+
+                    const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
+                    const timeFmt = targetAppt.appointment_time ? targetAppt.appointment_time.substring(0, 5) : '';
+
+                    let cancelText = `Sua consulta de ${targetAppt.type || 'avaliação'} (dia ${dateFmt} às ${timeFmt}) foi cancelada com sucesso! ❌`;
+
+                    const remainingAppts = upcomingAppts.filter((_, idx) => idx !== selectedIndex);
+                    if (remainingAppts.length > 0) {
+                        const remStr = remainingAppts.map((a, i) => `${i + 1}) ${a.type || 'Consulta'} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`).join('\n');
+                        cancelText += `\n\n📋 *Suas outras consultas futuras continuam confirmadas:*\n${remStr}`;
+                    } else {
+                        cancelText += `\n\nSe no futuro você quiser agendar um novo horário, basta clicar no botão abaixo:`;
+                    }
+                    const cancelButtons = ["Agendar Consulta"];
+
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: cancelText }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: cancelText, buttons: cancelButtons, showCalendar: false, showTimeSlots: false, showProceduresList: false, requireCpf: false, procedures: null, availableSlots: null, transferToHuman: false
+                    };
+                }
+
+                // Solicita a seleção da consulta para cancelar
+                draft.pending_cancel_selection = true;
+                await db.sessions.setDraft(phone, draft, clinicId);
+
+                const listStr = upcomingAppts.map((a, i) => 
+                    `${i + 1}️⃣ *${a.type || 'Consulta'}* — dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`
+                ).join('\n\n');
+
+                const selectText = `Identificamos que você possui ${upcomingAppts.length} consultas futuras agendadas:\n\n${listStr}\n\nQual delas você gostaria de *cancelar*? Digite o número da opção (ex: 1) ou selecione abaixo:`;
+                
+                const selectButtons = upcomingAppts.slice(0, 2).map((a, i) => `Opção ${i + 1}`).concat(["Manter Consultas"]);
 
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
-                history.push({ role: 'model', parts: [{ text: cancelText }] });
+                history.push({ role: 'model', parts: [{ text: selectText }] });
                 await db.sessions.set(phone, history, clinicId);
 
                 if (!isSimulation) {
-                    await whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken).catch(() => {});
+                    await whatsappService.sendButtonMessage(phone, selectText, selectButtons, phoneId, clinicToken).catch(() => {});
                 }
 
                 return {
-                    text: cancelText,
-                    buttons: cancelButtons,
-                    showCalendar: false,
-                    showTimeSlots: false,
-                    showProceduresList: false,
-                    requireCpf: false,
-                    procedures: null,
-                    availableSlots: null,
-                    transferToHuman: false
+                    text: selectText, buttons: selectButtons, showCalendar: false, showTimeSlots: false, showProceduresList: false, requireCpf: false, procedures: null, availableSlots: null, transferToHuman: false
                 };
             }
 
@@ -697,7 +828,7 @@ class ConversationController {
                     let activeAppts = [];
                     if (patient && patient.id) {
                         const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('FIND_BY_PATIENT_ERR', err.message); return []; });
-                        activeAppts = (appts || []).filter(a => a.status === 'pending' || a.status === 'confirmed');
+                        activeAppts = (appts || []).filter(a => (a.status === 'pending' || a.status === 'confirmed') && isUpcomingAppt(a.appointment_date, a.appointment_time));
                     }
 
                     if (activeAppts.length > 0) {
@@ -1106,7 +1237,7 @@ class ConversationController {
                     logger.error('FIND_ACTIVE_APPTS_ERR', err.message);
                     return [];
                 });
-                patientActiveAppts = (allAppts || []).filter(a => a.status === 'pending' || a.status === 'confirmed');
+                patientActiveAppts = (allAppts || []).filter(a => (a.status === 'pending' || a.status === 'confirmed') && isUpcomingAppt(a.appointment_date, a.appointment_time));
             }
 
             if (patientActiveAppts.length > 0) {
