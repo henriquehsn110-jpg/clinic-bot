@@ -347,7 +347,7 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
                     generationConfig: {
                         responseMimeType: 'application/json',
                         temperature: 0.3,
-                        maxOutputTokens: 350, // Limita tokens de saída por resposta (economia de custos)
+                        maxOutputTokens: 1024, // Garante orçamento de tokens suficiente para respostas completas sem truncamento
                         responseSchema: {
                             type: 'object',
                             properties: {
@@ -372,7 +372,12 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
                     parsed = JSON.parse(responseText);
                 } catch (jsonErr) {
                     logger.error('GEMINI_API', 'Falha ao fazer parse do JSON do Gemini', jsonErr.message);
-                    parsed = {}; // Fallback seguro
+                    parsed = {};
+                    // Tenta extrair o campo text caso a resposta tenha sido interrompida
+                    const matchText = responseText.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)/);
+                    if (matchText && matchText[1]) {
+                        parsed.text = matchText[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\/g, '');
+                    }
                 }
 
                 // Normalização de tipos (garante booleano ou false)
