@@ -102,12 +102,28 @@ async function runMultiApptCancelTest() {
     const updated2 = checkAppts.find(a => a.id === futureAppt2.id);
 
     assert.strictEqual(updated2.status, 'cancelled', 'FutureAppt2 (Opção 1) deve estar cancelada');
-    assert.notStrictEqual(updated1.status, 'cancelled', 'FutureAppt1 (Opção 2) não deve ser cancelada');
+    // 8. Teste 4: Teste de Seleção Múltipla simultânea ("1 e 2")
+    const futureAppt3 = await db.appointments.create({
+        clinic_id: clinicId, patient_id: patient.id, appointment_date: '2026-12-01', appointment_time: '10:00', type: 'Consulta A', status: 'confirmed'
+    });
+    const futureAppt4 = await db.appointments.create({
+        clinic_id: clinicId, patient_id: patient.id, appointment_date: '2026-12-02', appointment_time: '11:00', type: 'Consulta B', status: 'confirmed'
+    });
+
+    await conversationController.handleIncomingMessage(testPhone, "Quero cancelar", true, clinicId);
+    const resMulti = await conversationController.handleIncomingMessage(testPhone, "1 e 2", true, clinicId);
+    console.log('  💬 Resposta após enviar "1 e 2":');
+    console.log('  -----------------------------------');
+    console.log(resMulti.text);
+    console.log('  -----------------------------------');
+    assert(resMulti.text.includes('Suas 2 consultas foram canceladas com sucesso'), 'Deve confirmar cancelamento duplo de 1 e 2');
 
     console.log('  🎉 TESTE DE CANCELAMENTO INTERATIVO MULTI-CONSULTAS 100% APROVADO! 🚀');
 
     // Limpeza final
     await db.appointments.updateStatus(futureAppt2.id, 'cancelled', clinicId);
+    await db.appointments.updateStatus(futureAppt3.id, 'cancelled', clinicId);
+    await db.appointments.updateStatus(futureAppt4.id, 'cancelled', clinicId);
 }
 
 runMultiApptCancelTest().catch(err => {

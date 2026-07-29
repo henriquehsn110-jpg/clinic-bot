@@ -652,35 +652,48 @@ class ConversationController {
                 }
 
                 // 3. Caso com MÚLTIPLAS (2 ou mais) consultas futuras agendadas
-                let selectedIndex = -1;
+                let selectedIndices = [];
                 if (draft.pending_cancel_selection) {
-                    const matchNum = lowerText.match(/\b([1-9])\b/);
-                    if (matchNum) {
-                        selectedIndex = parseInt(matchNum[1], 10) - 1;
-                    } else if (/opção 1|opcao 1|primeira/i.test(lowerText)) {
-                        selectedIndex = 0;
-                    } else if (/opção 2|opcao 2|segunda/i.test(lowerText)) {
-                        selectedIndex = 1;
-                    } else if (/opção 3|opcao 3|terceira/i.test(lowerText)) {
-                        selectedIndex = 2;
+                    if (/todas|todas as consultas|cancelar todas/i.test(lowerText)) {
+                        selectedIndices = upcomingAppts.map((_, idx) => idx);
+                    } else {
+                        const allNumMatches = [...lowerText.matchAll(/\b([1-9]\d*)\b/g)].map(m => parseInt(m[1], 10) - 1);
+                        selectedIndices = [...new Set(allNumMatches)].filter(idx => idx >= 0 && idx < upcomingAppts.length);
+                        
+                        if (selectedIndices.length === 0) {
+                            if (/opção 1|opcao 1|primeira/i.test(lowerText)) selectedIndices = [0];
+                            else if (/opção 2|opcao 2|segunda/i.test(lowerText)) selectedIndices = [1];
+                            else if (/opção 3|opcao 3|terceira/i.test(lowerText)) selectedIndices = [2];
+                        }
                     }
                 }
 
-                if (selectedIndex >= 0 && selectedIndex < upcomingAppts.length) {
-                    const targetAppt = upcomingAppts[selectedIndex];
-                    await db.appointments.updateStatus(targetAppt.id, 'cancelled', clinicId);
-                    logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${targetAppt.id} cancelada com sucesso via seleção.`);
+                if (selectedIndices.length > 0) {
+                    const cancelledApptsInfo = [];
+                    for (const idx of selectedIndices) {
+                        const targetAppt = upcomingAppts[idx];
+                        await db.appointments.updateStatus(targetAppt.id, 'cancelled', clinicId);
+                        logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${targetAppt.id} (Opção ${idx + 1}) cancelada com sucesso via seleção.`);
+
+                        const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
+                        const timeFmt = targetAppt.appointment_time ? targetAppt.appointment_time.substring(0, 5) : '';
+                        cancelledApptsInfo.push({ type: targetAppt.type || 'Consulta', dateFmt, timeFmt });
+                    }
 
                     draft.pending_cancel_selection = false;
                     draft.date = null; draft.time = null;
                     await db.sessions.setDraft(phone, draft, clinicId);
 
-                    const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
-                    const timeFmt = targetAppt.appointment_time ? targetAppt.appointment_time.substring(0, 5) : '';
+                    let cancelText = "";
+                    if (cancelledApptsInfo.length === 1) {
+                        const c = cancelledApptsInfo[0];
+                        cancelText = `Sua consulta de ${c.type} (dia ${c.dateFmt} às ${c.timeFmt}) foi cancelada com sucesso! ❌`;
+                    } else {
+                        const listFmt = cancelledApptsInfo.map(c => `• *${c.type}* — dia ${c.dateFmt} às ${c.timeFmt}`).join('\n');
+                        cancelText = `Suas ${cancelledApptsInfo.length} consultas foram canceladas com sucesso! ❌\n\n${listFmt}`;
+                    }
 
-                    let cancelText = `Sua consulta de ${targetAppt.type || 'avaliação'} (dia ${dateFmt} às ${timeFmt}) foi cancelada com sucesso! ❌`;
-
-                    const remainingAppts = upcomingAppts.filter((_, idx) => idx !== selectedIndex);
+                    const remainingAppts = upcomingAppts.filter((_, idx) => !selectedIndices.includes(idx));
                     if (remainingAppts.length > 0) {
                         const remStr = remainingAppts.map((a, i) => `${i + 1}) ${a.type || 'Consulta'} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`).join('\n');
                         cancelText += `\n\n📋 *Suas outras consultas futuras continuam confirmadas:*\n${remStr}`;
