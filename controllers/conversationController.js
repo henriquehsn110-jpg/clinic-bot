@@ -694,20 +694,28 @@ class ConversationController {
                     }
                 } else {
                     // Verifica se o paciente já possui agendamento recém-criado (evita falso alerta em clique duplo)
-                    let activeAppt = null;
+                    let activeAppts = [];
                     if (patient && patient.id) {
                         const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('FIND_BY_PATIENT_ERR', err.message); return []; });
-                        activeAppt = appts.find(a => a.status === 'pending' || a.status === 'confirmed');
+                        activeAppts = (appts || []).filter(a => a.status === 'pending' || a.status === 'confirmed');
                     }
 
-                    if (activeAppt) {
+                    if (activeAppts.length > 0) {
+                        const activeAppt = activeAppts[0];
                         const dateFmt = activeAppt.appointment_date.split('-').reverse().join('/');
                         const timeFmt = activeAppt.appointment_time.substring(0, 5);
                         const shortId = activeAppt.id.substring(0, 8);
                         const appHost = process.env.RENDER_EXTERNAL_URL || 'https://clinic-bot-zksc.onrender.com';
                         const calUrl = `${appHost}/c/${shortId}`;
                         
-                        const confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊\n\n📅 Adicionar ao Google Agenda:\n${calUrl}`;
+                        let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊\n\n📅 Adicionar ao Google Agenda:\n${calUrl}`;
+                        
+                        if (activeAppts.length > 1) {
+                            const otherStr = activeAppts.slice(1).map((a, i) => 
+                                `${i + 2}) ${a.type || 'Consulta'} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`
+                            ).join('\n');
+                            confirmText += `\n\n📋 *Você também possui mais ${activeAppts.length - 1} consulta(s) agendada(s):*\n${otherStr}`;
+                        }
                         
                         history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                         history.push({ role: 'model', parts: [{ text: confirmText }] });
@@ -1089,6 +1097,26 @@ class ConversationController {
             let textForAI = processedText;
             if (patient && patient.name && patient.cpf && !processedText.includes('[SISTEMA:')) {
                 textForAI = `[SISTEMA INVISÍVEL: Este paciente já é cadastrado no banco de dados. Nome: ${patient.name}, CPF: Validado.]\n` + processedText;
+            }
+
+            // Busca TODAS as consultas ativas (pendentes ou confirmadas) do paciente no Supabase
+            let patientActiveAppts = [];
+            if (patient && patient.id) {
+                const allAppts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => {
+                    logger.error('FIND_ACTIVE_APPTS_ERR', err.message);
+                    return [];
+                });
+                patientActiveAppts = (allAppts || []).filter(a => a.status === 'pending' || a.status === 'confirmed');
+            }
+
+            if (patientActiveAppts.length > 0) {
+                const apptListStr = patientActiveAppts.map((a, i) => {
+                    const dateFmt = a.appointment_date ? a.appointment_date.split('-').reverse().join('/') : 'A definir';
+                    const timeFmt = a.appointment_time ? a.appointment_time.substring(0, 5) : 'A definir';
+                    return `Consulta ${i + 1}: ${a.type || 'Consulta'} no dia ${dateFmt} às ${timeFmt} (Status: ${a.status === 'confirmed' ? 'Confirmada' : 'Pendente'})`;
+                }).join('; ');
+                
+                textForAI += `\n[SISTEMA INVISÍVEL: O paciente possui ${patientActiveAppts.length} consulta(s) ativa(s) agendada(s) no banco de dados: ${apptListStr}. Se o paciente perguntar sobre suas consultas, agendamentos ou o que ele tem marcado, informe obrigatoriamente TODAS as ${patientActiveAppts.length} consulta(s) ativas encontradas!].`;
             }
 
             const currentPatientName = draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone ? patient.name : null);

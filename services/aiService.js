@@ -244,6 +244,7 @@ Responda direto com base nas informações oficiais desta clínica:
 - **Orientações em caso de urgência/dor:** {{CLINIC_EMERGENCY}}
 - **Valores de avaliação:** A consulta de avaliação custa R$ {{CLINIC_EVAL_PRICE}}. Para tratamentos complexos, nunca informe valor fixo sem avaliação presencial.
 - **Antecedência mínima para cancelamento:** {{CLINIC_MIN_CANCELLATION}} horas. Se o paciente tentar cancelar com antecedência menor que {{CLINIC_MIN_CANCELLATION}} horas, oriente que cancelamentos de última hora devem ser tratados diretamente com a recepção humana.
+- **Consultas Agendadas do Paciente:** Se o sistema fornecer a tag [SISTEMA INVISÍVEL: O paciente possui X consulta(s) ativa(s)...], e o paciente perguntar sobre suas consultas ou agendamentos, informe obrigatoriamente TODAS as consultas ativas listadas na tag com data (DD/MM/YYYY) e horário!
 
 ---
 

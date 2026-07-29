@@ -401,7 +401,8 @@ class DashboardController {
             const { phone } = req.body;
             if (!phone) return res.status(400).json({ error: 'Telefone é obrigatório.' });
 
-            await db.sessions.delete(phone);
+            const clinicId = req.clinicId || req.user?.clinic_id;
+            await db.sessions.delete(phone, clinicId);
             logger.info('DASHBOARD_HANDOFF', `Sessão [${phone}] devolvida para a IA via painel.`);
             res.json({ success: true });
 
