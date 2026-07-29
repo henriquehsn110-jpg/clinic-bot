@@ -259,8 +259,15 @@ function extractCleanName(text) {
     // Remove marcadores de sistema se houver
     clean = clean.replace(/\[\s*SISTEMA\s*:.*?\]/gi, '').trim();
 
+    // Se contiver ponto de interrogação, é uma pergunta, não um nome
+    if (clean.includes('?')) return null;
+
     // Se contiver palavras reservadas de comandos ou palavras da aplicação, não é nome
     if (/Selecionei|CPF|confirmar|cancelar|remarcar|agendar|opções|opcao/i.test(clean)) return null;
+
+    // Se contiver verbos ou questionamentos comuns em frases em português, não é um nome pessoal
+    const sentenceFilter = /\b(quero|quando|quanto|quais|qual|como|onde|porque|por que|saber|falar|falarei|conversar|atender|atendimento|dentista|médico|medico|doutor|doutora|dra|dr|consulta|valor|preço|preco|convênio|convenio|plano|horário|horario|vaga|vagas|endereço|endereco|local|dúvida|duvida|ajuda|informação|informacao|gostaria|preciso|tenho|queria|posso)\b/i;
+    if (sentenceFilter.test(clean)) return null;
 
     // Remove prefixos comuns em português
     clean = clean.replace(/^(meu\s+nome\s+é|meu\s+nome\s+e|sou\s+a|sou\s+o|me\s+chamo|chamo-me|pode\s+colocar|nome:\s*)\s*/i, '').trim();
@@ -269,11 +276,15 @@ function extractCleanName(text) {
     const greetingBlocklist = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|obrigad[oa]|sim|não|nao|ok|beleza|valeu|tchau|confirmar|cancelar|remarcar|alterar|agendar|menu)$/i;
     if (greetingBlocklist.test(clean)) return null;
 
+    // Um nome pessoal não costuma ter mais que 5 palavras
+    const rawWords = clean.split(/\s+/);
+    if (rawWords.length > 5) return null;
+
     // Um nome deve ter pelo menos 2 caracteres e conter letras
     if (clean.length < 2 || !/[a-zA-ZáàâãéèêíïóôõúüçÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇ]/.test(clean)) return null;
 
     // Capitalização adequada (primeiras letras maiúsculas)
-    const words = clean.split(/\s+/).map(w => {
+    const words = rawWords.map(w => {
         if (w.length <= 2 && /^(de|da|do|dos|das|e)$/i.test(w)) return w.toLowerCase();
         return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
     });
@@ -1053,10 +1064,10 @@ class ConversationController {
                     await db.patients.updateName(phone, extractedName, clinicId).catch(() => {});
                     if (patient) patient.name = extractedName;
                 } else {
-                    // Se o paciente mandou saudação ou texto genérico ao invés do nome,
-                    // barramos de forma determinística e solicitamos o nome novamente
                     const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
-                    if (!isBypass) {
+                    const isQuestion = sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|quero|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText);
+
+                    if (!isBypass && !isQuestion) {
                         const nameErrText = "Para prosseguirmos com o agendamento, por favor me informe o seu nome completo.";
                         history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                         history.push({ role: 'model', parts: [{ text: `${nameErrText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
@@ -1078,6 +1089,8 @@ class ConversationController {
                             availableSlots:  null,
                             transferToHuman: false
                         };
+                    } else if (isQuestion) {
+                        processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente fez uma dúvida/pergunta ao invés de informar o nome. Responda à dúvida do paciente com clareza e cordialidade e, ao final, solicite gentilmente o nome completo da pessoa para prosseguir com o agendamento.]`;
                     }
                 }
             }
