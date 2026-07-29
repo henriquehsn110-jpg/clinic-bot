@@ -1134,7 +1134,8 @@ class ConversationController {
 
             // Se o CPF foi solicitado anteriormente, mas o usuário digitou um valor inválido,
             // barramos e pedimos novamente de forma determinística (evita que a LLM processe dados incorretos).
-            const isBypassKeyword = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
+            const isProcMatch = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
+            const isBypassKeyword = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText) || isProcMatch || dateMatch || timeMatch;
             if (wasCpfRequested && !rawCpf && !isBypassKeyword) {
                 const errText = "O CPF informado é inválido. Por favor, informe seu CPF de 11 dígitos para prosseguirmos.";
                 
@@ -1279,7 +1280,10 @@ class ConversationController {
             const currentPatientName = draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone ? patient.name : null);
 
             if (draft.type || draft.date || draft.time || currentPatientName) {
-                const draftInfoTag = `[SISTEMA INVISÍVEL: Dados do agendamento — Paciente: ${currentPatientName || 'a definir'}, Procedimento: ${draft.type || 'Consulta'}, Médico: ${doctorName}, Data: ${draft.date || 'a definir'}, Horário: ${draft.time || 'a definir'}. Na mensagem de confirmação, cite obrigatoriamente o nome do paciente ("${currentPatientName || 'a definir'}"), o procedimento ("${draft.type || 'Consulta'}") e o médico ("${doctorName}")].`;
+                let draftInfoTag = `[SISTEMA INVISÍVEL: Dados do agendamento — Paciente: ${currentPatientName || 'a definir'}, Procedimento: ${draft.type || 'Consulta'}, Médico: ${doctorName}, Data: ${draft.date || 'a definir'}, Horário: ${draft.time || 'a definir'}. Na mensagem de confirmação, cite obrigatoriamente o nome do paciente ("${currentPatientName || 'a definir'}"), o procedimento ("${draft.type || 'Consulta'}") e o médico ("${doctorName}")].`;
+                if (draft.is_family_booking) {
+                    draftInfoTag += `\n[SISTEMA INVISÍVEL: Trata-se de um agendamento para familiar/dependente. Se for solicitar o CPF, mencione cordialmente que pode ser o CPF do paciente ou do responsável legal (caso seja menor de idade)].`;
+                }
                 textForAI = `${textForAI}\n${draftInfoTag}`;
             }
 
