@@ -154,6 +154,21 @@ async function runDashboardE2EAudit() {
 
             if (tab.targetTab === 'tab-crm') {
                 await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_crm_tab.png') });
+                // Testa disparo do Modal de Confirmação
+                const crmModalActive = await page.evaluate(() => {
+                    if (typeof triggerCrmCampaign === 'function') {
+                        triggerCrmCampaign('preventive');
+                        const modal = document.getElementById('modal-confirm-crm');
+                        return modal && modal.classList.contains('active');
+                    }
+                    return false;
+                });
+                assert('Modal de Segurança e Confirmação de Disparo CRM abre com sucesso', crmModalActive);
+                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_crm_modal_confirm.png') });
+                // Fecha o modal
+                await page.evaluate(() => {
+                    if (typeof closeModal === 'function') closeModal('modal-confirm-crm');
+                });
             }
             if (tab.targetTab === 'tab-settings') {
                 await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_settings_mockup.png') });
