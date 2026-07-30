@@ -1,9 +1,16 @@
+// Importa a inicialização do Sentry antes de qualquer outro módulo
+const Sentry = require('./instrument');
 require('dotenv').config();
 const express = require('express');
+
 
 // Validação explícita de variáveis de ambiente críticas no boot em produção
 if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_DASHBOARD_URL) {
     console.error('❌ ERRO CRÍTICO: A variável ADMIN_DASHBOARD_URL não está definida no ambiente de produção.');
+    process.exit(1);
+}
+if (process.env.NODE_ENV === 'production' && !process.env.APP_SECRET) {
+    console.error('❌ ERRO CRÍTICO DE SEGURANÇA: APP_SECRET não está definido no ambiente de produção. Webhook HMAC e tokens de sessão ficam inseguros sem esta variável.');
     process.exit(1);
 }
 const crypto = require('crypto');
@@ -222,14 +229,13 @@ const processWebhookInbox = async () => {
                                 if (clinic) clinicId = clinic.id;
                             }
                             if (!clinicId) {
-                                // Em ambiente de produção / SaaS Multi-Tenant, se o phone_number_id não for reconhecido,
-                                // rejeitamos o processamento em vez de cair na clínica default, evitando vazamento de mensagens entre clínicas.
-                                if (phoneNumberId && process.env.NODE_ENV === 'production') {
-                                    logger.warn('WEBHOOK_INBOX', `[MULTI-TENANT SECURITY] Webhook ignorado: phone_number_id (${phoneNumberId}) não está associado a nenhuma clínica cadastrada.`);
+                                // Em produção (SaaS Multi-Tenant), rejeitamos estritamente qualquer webhook cuja clínica não seja resolvida,
+                                // independente de o phone_number_id estar presente ou ausente, impedindo qualquer vazamento para clínica default.
+                                if (process.env.NODE_ENV === 'production') {
+                                    logger.warn('WEBHOOK_INBOX', `[MULTI-TENANT SECURITY] Webhook ignorado: phone_number_id (${phoneNumberId || 'ausente'}) não está associado a nenhuma clínica cadastrada.`);
                                     continue;
                                 }
-                                // No ambiente de desenvolvimento/teste local (ou no simulador onde phone_number_id pode não estar mapeado),
-                                // usamos a clínica modelo como fallback seguro de testes.
+                                // No ambiente de desenvolvimento/teste local, usamos a clínica modelo como fallback de testes.
                                 const defaultClinic = await db.clinics.findBySlug('clinica-modelo');
                                 if (defaultClinic) {
                                     clinicId = defaultClinic.id;
@@ -346,12 +352,21 @@ const handleIncomingWebhook = async (req, res) => {
 app.post('/webhook', handleIncomingWebhook);
 app.post('/api/webhook', handleIncomingWebhook);
 
-// 6. Health Check
+// 6. Health Check & Observabilidade
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
+// Rota de teste/debug para validar recepção de erros no painel do Sentry
+app.get('/debug-sentry', function mainHandler(req, res) {
+    throw new Error('Sentry Test Error — ClinicaBot SaaS Pro');
+});
+
+// Registrar o Error Handler do Sentry após todas as rotas/controllers
+Sentry.setupExpressErrorHandler(app);
+
 // Boot
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor online na porta ${PORT}`);

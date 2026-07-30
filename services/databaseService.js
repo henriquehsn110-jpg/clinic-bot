@@ -105,6 +105,9 @@ const clinics = {
             return data;
         });
     },
+    async getByPhoneNumberId(phoneNumberId) {
+        return this.findByPhoneNumberId(phoneNumberId);
+    },
     async findById(id) {
         return withRetry(async () => {
             const { data, error } = await supabase
@@ -168,17 +171,32 @@ const patients = {
     async findOrCreate(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.findOrCreate');
         return withRetry(async () => {
-            // 1. Tenta buscar o paciente por telefone e clínica
+            // 1. Tenta buscar o paciente por telefone e clínica (incluindo soft-deleted)
             let { data, error } = await supabase
                 .from('patients')
                 .select('*')
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
+                .order('created_at', { ascending: false })
+                .limit(1)
                 .maybeSingle();
 
             if (error) throw new Error(`patients.findOrCreate (select): ${error.message}`);
 
             if (data) {
+                // Reativa paciente soft-deleted que voltou a mandar mensagem
+                if (data.deleted_at) {
+                    const { error: reactivateErr } = await supabase
+                        .from('patients')
+                        .update({ deleted_at: null })
+                        .eq('id', data.id);
+                    if (reactivateErr) {
+                        console.warn(`[DB_WARN] patients.findOrCreate: falha ao reativar paciente soft-deleted ${data.id}: ${reactivateErr.message}`);
+                    } else {
+                        console.log(`[DB_INFO] patients.findOrCreate: paciente ${data.id} reativado (deleted_at limpo) — retornou a enviar mensagens.`);
+                    }
+                    data.deleted_at = null;
+                }
                 if (data.cpf) data.cpf = decryptData(data.cpf);
                 return data;
             }
@@ -200,6 +218,12 @@ const patients = {
                         .eq('clinic_id', clinicId)
                         .maybeSingle();
                     if (retryRes.data) {
+                        // Reativa também no caminho de race condition
+                        if (retryRes.data.deleted_at) {
+                            await supabase.from('patients').update({ deleted_at: null }).eq('id', retryRes.data.id);
+                            retryRes.data.deleted_at = null;
+                            console.log(`[DB_INFO] patients.findOrCreate (23505 retry): paciente ${retryRes.data.id} reativado.`);
+                        }
                         if (retryRes.data.cpf) retryRes.data.cpf = decryptData(retryRes.data.cpf);
                         return retryRes.data;
                     }
@@ -292,6 +316,8 @@ const patients = {
                 .from('patients').select('*').is('deleted_at', null)
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
+                .order('created_at', { ascending: false })
+                .limit(1)
                 .maybeSingle(); // retorna null se não encontrar (sem erro)
 
             if (error) throw new Error(`patients.findByPhone: ${error.message}`);

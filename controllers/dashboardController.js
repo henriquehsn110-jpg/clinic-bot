@@ -4,8 +4,13 @@ const whatsappService = require('../services/whatsappService');
 const logger = require('../services/logger');
 const crypto = require('crypto');
 
-// Chave secreta interna para assinar tokens de sessão simples do dashboard
-const SESSION_SECRET = process.env.APP_SECRET || 'clinicabot_secure_session_secret_2026';
+// Chave secreta interna para assinar tokens de sessão do dashboard.
+// SEGURANÇA: Em produção, APP_SECRET DEVE estar definido — sem fallback hardcoded.
+if (process.env.NODE_ENV === 'production' && !process.env.APP_SECRET) {
+    console.error('❌ ERRO CRÍTICO DE SEGURANÇA: APP_SECRET não está definido no ambiente de produção. Abortando para impedir uso de segredo hardcoded.');
+    process.exit(1);
+}
+const SESSION_SECRET = process.env.APP_SECRET || 'dev_only_fallback_not_for_production';
 
 // Simulação de banco de credenciais de clínicas para demonstração segura
 const CLINIC_CREDENTIALS = {
@@ -47,7 +52,12 @@ function verifyToken(tokenString) {
     const signature = parts[1];
 
     const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(dataRaw).digest('hex');
-    if (signature !== expectedSig) return null;
+
+    // Comparação timing-safe para prevenir timing attacks na verificação HMAC
+    // (mesmo padrão usado em verifySignature() do server.js para webhooks da Meta)
+    const sigBuf = Buffer.from(signature, 'utf8');
+    const expectedBuf = Buffer.from(expectedSig, 'utf8');
+    if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) return null;
 
     try {
         const payload = JSON.parse(dataRaw);
@@ -71,6 +81,56 @@ class DashboardController {
 
         req.user = user;
         next();
+    }
+
+    // Middleware de Autorização por Role (RBAC)
+    authorize(...allowedRoles) {
+        return (req, res, next) => {
+            if (!req.user || !req.user.role) {
+                return res.status(401).json({ error: 'Acesso não autorizado: sessão não identificada.' });
+            }
+            if (!allowedRoles.includes(req.user.role)) {
+                logger.warn('RBAC_DENIED', `Acesso negado para role '${req.user.role}' na rota ${req.originalUrl}`);
+                return res.status(403).json({ error: 'Acesso negado: permissão insuficiente para este recurso.' });
+            }
+            next();
+        };
+    }
+
+    // Middleware de Resolução Centralizada de Clinic ID (Slug → UUID & SuperAdmin Guard)
+    async resolveClinicId(req, res, next) {
+        try {
+            const { clinicId, role } = req.user || {};
+            req.isSuperAdmin = (role === 'superadmin' || clinicId === 'all');
+
+            if (req.isSuperAdmin) {
+                req.resolvedClinicId = null;
+                return next();
+            }
+
+            if (!clinicId) {
+                logger.warn('RESOLVE_CLINIC_ID_FAIL', `Acesso negado: token sem clinicId para o usuário ${req.user?.email}`);
+                return res.status(403).json({ error: 'Acesso negado: nenhuma clínica associada a este usuário.' });
+            }
+
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
+            if (isUuid) {
+                req.resolvedClinicId = clinicId;
+            } else {
+                const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
+                if (cRow && cRow.id) {
+                    req.resolvedClinicId = cRow.id;
+                } else {
+                    logger.warn('RESOLVE_CLINIC_ID_NOT_FOUND', `Acesso negado: slug de clínica '${clinicId}' não cadastrado no banco para usuário ${req.user?.email}`);
+                    return res.status(403).json({ error: 'Acesso negado: clínica não cadastrada no sistema.' });
+                }
+            }
+
+            next();
+        } catch (err) {
+            logger.error('RESOLVE_CLINIC_ID_ERR', `Erro ao resolver clinic_id: ${err.message}`);
+            return res.status(500).json({ error: 'Falha interna ao verificar credenciais de tenant.' });
+        }
     }
 
     // Login seguro da Clínica / Secretária
@@ -122,27 +182,20 @@ class DashboardController {
     // Retorna dados da clínica com suporte à Paginação e Isolamento Multi-Tenant (P8)
     async getDashboardData(req, res) {
         try {
-            const { clinicId, role } = req.user || {};
             const page = parseInt(req.query.page) || 1;
             const limit = Math.min(parseInt(req.query.limit) || 50, 200);
             const offset = (page - 1) * limit;
-
-            // Resolve slug de clínica para UUID caso o login tenha retornado o slug (ex: 'clinica-modelo')
-            let targetClinicId = clinicId;
-            if (clinicId && clinicId !== 'all' && role !== 'superadmin') {
-                // Verifica se clinicId já é UUID válido ou se é slug
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
-                if (!isUuid) {
-                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
-                    if (cRow) targetClinicId = cRow.id;
-                }
-            }
+            const targetClinicId = req.resolvedClinicId;
 
             let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)', { count: 'exact' }).is('deleted_at', null).order('appointment_date', { ascending: true }).range(offset, offset + limit - 1);
             let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
             let sessionsQuery = db.supabase.from('sessions').select('*').is('deleted_at', null);
 
-            if (targetClinicId && targetClinicId !== 'all' && role !== 'superadmin') {
+            if (!req.isSuperAdmin && !targetClinicId) {
+                return res.status(403).json({ error: 'Acesso negado: clínica não resolvida.' });
+            }
+
+            if (!req.isSuperAdmin && targetClinicId) {
                 apptsQuery = apptsQuery.eq('clinic_id', targetClinicId);
                 patientsQuery = patientsQuery.eq('clinic_id', targetClinicId);
                 sessionsQuery = sessionsQuery.eq('clinic_id', targetClinicId);
@@ -215,26 +268,14 @@ class DashboardController {
     async createPatient(req, res) {
         try {
             const { name, phone, cpf } = req.body;
-            const { clinicId } = req.user;
+            const targetClinicId = req.resolvedClinicId;
 
             if (!name || !phone) {
                 return res.status(400).json({ error: 'Nome e telefone do paciente são obrigatórios.' });
             }
 
-            let targetClinicId = clinicId;
-            if (clinicId && clinicId !== 'all' && req.user?.role !== 'superadmin') {
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
-                if (!isUuid) {
-                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
-                    if (cRow) targetClinicId = cRow.id;
-                }
-            } else if (!targetClinicId || targetClinicId === 'all') {
-                const { data: firstClinic } = await db.supabase.from('clinics').select('id').order('created_at', { ascending: true }).limit(1).maybeSingle();
-                if (firstClinic) targetClinicId = firstClinic.id;
-            }
-
-            if (!targetClinicId || targetClinicId === 'all') {
-                return res.status(400).json({ error: 'É necessário estar associado a uma clínica para cadastrar pacientes.' });
+            if (!targetClinicId && !req.isSuperAdmin) {
+                return res.status(400).json({ error: 'É necessário estar associado a uma clínica válida para cadastrar pacientes.' });
             }
 
             const cleanPhone = String(phone).trim();
@@ -258,14 +299,10 @@ class DashboardController {
     async createAppointment(req, res) {
         try {
             const { patientId, patientName, patientPhone, type, appointmentDate, appointmentTime } = req.body;
-            const { clinicId } = req.user;
-            let targetClinicId = clinicId;
-            if (clinicId && clinicId !== 'all') {
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
-                if (!isUuid) {
-                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
-                    if (cRow) targetClinicId = cRow.id;
-                }
+            const targetClinicId = req.resolvedClinicId;
+
+            if (!targetClinicId && !req.isSuperAdmin) {
+                return res.status(400).json({ error: 'É necessário estar associado a uma clínica válida para agendar consultas.' });
             }
 
             let targetPatientId = (patientId && typeof patientId === 'string' && patientId.trim().length > 10) ? patientId.trim() : null;
@@ -308,7 +345,7 @@ class DashboardController {
             // Confirma o agendamento imediatamente
             await db.appointments.updateStatus(appt.id, 'confirmed', targetClinicId);
 
-            logger.info('DASHBOARD_APPOINTMENT', `Agendamento criado via recepção: ID ${appt.id} em ${appointmentDate} ${appointmentTime} (Clínica ${clinicId})`);
+            logger.info('DASHBOARD_APPOINTMENT', `Agendamento criado via recepção: ID ${appt.id} em ${appointmentDate} ${appointmentTime} (Clínica ${targetClinicId})`);
             res.json({ success: true, appointment: appt });
 
         } catch (err) {
@@ -322,15 +359,7 @@ class DashboardController {
         try {
             const { id } = req.params;
             const { status, reason } = req.body;
-            const { clinicId } = req.user || {};
-            let targetClinicId = clinicId;
-            if (clinicId && clinicId !== 'all') {
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
-                if (!isUuid) {
-                    const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
-                    if (cRow) targetClinicId = cRow.id;
-                }
-            }
+            const targetClinicId = req.resolvedClinicId || (req.user?.clinicId !== 'all' ? req.user?.clinicId : null);
 
             if (!['confirmed', 'cancelled', 'pending'].includes(status)) {
                 return res.status(400).json({ error: 'Status de agendamento inválido.' });
@@ -343,6 +372,16 @@ class DashboardController {
                 .eq('id', id)
                 .maybeSingle();
 
+            if (!apptData) {
+                return res.status(404).json({ error: 'Agendamento não encontrado.' });
+            }
+
+            // SEGURANÇA MULTI-TENANT (VULN-01): Impede que uma clínica modifique agendamento de outra
+            if (!req.isSuperAdmin && apptData.clinic_id && targetClinicId && apptData.clinic_id !== targetClinicId) {
+                logger.warn('TENANT_VIOLATION', `Tentativa bloqueada de alterar agendamento de outra clínica: Usuário tenant=${targetClinicId}, Agendamento tenant=${apptData.clinic_id}`);
+                return res.status(403).json({ error: 'Acesso negado: este agendamento pertence a outra clínica.' });
+            }
+
             let clinicData = null;
             if (apptData && apptData.clinic_id) {
                 const { data: cData } = await db.supabase
@@ -353,7 +392,7 @@ class DashboardController {
                 clinicData = cData;
             }
 
-            const updated = await db.appointments.updateStatus(id, status, targetClinicId);
+            const updated = await db.appointments.updateStatus(id, status, targetClinicId || apptData.clinic_id);
 
             // Dispara notificação automática no WhatsApp do paciente em caso de confirmação ou cancelamento
             if (apptData && apptData.patients && apptData.patients.phone) {
@@ -401,9 +440,10 @@ class DashboardController {
             const { phone } = req.body;
             if (!phone) return res.status(400).json({ error: 'Telefone é obrigatório.' });
 
-            const clinicId = req.clinicId || req.user?.clinic_id;
-            await db.sessions.delete(phone, clinicId);
-            logger.info('DASHBOARD_HANDOFF', `Sessão [${phone}] devolvida para a IA via painel.`);
+            // SEGURANÇA (VULN-02): Usa req.resolvedClinicId do middleware ou req.user.clinicId (camelCase)
+            const targetClinicId = req.resolvedClinicId || req.user?.clinicId;
+            await db.sessions.delete(phone, targetClinicId);
+            logger.info('DASHBOARD_HANDOFF', `Sessão [${phone}] devolvida para a IA via painel (Clínica: ${targetClinicId}).`);
             res.json({ success: true });
 
         } catch (err) {
@@ -416,7 +456,11 @@ class DashboardController {
     async updateSettings(req, res) {
         try {
             const { name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours } = req.body;
-            const { clinicId } = req.user;
+            const targetClinicId = req.resolvedClinicId;
+
+            if (!targetClinicId && !req.isSuperAdmin) {
+                return res.status(400).json({ error: 'Clínica não encontrada para atualização de configurações.' });
+            }
 
             const settings = {
                 name,
@@ -432,17 +476,17 @@ class DashboardController {
                 updatedAt: new Date().toISOString()
             };
 
-            // Salva no banco de dados na tabela 'clinics' (se existir) ou atualiza registro
-            if (db.supabase && clinicId && clinicId !== 'all') {
+            // SEGURANÇA MULTI-TENANT (VULN-03): Salva usando a UUID da clínica resolvida (não o slug)
+            if (db.supabase && targetClinicId) {
                 await db.supabase.from('clinics').upsert({
-                    id: clinicId,
+                    id: targetClinicId,
                     name,
                     whatsapp_list_title: whatsappListTitle || 'Tratamentos',
                     settings
                 });
             }
 
-            logger.info('DASHBOARD_SETTINGS', `Configurações da clínica [${clinicId}] atualizadas via painel.`);
+            logger.info('DASHBOARD_SETTINGS', `Configurações da clínica [${targetClinicId}] atualizadas via painel.`);
             res.json({ success: true, settings });
 
         } catch (err) {
@@ -455,7 +499,7 @@ class DashboardController {
     // Permite que sistemas de SIEM (Datadog, Splunk, QRadar) consumam os logs de auditoria em tempo real
     async getAuditStream(req, res) {
         try {
-            const { clinicId } = req.user;
+            const targetClinicId = req.resolvedClinicId;
             const limit = parseInt(req.query.limit) || 100;
 
             if (db.supabase) {
@@ -465,8 +509,8 @@ class DashboardController {
                     .order('created_at', { ascending: false })
                     .limit(limit);
 
-                if (clinicId && clinicId !== 'all') {
-                    query = query.eq('clinic_id', clinicId);
+                if (!req.isSuperAdmin && targetClinicId) {
+                    query = query.eq('clinic_id', targetClinicId);
                 }
 
                 const { data, error } = await query;

@@ -259,29 +259,32 @@ function extractCleanName(text) {
     // Remove marcadores de sistema se houver
     clean = clean.replace(/\[\s*SISTEMA\s*:.*?\]/gi, '').trim();
 
-    // Se contiver ponto de interrogação, é uma pergunta, não um nome
-    if (clean.includes('?')) return null;
+    // Se contiver profanidade ou insulto, NÃO é nome
+    const profanityFilter = /\b(vai\s+se\s+lascar|se\s+lascar|porra|caralho|merda|cacete|filho\s+da\s+puta|fdp|tomar\s+no|vsf|tnj|vtnc|puta|corno|desgraça|desgraca|arrombado|bosta|pica|pau|otario|otária|otaria|babaca|imbecil|idiota|burro|burra)\b/i;
+    if (profanityFilter.test(clean)) return null;
 
-    // Se contiver palavras reservadas de comandos ou palavras da aplicação, não é nome
-    if (/Selecionei|CPF|confirmar|cancelar|remarcar|agendar|opções|opcao/i.test(clean)) return null;
+    // Se contiver ponto de interrogação, exclamação isolada ou símbolos numéricos, não é nome
+    if (/[?!\d@#$%^&*()_+={}\[\]:;<>\\/|]/.test(clean)) return null;
 
-    // Se contiver verbos ou questionamentos comuns em frases em português, não é um nome pessoal
-    const sentenceFilter = /\b(quero|quando|quanto|quais|qual|como|onde|porque|por que|saber|falar|falarei|conversar|atender|atendimento|dentista|médico|medico|doutor|doutora|dra|dr|consulta|valor|preço|preco|convênio|convenio|plano|horário|horario|vaga|vagas|endereço|endereco|local|dúvida|duvida|ajuda|informação|informacao|gostaria|preciso|tenho|queria|posso)\b/i;
-    if (sentenceFilter.test(clean)) return null;
+    // Se contiver palavras reservadas de comandos ou termos do app, não é nome
+    if (/Selecionei|CPF|confirmar|cancelar|remarcar|agendar|opções|opcao|menu/i.test(clean)) return null;
 
-    // Remove prefixos comuns em português
+    // Remove prefixos comuns de apresentação em português antes de checar a frase
     clean = clean.replace(/^(meu\s+nome\s+é|meu\s+nome\s+e|sou\s+a|sou\s+o|me\s+chamo|chamo-me|pode\s+colocar|nome:\s*)\s*/i, '').trim();
 
-    // Bloqueia saudações e frases curtas genéricas de serem salvas como nome
-    const greetingBlocklist = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|obrigad[oa]|sim|não|nao|ok|beleza|valeu|tchau|confirmar|cancelar|remarcar|alterar|agendar|menu)$/i;
-    if (greetingBlocklist.test(clean)) return null;
+    // Dicionário Estrito de Palavras NÃO-NOME (Verbos, Pronomes, Advérbios, Adjetivos, Saudações e Gírias em PT-BR)
+    const nonNameWordsRegex = /\b(oi|olá|ola|hey|hi|hello|boa|bom|noite|tarde|dia|tudo|bem|quero|quando|quanto|quais|qual|como|onde|porque|por que|porquê|saber|falar|falarei|conversar|atender|atendimento|dentista|médico|medico|doutor|doutora|dra|dr|consulta|valor|preço|preco|convênio|convenio|plano|horário|horario|vaga|vagas|endereço|endereco|local|dúvida|duvida|ajuda|informação|informacao|gostaria|preciso|tenho|queria|posso|pode|podia|deve|deveria|decide|decida|decidir|escolhe|escolha|escolher|veja|vê|olha|olhar|diz|dizer|fala|mostra|mostrar|acha|acho|pensa|penso|sabe|sei|faz|fazer|faço|coloca|bota|manda|envia|passa|pega|tira|deixa|fica|vai|ir|você|voce|vocês|voces|tu|ele|ela|nós|nos|mim|me|te|lhe|si|comigo|contigo|consigo|isso|isto|aquilo|esse|essa|este|esta|aquele|aquela|qualquer|quem|assim|então|entao|agora|depois|antes|sempre|nunca|jamais|já|ja|hoje|amanhã|amanha|ontem|aqui|ali|lá|la|cá|ca|muito|pouco|mais|menos|mal|ruim|melhor|pior|mole|duro|certo|errado|cara|véi|vei|mano|parça|parca|irmão|irmao|amigo|amiga|moço|moco|moça|moca|atendente|humano|secretária|secretaria|tanto|faz|beleza|valeu|obrigado|obrigada|tchau|sim|não|nao|ok)\b/i;
+    if (nonNameWordsRegex.test(clean)) return null;
 
-    // Um nome pessoal não costuma ter mais que 5 palavras
+    // Quantidade de palavras (um nome brasileiro válido tem de 1 a 4 palavras)
     const rawWords = clean.split(/\s+/);
-    if (rawWords.length > 5) return null;
+    if (rawWords.length < 1 || rawWords.length > 4) return null;
 
-    // Um nome deve ter pelo menos 2 caracteres e conter letras
-    if (clean.length < 2 || !/[a-zA-ZáàâãéèêíïóôõúüçÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇ]/.test(clean)) return null;
+    // Cada palavra do nome deve ter pelo menos 2 caracteres e conter apenas letras válidas
+    for (const w of rawWords) {
+        if (w.length < 2) return null;
+        if (!/^[a-zA-ZáàâãéèêíïóôõúüçÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇ'-]+$/.test(w)) return null;
+    }
 
     // Capitalização adequada (primeiras letras maiúsculas)
     const words = rawWords.map(w => {
@@ -360,8 +363,58 @@ class ConversationController {
             }
 
             // ── P3: CACHE LOCAL DE BOAS-VINDAS & ATALHOS (0 TOKENS GEMINI) ───────
-            // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato)
-            if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar')) {
+            // 0. Atalho Direto para Transbordo Humano (Handoff Explícito)
+            const isExplicitHumanRequest = /\b(falar\s+com\s+(um\s+)?(atendente|humano|recepção|secretária|pessoa|alguém)|atendimento\s+humano|preciso\s+falar\s+com\s+alguém)\b/i.test(sanitizedText);
+            if (isExplicitHumanRequest) {
+                logger.info('HUMAN_HANDOFF_REQUESTED', `Paciente [${phone}] solicitou atendimento humano.`);
+                const handoffText = "Com certeza! Estou transferindo seu atendimento para a nossa recepção humano. Em breve um atendente irá responder você aqui pelo WhatsApp! 😊\n\n[SISTEMA: conversa transferida para atendente humano]";
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: handoffText }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, "Com certeza! Estou transferindo seu atendimento para a nossa recepção. Em breve um atendente irá responder você! 😊", phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: "Com certeza! Estou transferindo seu atendimento para a nossa recepção humano. Em breve um atendente irá responder você aqui!",
+                    buttons: ["Falar com a IA (Ana)"],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: true
+                };
+            }
+
+            // 0b. Atalho Direto para Insultos/Profanidades (Transbordo Polido Silencioso — 0 Tokens Gemini)
+            const profanityRegex = /\b(vai\s+se\s+lascar|se\s+lascar|porra|caralho|merda|cacete|filho\s+da\s+puta|fdp|tomar\s+no|vsf|tnj|vtnc|puta|corno|desgraça|desgraca|arrombado)\b/i;
+            if (profanityRegex.test(sanitizedText)) {
+                logger.warn('PROFANITY_HANDOFF', `Paciente [${phone}] enviou termo de baixo calão. Efetuando transbordo humano polido silencioso.`);
+                const handoffMsg = "Entendo. Vou transferir você para um de nossos atendentes para te ajudar melhor. Um momento, por favor.";
+                await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, handoffMsg, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: handoffMsg,
+                    buttons: ["Falar com a IA (Ana)"],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: true
+                };
+            }
+            // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato genérico)
+            const hasDirectIntent = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /agendar|remarcar|cancelar/i.test(sanitizedText);
+            if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar') && !hasDirectIntent) {
                 const welcomeText = "Olá! Sou a Ana, da Clínica Modelo 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?";
                 const welcomeButtons = ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"];
 
@@ -623,7 +676,7 @@ class ConversationController {
                     const dateFmt = singleAppt.appointment_date ? singleAppt.appointment_date.split('-').reverse().join('/') : '';
                     const timeFmt = singleAppt.appointment_time ? singleAppt.appointment_time.substring(0, 5) : '';
 
-                    if (lowerText === 'sim, cancelar' || lowerText === 'cancelar consulta') {
+                    if (lowerText === 'sim, cancelar' || lowerText === 'cancelar consulta' || lowerText === '1' || lowerText === 'sim' || lowerText === 'opcao 1' || lowerText === 'opção 1') {
                         await db.appointments.updateStatus(singleAppt.id, 'cancelled', clinicId);
                         logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${singleAppt.id} cancelada com sucesso via chat.`);
                         draft.date = null; draft.time = null; draft.pending_cancel_selection = false;
@@ -762,21 +815,20 @@ class ConversationController {
                             newApptId = existing.id;
                             logger.info('SCHEDULING', `Agendamento idempotente detectado para [${phone}] - ${draft.date} ${draft.time}`);
                         } else {
+                            const newAppt = await calendarService.scheduleAppointment({
+                                clinicId,
+                                phone,
+                                name: draft.name || null,
+                                date: draft.date,
+                                time: draft.time,
+                                type: draft.type,
+                                doctor_id: draft.doctor_id || null,
+                                notes: draft.notes || null
+                            });
+                            newApptId = newAppt.id;
                             if (!isSimulation) {
-                                const newAppt = await calendarService.scheduleAppointment({
-                                    clinicId,
-                                    phone,
-                                    name: draft.name || null,
-                                    date: draft.date,
-                                    time: draft.time,
-                                    type: draft.type,
-                                    doctor_id: draft.doctor_id || null,
-                                    notes: draft.notes || null
-                                });
-                                newApptId = newAppt.id;
                                 logger.info('SCHEDULING', `Agendamento criado com sucesso via WhatsApp para [${phone}] - ${draft.date} ${draft.time}`);
                             } else {
-                                newApptId = 'simulat0r-id';
                                 logger.info('SCHEDULING', `Agendamento criado com sucesso via Simulador para [${phone}] - ${draft.date} ${draft.time}`);
                             }
                         }
@@ -1043,16 +1095,17 @@ class ConversationController {
                 await db.sessions.setDraft(phone, draft, clinicId);
             }
 
-            // 3. Extração do Nome (se foi solicitado explicitamente no histórico)
+            // 3. Extração do Nome (apenas se a ÚLTIMA mensagem do modelo solicitou o nome explicitamente)
             let wasNameRequested = false;
+            let lastModelMsgText = '';
             for (let i = history.length - 1; i >= 0; i--) {
                 if (history[i].role === 'model') {
-                    const modelText = history[i].parts?.[0]?.text || '';
-                    if (modelText.includes('Qual é o seu nome completo?') || modelText.includes('informe seu nome completo')) {
-                        wasNameRequested = true;
-                        break;
-                    }
+                    lastModelMsgText = history[i].parts?.[0]?.text || '';
+                    break;
                 }
+            }
+            if (lastModelMsgText.includes('Qual é o seu nome completo?') || lastModelMsgText.includes('informe seu nome completo')) {
+                wasNameRequested = true;
             }
 
             if (wasNameRequested) {
@@ -1065,9 +1118,10 @@ class ConversationController {
                     if (patient) patient.name = extractedName;
                 } else {
                     const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
+                    const isGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem)$/i.test(sanitizedText);
                     const isQuestion = sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|quero|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText);
 
-                    if (!isBypass && !isQuestion) {
+                    if (!isBypass && !isQuestion && !isGreeting) {
                         const nameErrText = "Para prosseguirmos com o agendamento, por favor me informe o seu nome completo.";
                         history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                         history.push({ role: 'model', parts: [{ text: `${nameErrText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
@@ -1110,6 +1164,29 @@ class ConversationController {
                 draft.notes = sanitizedText;
                 await db.sessions.setDraft(phone, draft, clinicId);
                 processedText = `${sanitizedText}\n[SISTEMA: descrição do paciente para a opção Outro coletada. Avance para a escolha da data (Passo 2)]`;
+            }
+
+            // ── Interceptação determinística de Procedimento e Nome no texto ──────────
+            const matchedProcedureObj = PROCEDURES_RICH.find(p => sanitizedText.toLowerCase().includes(p.title.toLowerCase()));
+            if (matchedProcedureObj && !draft.type) {
+                draft.type = matchedProcedureObj.title;
+                await db.sessions.setDraft(phone, draft, clinicId);
+            }
+
+            if (draft.type === 'Outro' && !draft.notes && sanitizedText.toLowerCase() !== 'outro' && !sanitizedText.includes('Selecionei')) {
+                draft.notes = sanitizedText;
+                await db.sessions.setDraft(phone, draft, clinicId);
+            }
+
+            const nameInlineMatch = sanitizedText.match(/meu\s+nome\s+é\s+([a-zA-ZáàâãéèêíïóôõúüçÁÀÂÃÉÈÊÍÏÓÔÕÚÜÇ\s]+?)(?=\s+(?:e\s+)?cpf|\s*$)/i);
+            if (nameInlineMatch && !draft.name) {
+                const cleanInlineName = extractCleanName(nameInlineMatch[1]);
+                if (cleanInlineName) {
+                    draft.name = cleanInlineName;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+                    await db.patients.updateName(phone, cleanInlineName, clinicId).catch(() => {});
+                    if (patient) patient.name = cleanInlineName;
+                }
             }
 
             // ── Pré-verificação de disponibilidade de data e busca de CPF ─────────
@@ -1287,7 +1364,35 @@ class ConversationController {
                 textForAI = `${textForAI}\n${draftInfoTag}`;
             }
 
-            let aiResponse = await aiService.generateResponse(textForAI, history, clinicSettings);
+            let aiResponse;
+            if (isSimulation) {
+                aiResponse = {
+                    text: `Entendido! Processando seu agendamento para ${draft.type || 'consulta'}.`,
+                    buttons: [],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    transferToHuman: false,
+                    requireDescription: false
+                };
+            } else {
+                try {
+                    aiResponse = await aiService.generateResponse(textForAI, history, clinicSettings);
+                } catch (aiErr) {
+                    logger.warn('AI_FALLBACK', `Falha ao chamar Gemini (${aiErr.message}). Usando resposta padrão.`);
+                    aiResponse = {
+                        text: `Olá! Sou a Ana da Clínica Modelo. Como posso te ajudar hoje?`,
+                        buttons: [],
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        transferToHuman: false,
+                        requireDescription: false
+                    };
+                }
+            }
             logger.info('STATE_MACHINE', `text: ${sanitizedText}, draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
             console.log(`[DEBUG] draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
 

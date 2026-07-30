@@ -323,9 +323,12 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
     }
 
     async generateResponse(userMessage, conversationHistory = [], clinicSettings = {}) {
-        // P2: Verifica rate limit antes de chamar a API
+        // P2: Verifica rate limit antes de chamar a API (com buffer de espera graciosa de 800ms)
         if (!this._checkRateLimit()) {
-            throw new Error('RATE_LIMIT_EXCEEDED: Limite de chamadas por minuto atingido. Tente novamente em breve.');
+            await new Promise(resolve => setTimeout(resolve, 800));
+            if (!this._checkRateLimit()) {
+                throw new Error('RATE_LIMIT_EXCEEDED: Limite de chamadas por minuto atingido. Tente novamente em breve.');
+            }
         }
 
         // Sanitização Anti-Prompt Injection (MITRE ATLAS Guard)

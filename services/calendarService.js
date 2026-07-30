@@ -27,9 +27,17 @@ class CalendarService {
                 .eq('holiday_date', dateStr)
                 .maybeSingle();
 
-            if (holiday) {
-                logger.info('CALENDAR', `Data ${dateStr} é feriado (${holiday.reason || 'Feriado'}). Zero slots disponíveis.`);
+            const isNationalHoliday = ['12-25', '01-01', '05-01', '09-07', '11-15', '11-02', '10-12'].some(h => dateStr.endsWith(h));
+            if (holiday || isNationalHoliday) {
+                logger.info('CALENDAR', `Data ${dateStr} é feriado. Zero slots disponíveis.`);
                 return []; // Nenhum horário disponível em feriados
+            }
+
+            const dateObj = new Date(`${dateStr}T12:00:00Z`);
+            const dayOfWeek = dateObj.getDay(); // 0-6 (0 = Domingo)
+            if (dayOfWeek === 0) {
+                logger.info('CALENDAR', `Data ${dateStr} é domingo. Sem expediente.`);
+                return []; // Domingo sem expediente
             }
 
             // 2. Busca grade de horários ocupados no banco (considerando doctorId)
