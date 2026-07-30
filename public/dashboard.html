@@ -348,7 +348,7 @@
                                 </div>
                                 <div class="form-group" style="flex: 1;">
                                     <label>Nome da Assistente Virtual (IA) *</label>
-                                    <input type="text" id="cfg-persona-name" value="Ana" onkeyup="updateLivePreview()" required>
+                                    <input type="text" id="cfg-persona-name" value="" placeholder="Ex: Ana, Bruna, Lara..." onkeyup="updateLivePreview()" required>
                                 </div>
                             </div>
                             <div class="form-group">
@@ -755,8 +755,13 @@
                 return;
             }
 
-            // SEMPRE tenta auto-login ao carregar para garantir token válido
-            autoLoginDefaultAdmin();
+            // Verifica se o usuário já possui token de sessão no localStorage
+            if (token) {
+                closeModal('modal-login');
+                fetchLiveDashboardData();
+            } else {
+                openModal('modal-login');
+            }
         });
 
         // REQUISIÇÕES À API (SEM FALLBACK SILENCIOSO MOCKADO — PROPAGA ERRO REAL)
@@ -904,9 +909,9 @@
             } catch (err) {
                 console.warn('[POLL] Erro ao atualizar dados:', err.message);
                 if (err.message === 'AUTH_EXPIRED') {
-                    console.log('[POLL] Token expirado, re-autenticando...');
-                    autoLoginDefaultAdmin();
-                    return; // autoLoginDefaultAdmin vai chamar fetchLiveDashboardData após re-login
+                    console.log('[POLL] Token expirado ou não autorizado. Redirecionando para login...');
+                    logout();
+                    return;
                 }
                 if (indicator) {
                     indicator.classList.add('offline');
@@ -1433,7 +1438,7 @@
             }
 
             if (clinicNameInput && (s.name || data.clinicName)) clinicNameInput.value = s.name || data.clinicName;
-            if (personaNameInput && s.personaName) personaNameInput.value = s.personaName;
+            if (personaNameInput) personaNameInput.value = s.personaName || data.personaName || 'Ana';
             if (listTitleInput && data.whatsappListTitle) listTitleInput.value = data.whatsappListTitle;
             if (proceduresInput && s.procedures) proceduresInput.value = s.procedures;
             if (addressInput && s.address) addressInput.value = s.address;

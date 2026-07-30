@@ -187,10 +187,17 @@ class DashboardController {
             const offset = (page - 1) * limit;
             const targetClinicId = req.resolvedClinicId;
 
+            let clinicIdToFetch = targetClinicId;
+            if (!clinicIdToFetch) {
+                const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', 'clinica-modelo').maybeSingle();
+                clinicIdToFetch = cRow?.id || null;
+            }
+
+            let clinicQuery = clinicIdToFetch ? db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, work_hours, address, eval_price').eq('id', clinicIdToFetch).maybeSingle() : Promise.resolve({ data: null });
+
             let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)', { count: 'exact' }).is('deleted_at', null).order('appointment_date', { ascending: true }).range(offset, offset + limit - 1);
             let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
             let sessionsQuery = db.supabase.from('sessions').select('*').is('deleted_at', null);
-            let clinicQuery = targetClinicId ? db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, settings').eq('id', targetClinicId).maybeSingle() : Promise.resolve({ data: null });
 
             if (!req.isSuperAdmin && !targetClinicId) {
                 return res.status(403).json({ error: 'Acesso negado: clínica não resolvida.' });
@@ -244,14 +251,13 @@ class DashboardController {
 
             let parsedSettings = {};
             if (clinicData) {
-                if (clinicData.settings && typeof clinicData.settings === 'object') {
-                    parsedSettings = clinicData.settings;
-                } else if (clinicData.work_hours && clinicData.work_hours.startsWith('{')) {
+                if (clinicData.work_hours && clinicData.work_hours.startsWith('{')) {
                     try { parsedSettings = JSON.parse(clinicData.work_hours); } catch {}
                 }
                 if (!parsedSettings.name && clinicData.name) parsedSettings.name = clinicData.name;
                 if (!parsedSettings.address && clinicData.address) parsedSettings.address = clinicData.address;
                 if (!parsedSettings.evalPrice && clinicData.eval_price) parsedSettings.evalPrice = String(clinicData.eval_price);
+                if (!parsedSettings.personaName) parsedSettings.personaName = 'Ana';
             }
 
             res.json({
@@ -474,9 +480,14 @@ class DashboardController {
     async updateSettings(req, res) {
         try {
             const { name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours, procedures } = req.body;
-            const targetClinicId = req.resolvedClinicId;
+            let targetClinicId = req.resolvedClinicId;
 
-            if (!targetClinicId && !req.isSuperAdmin) {
+            if (!targetClinicId && req.isSuperAdmin) {
+                const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', 'clinica-modelo').maybeSingle();
+                targetClinicId = cRow?.id || null;
+            }
+
+            if (!targetClinicId) {
                 return res.status(400).json({ error: 'Clínica não encontrada para atualização de configurações.' });
             }
 
@@ -505,10 +516,13 @@ class DashboardController {
                     work_hours: JSON.stringify(settings)
                 };
 
-                const { error: err1 } = await db.supabase.from('clinics').update({ ...updatePayload, settings }).eq('id', targetClinicId);
-                if (err1) {
-                    await db.supabase.from('clinics').update(updatePayload).eq('id', targetClinicId);
+                logger.info('DASHBOARD_SETTINGS', `Salvando configurações: personaName="${personaName}", clinicId=${targetClinicId}`);
+                const { error: updateErr } = await db.supabase.from('clinics').update(updatePayload).eq('id', targetClinicId);
+                if (updateErr) {
+                    logger.error('DASHBOARD_SETTINGS', `Erro ao gravar no Supabase: ${updateErr.message}`);
+                    return res.status(500).json({ error: `Erro ao salvar no banco: ${updateErr.message}` });
                 }
+                logger.info('DASHBOARD_SETTINGS', `Configurações gravadas com sucesso. personaName="${personaName}" persistido em work_hours.`);
             }
 
             logger.info('DASHBOARD_SETTINGS', `Configurações da clínica [${targetClinicId}] atualizadas via painel.`);

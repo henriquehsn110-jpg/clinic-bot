@@ -1,93 +1,130 @@
-/**
- * Teste de Integração Automatizado — Personalização Dinâmica em Tempo Real da Clínica & IA
- * 
- * Valida:
- * 1. Salvamento de configurações no banco de dados.
- * 2. Recuperação transparente das configurações da clínica.
- * 3. Injeção dinâmica no Gemini AI (nova Persona, novos valores, convênios e procedimentos).
- */
-
 require('dotenv').config();
 const conversationController = require('../controllers/conversationController');
-const aiService = require('../services/aiService');
+const dashboardController = require('../controllers/dashboardController');
 const db = require('../services/databaseService');
 
-async function runDynamicSettingsTest() {
-    console.log(`================================================================`);
-    console.log(`🧪 TESTE DE INTEGRAÇÃO — PERSONALIZAÇÃO DINÂMICA DA IA DA CLÍNICA`);
-    console.log(`================================================================\n`);
+async function testDynamicPersonaSettings() {
+    console.log('\n================================================================');
+    console.log('🧪 TESTE DE INTEGRAÇÃO — PERSONALIZAÇÃO DINÂMICA DE IA (BRUNA vs ANA)');
+    console.log('================================================================\n');
 
-    const testPhone = '5511988889999';
-    let defaultClinic = await db.clinics.findBySlug('clinica-modelo');
+    const defaultClinic = await db.clinics.findBySlug('clinica-modelo');
     if (!defaultClinic) {
-        const clinics = await db.clinics.getAll();
-        defaultClinic = clinics[0];
+        console.error('❌ ERRO: Clínica "clinica-modelo" não encontrada no BD.');
+        process.exit(1);
     }
+
     const clinicId = defaultClinic.id;
 
-    // 1. Grava novas configurações personalizadas no Supabase
-    const customSettings = {
-        name: "Clínica Odonto Elite",
-        personaName: "Dra. Sofia",
-        address: "Av. Faria Lima, 2000 - São Paulo/SP",
-        phone: "5511988889999",
-        evalPrice: "280",
-        insurances: "Unimed Odonto, Porto Seguro, Bradesco Dental",
-        paymentMethods: "PIX com 10% de desconto, Cartão em 12x",
-        emergency: "Em caso de dor intensa, procure nosso pronto-socorro 24h",
-        workHours: "Segunda a Sábado, das 07:00 às 20:00",
-        minCancellationHours: "12",
-        procedures: "Consulta Geral, Invisalign, Harmonização Facial, Implantes"
+    // Salva o personaName ORIGINAL para restaurar no final do teste
+    let originalPersonaName = 'Ana';
+    const { data: cRow } = await db.supabase.from('clinics').select('work_hours').eq('id', clinicId).maybeSingle();
+    if (cRow?.work_hours && cRow.work_hours.startsWith('{')) {
+        try { const parsed = JSON.parse(cRow.work_hours); originalPersonaName = parsed.personaName || 'Ana'; } catch {}
+    }
+    console.log(`  📋 personaName original salvo para restauração: "${originalPersonaName}"`);
+    console.log(`🔹 [Passo 1/4] Alterando Persona da IA para "Bruna" na clínica [${clinicId}]...`);
+
+    // 1. Simula salvamento de configurações via Dashboard (POST /api/dashboard/settings)
+    const mockReq = {
+        resolvedClinicId: clinicId,
+        isSuperAdmin: false,
+        body: {
+            name: 'Clínica Odonto Riso',
+            personaName: 'Bruna',
+            whatsappListTitle: 'Tratamentos Odontológicos',
+            address: 'Av. Paulista, 1000 - 12º andar, São Paulo/SP',
+            phone: '5511972008720',
+            evalPrice: '150',
+            insurances: 'Bradesco Saúde, Amil Dental, SulAmérica',
+            paymentMethods: 'PIX com 5% de desconto, Cartão em 12x',
+            emergency: 'Ligar para emergência médica imediata.',
+            workHours: 'Segunda a Sexta, 08h às 18h',
+            minCancellationHours: '4',
+            procedures: 'Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental'
+        }
     };
 
-    console.log(`🔹 [Passo 1/3] Salvando novas configurações personalizadas no Supabase...`);
-    await db.supabase.from('clinics').update({
-        name: customSettings.name,
-        address: customSettings.address,
-        eval_price: 280,
-        work_hours: JSON.stringify(customSettings)
-    }).eq('id', clinicId);
-    console.log(`  ✅ Configurações salvas para a clínica: "${customSettings.name}"`);
+    let settingsSaved = false;
+    const mockRes = {
+        json: (data) => {
+            if (data.success && data.settings?.personaName === 'Bruna') {
+                settingsSaved = true;
+            }
+        },
+        status: (code) => ({
+            json: (data) => console.error(`❌ HTTP ${code}:`, data)
+        })
+    };
 
-    // 2. Verifica se a busca no Supabase retorna o objeto settings completo
-    console.log(`\n🔹 [Passo 2/3] Verificando se os dados do Supabase trazem as configurações atualizadas...`);
-    const { data: fetchClinic } = await db.supabase.from('clinics').select('name, address, eval_price, work_hours').eq('id', clinicId).single();
-    
-    let loadedSettings = {};
-    if (fetchClinic?.work_hours && fetchClinic.work_hours.startsWith('{')) {
-        try { loadedSettings = JSON.parse(fetchClinic.work_hours); } catch {}
+    await dashboardController.updateSettings(mockReq, mockRes);
+
+    if (!settingsSaved) {
+        console.error('❌ FAIL: Falha ao salvar configurações na API.');
+        process.exit(1);
     }
+    console.log('  ✅ PASS: Configurações salvas no Supabase (personaName: "Bruna").');
 
-    if (loadedSettings.personaName === "Dra. Sofia" && loadedSettings.evalPrice === "280") {
-        console.log(`  ✅ PASS: Configurações recuperadas com sucesso! Persona: "${loadedSettings.personaName}", Avaliação: R$ ${loadedSettings.evalPrice}`);
-    } else {
-        console.error(`❌ FAIL: Configurações não foram retornadas corretamente do banco:`, fetchClinic);
+    // 2. Simula requisição GET /api/dashboard/data no Dashboard (recuperação na atualização de página)
+    console.log('\n🔹 [Passo 2/4] Testando GET /api/dashboard/data após refresh da página...');
+    let getDashboardOk = false;
+    const mockResData = {
+        json: (data) => {
+            if (data.settings && data.settings.personaName === 'Bruna') {
+                getDashboardOk = true;
+            }
+        },
+        status: (code) => ({
+            json: (data) => console.error(`❌ HTTP ${code}:`, data)
+        })
+    };
+
+    await dashboardController.getDashboardData({ resolvedClinicId: clinicId, isSuperAdmin: false, query: {} }, mockResData);
+
+    if (!getDashboardOk) {
+        console.error('❌ FAIL: GET /api/dashboard/data não retornou personaName: "Bruna" no objeto settings.');
+        process.exit(1);
+    }
+    console.log('  ✅ PASS: GET /api/dashboard/data retornou personaName: "Bruna" com sucesso.');
+
+    // 3. Simula mensagem no WhatsApp perguntando "Como você se chama?"
+    console.log('\n🔹 [Passo 3/4] Enviando mensagem no WhatsApp: "Como você se chama?"...');
+    const testPhone = '5511999988877';
+    
+    // Limpa sessão prévia de teste
+    await db.sessions.delete(testPhone, clinicId);
+    await db.sessions.setDraft(testPhone, null, clinicId);
+
+    const response = await conversationController.handleIncomingMessage(
+        testPhone,
+        'Como você se chama?',
+        false,
+        clinicId,
+        'phone_test'
+    );
+
+    console.log(`\n💬 Resposta da IA no WhatsApp:\n"${response.text}"\n`);
+
+    const hasBruna = response.text.toLowerCase().includes('bruna');
+    if (!hasBruna) {
+        console.error('❌ FAIL: A IA respondeu sem o nome "Bruna". Texto recebido:', response.text);
         process.exit(1);
     }
 
-    // 3. Valida a interpolação do prompt do Gemini (AI Service)
-    console.log(`\n🔹 [Passo 3/3] Validando construção dinâmica do System Prompt da IA...`);
-    const prompt = aiService.buildCustomPrompt(loadedSettings);
-    
-    let checksPassed = 0;
-    if (prompt.includes("Dra. Sofia")) { console.log(`  ✅ Persona: "Dra. Sofia" presente no prompt`); checksPassed++; }
-    if (prompt.includes("Clínica Odonto Elite")) { console.log(`  ✅ Nome Clínica: "Clínica Odonto Elite" presente no prompt`); checksPassed++; }
-    if (prompt.includes("280")) { console.log(`  ✅ Valor Avaliação: "280" presente no prompt`); checksPassed++; }
-    if (prompt.includes("Unimed Odonto")) { console.log(`  ✅ Convênio: "Unimed Odonto" presente no prompt`); checksPassed++; }
-    if (prompt.includes("Invisalign")) { console.log(`  ✅ Procedimento: "Invisalign" presente no prompt`); checksPassed++; }
+    console.log('  ✅ PASS: A IA respondeu identificando-se com sucesso como "Bruna"!');
 
-    if (checksPassed === 5) {
-        console.log(`\n================================================================`);
-        console.log(`🎉 TESTE DE PERSONALIZAÇÃO DINÂMICA APROVADO COM 100% DE SUCESSO!`);
-        console.log(`================================================================`);
-        process.exit(0);
-    } else {
-        console.error(`❌ FAIL: Nem todas as variáveis foram interpoladas no prompt (${checksPassed}/5).`);
-        process.exit(1);
-    }
+    // 4. Restaura a persona ORIGINAL para não sobrescrever a escolha do usuário
+    console.log(`\n🔹 [Passo 4/4] Restaurando persona original "${originalPersonaName}"...`);
+    mockReq.body.personaName = originalPersonaName;
+    await dashboardController.updateSettings(mockReq, mockRes);
+    await db.sessions.delete(testPhone, clinicId);
+
+    console.log('\n================================================================');
+    console.log('🎉 TESTE DE PERSONALIZAÇÃO DINÂMICA DA IA 100% APROVADO!');
+    console.log('================================================================\n');
 }
 
-runDynamicSettingsTest().catch(err => {
-    console.error('Erro na execução do teste de configurações dinâmicas:', err);
+testDynamicPersonaSettings().catch(err => {
+    console.error('❌ Exceção no teste:', err);
     process.exit(1);
 });

@@ -307,19 +307,19 @@ class ConversationController {
         let clinicToken = null;
         let clinicListTitle = "Opções de Agendamento";
         let clinicSettings = {};
+        let cData = null;
         try {
-            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token, whatsapp_list_title, settings, name, address, work_hours, eval_price').eq('id', clinicId).maybeSingle();
-            clinicToken = cData?.whatsapp_token || cData?.token || null;
+            const res = await db.supabase.from('clinics').select('whatsapp_token, whatsapp_list_title, name, address, work_hours, eval_price').eq('id', clinicId).maybeSingle();
+            cData = res?.data || null;
+            clinicToken = cData?.whatsapp_token || null;
             if (cData?.whatsapp_list_title) clinicListTitle = cData.whatsapp_list_title;
-            if (cData?.settings && typeof cData.settings === 'object') {
-                clinicSettings = cData.settings;
-            } else if (cData?.work_hours && cData.work_hours.startsWith('{')) {
+            if (cData?.work_hours && cData.work_hours.startsWith('{')) {
                 try { clinicSettings = JSON.parse(cData.work_hours); } catch {}
             }
             if (!clinicSettings.name && cData?.name) clinicSettings.name = cData.name;
             if (!clinicSettings.address && cData?.address) clinicSettings.address = cData.address;
             if (!clinicSettings.evalPrice && cData?.eval_price) clinicSettings.evalPrice = String(cData.eval_price);
-        } catch {}
+        } catch (e) { console.error('ERR_LOADING_CLINIC:', e); }
 
         const personaName = clinicSettings.personaName || 'Ana';
         const clinicName = clinicSettings.name || 'Clínica Modelo';
@@ -818,6 +818,30 @@ class ConversationController {
 
             const isConfirming = sanitizedText.toLowerCase() === 'confirmar';
             if (isConfirming) {
+                const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
+                if (!hasPatientName) {
+                    const askNameText = "Para finalizarmos a confirmação do seu agendamento, por favor me informe o seu nome completo:";
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: `${askNameText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendTextMessage(phone, askNameText, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: askNameText,
+                        buttons: [],
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: false
+                    };
+                }
+
                 if (draft.date && draft.time && draft.type) {
                     try {
                         let newApptId = null;
@@ -1399,8 +1423,8 @@ class ConversationController {
                 } catch (aiErr) {
                     logger.warn('AI_FALLBACK', `Falha ao chamar Gemini (${aiErr.message}). Usando resposta padrão.`);
                     aiResponse = {
-                        text: `Olá! Sou a Ana da Clínica Modelo. Como posso te ajudar hoje?`,
-                        buttons: [],
+                        text: `Olá! Sou a ${personaName}, assistente virtual da ${clinicName}. Como posso ajudar você hoje?`,
+                        buttons: ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"],
                         showCalendar: false,
                         showTimeSlots: false,
                         showProceduresList: false,
@@ -1458,6 +1482,7 @@ class ConversationController {
                 const isAskingName = wasNameRequested || /nome completo/i.test(aiResponse.text);
 
                 if (isAskingCpf || isAskingName) {
+                    aiResponse.buttons = [];
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
