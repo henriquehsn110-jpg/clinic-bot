@@ -216,6 +216,118 @@
             </div>
         </div>
 
+        <!-- TAB: CRM & REMARKETING AUTOMÁTICO -->
+        <div id="tab-crm" class="section-card" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <h2 style="font-size: 20px; font-weight: 800; color: var(--text-main);"><i class="fa-solid fa-bullhorn" style="color: var(--accent-purple);"></i> CRM & Automação de Remarketing no WhatsApp</h2>
+                    <p style="font-size: 14px; color: var(--text-muted);">Reengaje pacientes sumidos, dispare lembretes de preventiva (6 meses) e recupere faltantes (no-show) com 1 clique.</p>
+                </div>
+                <button class="btn btn-primary" onclick="showToast('🚀 Iniciando disparo de campanha no WhatsApp...')"><i class="fa-solid fa-paper-plane"></i> Nova Campanha</button>
+            </div>
+
+            <!-- Cards de Oportunidades CRM -->
+            <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 28px;">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Limpeza (6 Meses)</span>
+                        <div class="kpi-icon purple"><i class="fa-solid fa-teeth-open"></i></div>
+                    </div>
+                    <div class="kpi-value" id="crm-stat-clean">28</div>
+                    <div class="kpi-subtitle">Pacientes para retorno preventivo</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Recuperação No-Show</span>
+                        <div class="kpi-icon warning"><i class="fa-solid fa-user-clock"></i></div>
+                    </div>
+                    <div class="kpi-value" id="crm-stat-noshow">12</div>
+                    <div class="kpi-subtitle">Faltantes sem reagendamento</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Aniversariantes</span>
+                        <div class="kpi-icon green"><i class="fa-solid fa-cake-candles"></i></div>
+                    </div>
+                    <div class="kpi-value" id="crm-stat-bday">7</div>
+                    <div class="kpi-subtitle">Felicitações no mês</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Receita Estimada</span>
+                        <div class="kpi-icon blue"><i class="fa-solid fa-sack-dollar"></i></div>
+                    </div>
+                    <div class="kpi-value" style="color: var(--accent-success);">R$ 8.400</div>
+                    <div class="kpi-subtitle">Potencial em tratamentos parados</div>
+                </div>
+            </div>
+
+            <!-- Ações Rápidas de Disparo -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 32px;">
+                <div class="settings-card" style="margin: 0;">
+                    <div class="settings-card-title"><i class="fa-solid fa-rotate-right" style="color: var(--primary);"></i> 1. Retorno Preventivo (6 Meses)</div>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Convida pacientes cuja última consulta de limpeza foi há mais de 180 dias.</p>
+                    <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 12px; color: #cbd5e1; margin-bottom: 16px; border-left: 3px solid var(--primary);">
+                        "Olá [Nome]! Faz 6 meses que você realizou sua avaliação/limpeza. Vamos agendar seu retorno preventivo?"
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="triggerCrmCampaign('preventive')"><i class="fa-brands fa-whatsapp"></i> Disparar para 28 Pacientes</button>
+                </div>
+
+                <div class="settings-card" style="margin: 0;">
+                    <div class="settings-card-title"><i class="fa-solid fa-user-xmark" style="color: var(--accent-warning);"></i> 2. Recuperação de No-Show</div>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Reagendamento sem custo para pacientes que faltaram na última semana.</p>
+                    <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 12px; color: #cbd5e1; margin-bottom: 16px; border-left: 3px solid var(--accent-warning);">
+                        "Olá [Nome]! Sentimos sua falta na consulta. Gostaria de remarcar um horário sem custo esta semana?"
+                    </div>
+                    <button class="btn" style="width: 100%; justify-content: center; border-color: var(--accent-warning); color: #fbbf24;" onclick="triggerCrmCampaign('noshow')"><i class="fa-brands fa-whatsapp"></i> Disparar para 12 Faltantes</button>
+                </div>
+
+                <div class="settings-card" style="margin: 0;">
+                    <div class="settings-card-title"><i class="fa-solid fa-gift" style="color: var(--accent-success);"></i> 3. Cortesia de Aniversário</div>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Felicitações automáticas com presente/cupom de desconto de clareamento.</p>
+                    <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 12px; color: #cbd5e1; margin-bottom: 16px; border-left: 3px solid var(--accent-success);">
+                        "Parabéns [Nome]! 🎉 A clínica te deseja um feliz aniversário! Ganhe 15% de desconto no clareamento!"
+                    </div>
+                    <button class="btn btn-success" style="width: 100%; justify-content: center;" onclick="triggerCrmCampaign('bday')"><i class="fa-brands fa-whatsapp"></i> Disparar para 7 Aniversariantes</button>
+                </div>
+            </div>
+
+            <!-- Tabela de Histórico de Campanhas -->
+            <div style="font-weight: 700; font-size: 15px; margin-bottom: 16px; color: var(--text-main);">📋 Histórico de Campanhas Enviadas</div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome da Campanha</th>
+                            <th>Data de Envio</th>
+                            <th>Impactados</th>
+                            <th>Respostas IA</th>
+                            <th>Agendamentos Convertidos</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span style="font-weight: 600;">Retorno Preventivo (Julho)</span></td>
+                            <td>15/07/2026</td>
+                            <td>34 pacientes</td>
+                            <td>22 (64%)</td>
+                            <td><span style="color: var(--accent-success); font-weight: 700;">14 consultas</span></td>
+                            <td><span class="status-pill confirmed">Concluída</span></td>
+                        </tr>
+                        <tr>
+                            <td><span style="font-weight: 600;">Recuperação No-Show Junho</span></td>
+                            <td>01/07/2026</td>
+                            <td>18 pacientes</td>
+                            <td>11 (61%)</td>
+                            <td><span style="color: var(--accent-success); font-weight: 700;">8 consultas</span></td>
+                            <td><span class="status-pill confirmed">Concluída</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- TAB 5: CONFIGURAÇÕES EXPANSAIS DA IA & WHATSAPP DA CLÍNICA -->
         <div id="tab-settings" class="section-card" style="display: none;">
             <div style="margin-bottom: 24px;">
@@ -1384,6 +1496,14 @@
             showToast('📊 Relatório CSV exportado com sucesso!');
         }
 
+        function triggerCrmCampaign(type) {
+            let title = 'Campanha no WhatsApp';
+            if (type === 'preventive') title = 'Retorno Preventivo (6 Meses)';
+            if (type === 'noshow') title = 'Recuperação de No-Show';
+            if (type === 'bday') title = 'Aniversariantes do Mês';
+            showToast(`🚀 Disparo da campanha "${title}" iniciado no WhatsApp!`);
+        }
+
         function switchTab(tabName, btnElem) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btnElem.classList.add('active');
@@ -1391,6 +1511,8 @@
             document.getElementById('tab-patients').style.display = tabName === 'patients' ? 'block' : 'none';
             document.getElementById('tab-handoff').style.display = tabName === 'handoff' ? 'block' : 'none';
             document.getElementById('tab-doctors').style.display = tabName === 'doctors' ? 'block' : 'none';
+            const crmTab = document.getElementById('tab-crm');
+            if (crmTab) crmTab.style.display = tabName === 'crm' ? 'block' : 'none';
             document.getElementById('tab-settings').style.display = tabName === 'settings' ? 'block' : 'none';
         }
 

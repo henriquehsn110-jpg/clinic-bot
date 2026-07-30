@@ -10,26 +10,31 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         :root {
-            --bg-main: #080D1A;
-            --bg-card: rgba(16, 24, 48, 0.75);
-            --bg-card-hover: rgba(24, 36, 70, 0.85);
+            --bg-main: #060B14;
+            --bg-card: rgba(14, 22, 42, 0.75);
+            --bg-card-hover: rgba(22, 34, 64, 0.88);
             --accent-cyan: #00F2FE;
             --accent-blue: #4FACFE;
             --wa-green: #25D366;
             --wa-green-hover: #1EBE5D;
+            --wa-dark-bg: #0B141A;
+            --wa-header-bg: #202C33;
+            --wa-msg-in: #202C33;
+            --wa-msg-out: #005C4B;
             --text-title: #FFFFFF;
             --text-body: #94A3B8;
             --text-light: #CBD5E1;
             --border-glass: rgba(255, 255, 255, 0.08);
-            --border-highlight: rgba(0, 242, 254, 0.3);
-            --shadow-glow: 0 0 35px rgba(0, 242, 254, 0.15);
-            --shadow-wa: 0 0 25px rgba(37, 211, 102, 0.25);
-            --radius-xl: 20px;
-            --radius-lg: 14px;
+            --border-highlight: rgba(0, 242, 254, 0.35);
+            --shadow-glow: 0 0 35px rgba(0, 242, 254, 0.18);
+            --shadow-wa: 0 0 30px rgba(37, 211, 102, 0.3);
+            --radius-xl: 24px;
+            --radius-lg: 16px;
             --radius-md: 10px;
         }
 
@@ -47,33 +52,31 @@
             line-height: 1.6;
             overflow-x: hidden;
             background-image: 
-                radial-gradient(circle at 15% 15%, rgba(0, 242, 254, 0.05) 0%, transparent 40%),
-                radial-gradient(circle at 85% 65%, rgba(79, 172, 254, 0.05) 0%, transparent 40%);
+                radial-gradient(circle at 10% 10%, rgba(0, 242, 254, 0.06) 0%, transparent 45%),
+                radial-gradient(circle at 90% 60%, rgba(79, 172, 254, 0.06) 0%, transparent 45%);
         }
 
         h1, h2, h3, h4, .font-heading {
             font-family: 'Outfit', sans-serif;
             color: var(--text-title);
-            line-height: 1.25;
+            line-height: 1.2;
         }
 
         .container {
             width: 100%;
-            max-width: 1240px;
+            max-width: 1280px;
             margin: 0 auto;
             padding: 0 24px;
         }
 
-        /* Gradient Text */
+        /* Gradient & Glow Helpers */
         .text-gradient {
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            background: linear-gradient(135deg, #00F2FE, #4FACFE);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .text-wa {
-            color: var(--wa-green);
-        }
+        .text-wa { color: var(--wa-green); }
 
         /* Buttons & CTAs */
         .btn {
@@ -99,7 +102,7 @@
 
         .btn-wa:hover {
             transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(37, 211, 102, 0.4);
+            box-shadow: 0 12px 35px rgba(37, 211, 102, 0.45);
         }
 
         .btn-outline {
@@ -109,20 +112,20 @@
         }
 
         .btn-outline:hover {
-            background: rgba(0, 242, 254, 0.1);
+            background: rgba(0, 242, 254, 0.12);
             border-color: var(--accent-cyan);
             transform: translateY(-2px);
         }
 
-        /* Header Nav */
+        /* Header Navigation */
         header {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             z-index: 1000;
-            backdrop-filter: blur(16px);
-            background: rgba(8, 13, 26, 0.85);
+            backdrop-filter: blur(20px);
+            background: rgba(6, 11, 20, 0.88);
             border-bottom: 1px solid var(--border-glass);
         }
 
@@ -130,7 +133,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            height: 80px;
+            height: 84px;
             gap: 16px;
         }
 
@@ -139,7 +142,7 @@
             align-items: center;
             gap: 10px;
             font-family: 'Outfit', sans-serif;
-            font-size: 1.35rem;
+            font-size: 1.4rem;
             font-weight: 800;
             color: var(--text-title);
             text-decoration: none;
@@ -148,15 +151,15 @@
         }
 
         .logo-icon {
-            width: 40px;
-            height: 40px;
+            width: 42px;
+            height: 42px;
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
-            box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+            font-size: 1.25rem;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.35);
             flex-shrink: 0;
         }
 
@@ -187,10 +190,7 @@
             padding: 0;
         }
 
-        .nav-links li {
-            white-space: nowrap;
-        }
-
+        .nav-links li { white-space: nowrap; }
         .nav-links a {
             color: var(--text-body);
             text-decoration: none;
@@ -198,31 +198,38 @@
             font-size: 0.92rem;
             transition: color 0.2s;
         }
-
-        .nav-links a:hover {
-            color: var(--accent-cyan);
-        }
+        .nav-links a:hover { color: var(--accent-cyan); }
 
         #btn-header-demo {
             padding: 10px 20px;
             font-size: 0.88rem;
             white-space: nowrap;
-            height: 42px;
+            height: 44px;
             flex-shrink: 0;
-            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.25);
+            box-shadow: 0 4px 18px rgba(37, 211, 102, 0.3);
             border-radius: var(--radius-md);
         }
 
         #btn-header-demo:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+            box-shadow: 0 6px 24px rgba(37, 211, 102, 0.45);
         }
 
-        /* Hero Section */
+        /* Hero Section (Split Layout) */
         .hero {
-            padding: 170px 0 100px;
-            text-align: center;
+            padding: 160px 0 100px;
             position: relative;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 48px;
+            align-items: center;
+        }
+
+        .hero-content {
+            text-align: left;
         }
 
         .pill-badge {
@@ -231,44 +238,283 @@
             gap: 8px;
             padding: 8px 18px;
             background: rgba(37, 211, 102, 0.1);
-            border: 1px solid rgba(37, 211, 102, 0.3);
+            border: 1px solid rgba(37, 211, 102, 0.35);
             border-radius: 50px;
-            font-size: 0.88rem;
+            font-size: 0.86rem;
             font-weight: 600;
             color: var(--wa-green);
             margin-bottom: 24px;
         }
 
         .hero h1 {
-            font-size: 3.5rem;
+            font-size: 3.2rem;
             font-weight: 800;
-            max-width: 960px;
-            margin: 0 auto 24px;
+            margin-bottom: 24px;
             letter-spacing: -0.02em;
         }
 
         .hero p {
-            font-size: 1.25rem;
-            max-width: 780px;
-            margin: 0 auto 40px;
+            font-size: 1.18rem;
+            margin-bottom: 36px;
             color: var(--text-light);
+            line-height: 1.6;
         }
 
         .hero-ctas {
             display: flex;
-            justify-content: center;
-            gap: 18px;
-            margin-bottom: 60px;
+            gap: 16px;
+            margin-bottom: 40px;
             flex-wrap: wrap;
         }
 
-        /* Trust Badges */
+        /* 📱 REALISTIC 3D SMARTPHONE MOCKUP COMPONENT */
+        .phone-mockup-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            perspective: 1000px;
+        }
+
+        .phone-container {
+            width: 350px;
+            height: 700px;
+            background: #000000;
+            border-radius: 46px;
+            box-shadow: 
+                0 30px 70px rgba(0, 0, 0, 0.95),
+                0 0 45px rgba(0, 242, 254, 0.22),
+                inset 0 0 4px rgba(255, 255, 255, 0.35);
+            border: 10px solid #1E293B;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.4s ease, box-shadow 0.4s ease;
+        }
+
+        .phone-container:hover {
+            transform: translateY(-6px) rotateY(-2deg) rotateX(2deg);
+            box-shadow: 
+                0 40px 90px rgba(0, 0, 0, 0.98),
+                0 0 60px rgba(0, 242, 254, 0.35);
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 24px;
+            background: #000000;
+            border-radius: 20px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+        }
+
+        .phone-notch-camera {
+            width: 10px;
+            height: 10px;
+            background: #111;
+            border-radius: 50%;
+            border: 1px solid #222;
+        }
+
+        .phone-notch-speaker {
+            width: 45px;
+            height: 4px;
+            background: #222;
+            border-radius: 4px;
+        }
+
+        .phone-status-bar {
+            height: 44px;
+            padding: 12px 20px 0;
+            background: #111B21;
+            color: #8696A0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.76rem;
+            font-weight: 600;
+            z-index: 90;
+            position: relative;
+        }
+
+        .phone-status-icons {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            font-size: 0.72rem;
+        }
+
+        .wa-app-screen {
+            height: calc(100% - 44px);
+            display: flex;
+            flex-direction: column;
+            background: #0B141A;
+        }
+
+        .wa-header {
+            background: #202C33;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #E9EDEF;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .wa-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .wa-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00A884, #128C7E);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #FFF;
+            font-size: 0.9rem;
+            box-shadow: 0 0 10px rgba(0, 168, 132, 0.4);
+            position: relative;
+        }
+
+        .wa-avatar::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            background: #00E676;
+            border: 2px solid #202C33;
+            border-radius: 50%;
+        }
+
+        .wa-info strong { display: block; font-size: 0.9rem; color: #E9EDEF; }
+        .wa-info span { font-size: 0.72rem; color: #8696A0; display: flex; align-items: center; gap: 4px; }
+        .wa-info span .status-dot { width: 6px; height: 6px; background: #00E676; border-radius: 50%; display: inline-block; }
+
+        .wa-header-actions {
+            display: flex;
+            gap: 14px;
+            color: #8696A0;
+            font-size: 1rem;
+        }
+
+        .wa-body {
+            flex-grow: 1;
+            padding: 16px;
+            overflow-y: auto;
+            background-image: radial-gradient(#182229 1px, transparent 0);
+            background-size: 16px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .wa-msg {
+            max-width: 88%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.84rem;
+            line-height: 1.45;
+            position: relative;
+            animation: fadeInMsg 0.3s ease;
+        }
+
+        @keyframes fadeInMsg {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .wa-msg.received {
+            background: #202C33;
+            color: #E9EDEF;
+            align-self: flex-start;
+            border-top-left-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .wa-msg.sent {
+            background: #005C4B;
+            color: #E9EDEF;
+            align-self: flex-end;
+            border-top-right-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .wa-msg .time {
+            font-size: 0.65rem;
+            color: #8696A0;
+            float: right;
+            margin-top: 4px;
+            margin-left: 8px;
+        }
+
+        .wa-buttons-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .wa-btn-reply {
+            background: #2A3942;
+            color: #00A884;
+            border: 1px solid #3B4A54;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .wa-btn-reply:hover {
+            background: #3B4A54;
+            color: #34D399;
+            transform: scale(1.02);
+        }
+
+        .wa-footer-input {
+            background: #202C33;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #8696A0;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .wa-fake-input {
+            flex-grow: 1;
+            background: #2A3942;
+            border-radius: 20px;
+            padding: 8px 14px;
+            font-size: 0.8rem;
+            color: #8696A0;
+        }
+
+        /* Trust Badges Grid */
         .trust-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 16px;
-            max-width: 1050px;
-            margin: 0 auto;
+            margin-top: 20px;
         }
 
         .trust-card {
@@ -279,54 +525,52 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            text-align: left;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
         }
 
-        .trust-card-icon {
-            font-size: 1.5rem;
-        }
-
-        .trust-card-text strong {
-            display: block;
-            color: var(--text-title);
-            font-size: 0.9rem;
-        }
-
-        .trust-card-text span {
-            font-size: 0.8rem;
-            color: var(--text-body);
-        }
+        .trust-card-icon { font-size: 1.5rem; flex-shrink: 0; }
+        .trust-card-text strong { display: block; color: var(--text-title); font-size: 0.88rem; }
+        .trust-card-text span { font-size: 0.78rem; color: var(--text-body); }
 
         /* Section Layouts */
-        .section-padding {
-            padding: 100px 0;
-        }
+        .section-padding { padding: 100px 0; }
+        .section-header { text-align: center; max-width: 780px; margin: 0 auto 60px; }
+        .section-header h2 { font-size: 2.6rem; font-weight: 700; margin-bottom: 16px; }
+        .section-header p { font-size: 1.1rem; color: var(--text-body); }
 
-        .section-header {
-            text-align: center;
-            max-width: 750px;
-            margin: 0 auto 60px;
-        }
-
-        .section-header h2 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 16px;
-        }
-
-        .section-header p {
-            font-size: 1.1rem;
-            color: var(--text-body);
-        }
-
-        /* Before / After Table */
-        .comparison-grid {
+        /* Ecosystem Showcase (IA + Dashboard Split) */
+        .ecosystem-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            gap: 32px;
+            align-items: center;
         }
 
+        .eco-card {
+            background: linear-gradient(145deg, rgba(14, 22, 42, 0.85), rgba(8, 14, 28, 0.95));
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-xl);
+            padding: 36px;
+            backdrop-filter: blur(16px);
+            transition: border-color 0.3s;
+        }
+
+        .eco-card:hover { border-color: var(--border-highlight); }
+        .eco-card-tag {
+            display: inline-block;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            background: rgba(0, 242, 254, 0.08);
+            padding: 4px 14px;
+            border-radius: 50px;
+            margin-bottom: 16px;
+        }
+        .eco-card h3 { font-size: 1.5rem; margin-bottom: 12px; }
+        .eco-card p { font-size: 0.98rem; color: var(--text-body); margin-bottom: 20px; }
+
+        /* Comparison Grid (Before / After) */
+        .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         .comp-card {
             background: var(--bg-card);
             border-radius: var(--radius-xl);
@@ -334,69 +578,32 @@
             border: 1px solid var(--border-glass);
             backdrop-filter: blur(12px);
         }
-
-        .comp-card.before {
-            border-left: 4px solid #EF4444;
-        }
-
+        .comp-card.before { border-left: 4px solid #EF4444; }
         .comp-card.after {
             border-left: 4px solid var(--wa-green);
             background: rgba(16, 32, 48, 0.85);
             box-shadow: 0 0 30px rgba(37, 211, 102, 0.08);
         }
+        .comp-card h3 { font-size: 1.4rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+        .comp-list { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+        .comp-list li { display: flex; gap: 12px; font-size: 0.98rem; }
+        .comp-list li span.icon { font-size: 1.1rem; flex-shrink: 0; }
 
-        .comp-card h3 {
-            font-size: 1.4rem;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .comp-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .comp-list li {
-            display: flex;
-            gap: 12px;
-            font-size: 0.98rem;
-        }
-
-        .comp-list li span.icon {
-            font-size: 1.1rem;
-            flex-shrink: 0;
-        }
-
-        /* 3 Steps Cards */
-        .steps-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-        }
-
+        /* Steps Grid */
+        .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
         .step-card {
             background: var(--bg-card);
             border: 1px solid var(--border-glass);
             border-radius: var(--radius-xl);
             padding: 36px 28px;
-            position: relative;
             transition: transform 0.3s;
         }
-
-        .step-card:hover {
-            transform: translateY(-6px);
-            border-color: var(--border-highlight);
-        }
-
+        .step-card:hover { transform: translateY(-6px); border-color: var(--border-highlight); }
         .step-number {
             width: 48px;
             height: 48px;
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-            color: #000000;
+            color: #000;
             font-weight: 800;
             border-radius: 12px;
             display: flex;
@@ -405,54 +612,9 @@
             font-size: 1.2rem;
             margin-bottom: 24px;
         }
+        .step-card h3 { font-size: 1.25rem; margin-bottom: 12px; }
 
-        .step-card h3 {
-            font-size: 1.25rem;
-            margin-bottom: 12px;
-        }
-
-        /* Section 4 Simulator CTA Card */
-        .simulator-cta-card {
-            background: linear-gradient(145deg, rgba(16, 24, 48, 0.85), rgba(10, 18, 36, 0.95));
-            border: 1px solid var(--border-highlight);
-            border-radius: var(--radius-xl);
-            padding: 48px;
-            text-align: center;
-            box-shadow: var(--shadow-glow);
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .sim-cta-content h3 {
-            font-size: 1.8rem;
-            margin-bottom: 16px;
-        }
-
-        .sim-cta-content p {
-            font-size: 1.1rem;
-            color: var(--text-light);
-            max-width: 720px;
-            margin: 0 auto 28px;
-        }
-
-        .sim-features-list {
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .sim-feature-pill {
-            background: rgba(0, 242, 254, 0.08);
-            border: 1px solid rgba(0, 242, 254, 0.2);
-            padding: 8px 18px;
-            border-radius: 50px;
-            font-size: 0.9rem;
-            color: var(--accent-cyan);
-            font-weight: 500;
-        }
-
-        /* ROI Calculator Component & Callout */
+        /* ROI Calculator Component */
         .calculator-card {
             background: linear-gradient(145deg, rgba(16, 24, 48, 0.9), rgba(10, 16, 32, 0.95));
             border: 1px solid var(--border-highlight);
@@ -465,69 +627,15 @@
             align-items: center;
         }
 
-        .calc-inputs {
-            display: flex;
-            flex-direction: column;
-            gap: 28px;
-        }
-
-        .input-group label {
-            display: flex;
-            justify-content: space-between;
-            color: var(--text-title);
-            font-weight: 600;
-            margin-bottom: 10px;
-            font-size: 0.95rem;
-        }
-
-        .input-group label span.val {
-            color: var(--accent-cyan);
-            font-weight: 700;
-        }
-
-        .input-range {
-            width: 100%;
-            height: 8px;
-            border-radius: 4px;
-            background: #1E293B;
-            outline: none;
-            accent-color: var(--accent-cyan);
-            cursor: pointer;
-        }
-
-        .calc-results {
-            background: rgba(8, 13, 26, 0.8);
-            border-radius: var(--radius-lg);
-            padding: 32px;
-            border: 1px solid var(--border-glass);
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        .result-box {
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border-glass);
-        }
-
-        .result-box:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .result-box span.title {
-            font-size: 0.85rem;
-            color: var(--text-body);
-            display: block;
-            margin-bottom: 4px;
-        }
-
-        .result-box span.number {
-            font-size: 2rem;
-            font-weight: 800;
-            font-family: 'Outfit', sans-serif;
-        }
-
+        .calc-inputs { display: flex; flex-direction: column; gap: 28px; }
+        .input-group label { display: flex; justify-content: space-between; color: var(--text-title); font-weight: 600; margin-bottom: 10px; font-size: 0.95rem; }
+        .input-group label span.val { color: var(--accent-cyan); font-weight: 700; }
+        .input-range { width: 100%; height: 8px; border-radius: 4px; background: #1E293B; outline: none; accent-color: var(--accent-cyan); cursor: pointer; }
+        .calc-results { background: rgba(8, 13, 26, 0.85); border-radius: var(--radius-lg); padding: 32px; border: 1px solid var(--border-glass); display: flex; flex-direction: column; gap: 24px; }
+        .result-box { padding-bottom: 16px; border-bottom: 1px solid var(--border-glass); }
+        .result-box:last-child { border-bottom: none; padding-bottom: 0; }
+        .result-box span.title { font-size: 0.85rem; color: var(--text-body); display: block; margin-bottom: 4px; }
+        .result-box span.number { font-size: 2rem; font-weight: 800; font-family: 'Outfit', sans-serif; }
         .result-box.danger span.number { color: #EF4444; }
         .result-box.success span.number { color: var(--wa-green); }
         .result-box.roi span.number { color: var(--accent-cyan); }
@@ -546,24 +654,11 @@
             margin-right: auto;
         }
 
-        .roi-callout-box .callout-icon {
-            font-size: 1.8rem;
-            flex-shrink: 0;
-        }
-
-        .roi-callout-box p {
-            font-size: 1.05rem;
-            color: var(--text-title);
-            line-height: 1.5;
-        }
+        .roi-callout-box .callout-icon { font-size: 1.8rem; flex-shrink: 0; }
+        .roi-callout-box p { font-size: 1.05rem; color: var(--text-title); line-height: 1.5; }
 
         /* Testimonials Component */
-        .testimonials-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-        }
-
+        .testimonials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
         .testimonial-card {
             background: var(--bg-card);
             border: 1px solid var(--border-glass);
@@ -575,12 +670,7 @@
             backdrop-filter: blur(10px);
             transition: transform 0.3s, border-color 0.3s;
         }
-
-        .testimonial-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--border-highlight);
-        }
-
+        .testimonial-card:hover { transform: translateY(-4px); border-color: var(--border-highlight); }
         .testimonial-badge {
             display: inline-block;
             font-size: 0.82rem;
@@ -592,34 +682,12 @@
             margin-bottom: 16px;
             align-self: flex-start;
         }
-
-        .testimonial-quote {
-            font-size: 0.98rem;
-            color: var(--text-light);
-            line-height: 1.6;
-            margin-bottom: 24px;
-            font-style: italic;
-        }
-
-        .testimonial-author strong {
-            display: block;
-            color: var(--text-title);
-            font-size: 1rem;
-        }
-
-        .testimonial-author span {
-            font-size: 0.85rem;
-            color: var(--text-body);
-        }
+        .testimonial-quote { font-size: 0.98rem; color: var(--text-light); line-height: 1.6; margin-bottom: 24px; font-style: italic; }
+        .testimonial-author strong { display: block; color: var(--text-title); font-size: 1rem; }
+        .testimonial-author span { font-size: 0.85rem; color: var(--text-body); }
 
         /* Pricing Cards */
-        .pricing-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-            align-items: stretch;
-        }
-
+        .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: stretch; }
         .price-card {
             background: var(--bg-card);
             border: 1px solid var(--border-glass);
@@ -630,14 +698,12 @@
             position: relative;
             backdrop-filter: blur(12px);
         }
-
         .price-card.popular {
             border-color: var(--accent-cyan);
             background: linear-gradient(145deg, rgba(20, 32, 60, 0.9), rgba(12, 20, 40, 0.95));
             box-shadow: var(--shadow-glow);
             transform: scale(1.03);
         }
-
         .badge-popular {
             position: absolute;
             top: -14px;
@@ -651,66 +717,20 @@
             border-radius: 50px;
             text-transform: uppercase;
         }
-
-        .price-card h3 {
-            font-size: 1.5rem;
-            margin-bottom: 8px;
-        }
-
-        .price-card .subtitle {
-            font-size: 0.88rem;
-            color: var(--text-body);
-            margin-bottom: 24px;
-        }
-
-        .price-value {
-            font-size: 2.8rem;
-            font-weight: 800;
-            color: var(--text-title);
-            font-family: 'Outfit', sans-serif;
-            margin-bottom: 4px;
-        }
-
-        .price-value span {
-            font-size: 1rem;
-            font-weight: 400;
-            color: var(--text-body);
-        }
-
-        .setup-fee {
-            font-size: 0.85rem;
-            color: var(--accent-cyan);
-            margin-bottom: 28px;
-            font-weight: 600;
-        }
-
-        .price-features {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            margin-bottom: 36px;
-            flex-grow: 1;
-        }
-
-        .price-features li {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.92rem;
-        }
-
-        .price-features li::before {
-            content: "✓";
-            color: var(--wa-green);
-            font-weight: 800;
-        }
+        .price-card h3 { font-size: 1.5rem; margin-bottom: 8px; }
+        .price-card .subtitle { font-size: 0.88rem; color: var(--text-body); margin-bottom: 24px; }
+        .price-value { font-size: 2.8rem; font-weight: 800; color: var(--text-title); font-family: 'Outfit', sans-serif; margin-bottom: 4px; }
+        .price-value span { font-size: 1rem; font-weight: 400; color: var(--text-body); }
+        .setup-fee { font-size: 0.85rem; color: var(--accent-cyan); margin-bottom: 28px; font-weight: 600; }
+        .price-features { list-style: none; display: flex; flex-direction: column; gap: 14px; margin-bottom: 36px; flex-grow: 1; }
+        .price-features li { display: flex; align-items: center; gap: 10px; font-size: 0.92rem; }
+        .price-features li::before { content: "✓"; color: var(--wa-green); font-weight: 800; }
 
         /* Guarantee Box */
         .guarantee-box {
             margin-top: 48px;
             background: linear-gradient(135deg, rgba(37, 211, 102, 0.08), rgba(0, 168, 132, 0.04));
-            border: 1px solid rgba(37, 211, 102, 0.3);
+            border: 1px solid rgba(37, 211, 102, 0.35);
             border-radius: var(--radius-xl);
             padding: 32px 40px;
             display: flex;
@@ -720,77 +740,18 @@
             margin-left: auto;
             margin-right: auto;
         }
-
-        .guarantee-icon {
-            font-size: 3rem;
-            flex-shrink: 0;
-        }
-
-        .guarantee-text h3 {
-            font-size: 1.3rem;
-            color: var(--wa-green);
-            margin-bottom: 8px;
-        }
-
-        .guarantee-text p {
-            font-size: 0.98rem;
-            color: var(--text-light);
-            line-height: 1.5;
-        }
+        .guarantee-icon { font-size: 3rem; flex-shrink: 0; }
+        .guarantee-text h3 { font-size: 1.3rem; color: var(--wa-green); margin-bottom: 8px; }
+        .guarantee-text p { font-size: 0.98rem; color: var(--text-light); line-height: 1.5; }
 
         /* FAQ Accordion */
-        .faq-accordion {
-            max-width: 840px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .faq-item {
-            background: var(--bg-card);
-            border: 1px solid var(--border-glass);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-        }
-
-        .faq-question {
-            padding: 24px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--text-title);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-            outline: none;
-        }
-
-        .faq-question:focus-visible {
-            box-shadow: inset 0 0 0 2px var(--accent-cyan);
-        }
-
-        .faq-answer {
-            padding: 0 24px 24px 24px;
-            color: var(--text-body);
-            font-size: 0.98rem;
-            display: none;
-        }
-
-        .faq-item.active .faq-answer {
-            display: block;
-        }
-
-        .faq-item.active .faq-icon {
-            transform: rotate(45deg);
-            color: var(--accent-cyan);
-        }
-
-        .faq-icon {
-            font-size: 1.4rem;
-            transition: transform 0.3s;
-        }
+        .faq-accordion { max-width: 840px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+        .faq-item { background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--radius-lg); overflow: hidden; }
+        .faq-question { padding: 24px; font-size: 1.1rem; font-weight: 600; color: var(--text-title); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .faq-answer { padding: 0 24px 24px 24px; color: var(--text-body); font-size: 0.98rem; display: none; }
+        .faq-item.active .faq-answer { display: block; }
+        .faq-item.active .faq-icon { transform: rotate(45deg); color: var(--accent-cyan); }
+        .faq-icon { font-size: 1.4rem; transition: transform 0.3s; }
 
         /* WhatsApp Live Simulator Modal */
         .modal-overlay {
@@ -799,206 +760,42 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(4, 8, 18, 0.85);
-            backdrop-filter: blur(8px);
+            background: rgba(4, 8, 18, 0.88);
+            backdrop-filter: blur(12px);
             z-index: 2000;
             display: none;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .wa-simulator-box {
-            width: 100%;
-            max-width: 420px;
-            background: #0B141A;
-            border-radius: 24px;
-            overflow: hidden;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .wa-header {
-            background: #202C33;
-            padding: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            color: #E9EDEF;
-        }
-
-        .wa-profile {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .wa-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #00A884;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            color: #FFF;
-        }
-
-        .wa-info strong { display: block; font-size: 0.95rem; }
-        .wa-info span { font-size: 0.75rem; color: #8696A0; }
-
-        .wa-close {
-            background: none;
-            border: none;
-            color: #8696A0;
-            font-size: 1.5rem;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
-
-        .wa-close:hover {
-            color: #FFF;
-        }
-
-        .wa-body {
-            padding: 20px 16px;
-            height: 420px;
-            overflow-y: auto;
-            background-image: radial-gradient(#182229 1px, transparent 0);
-            background-size: 16px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .wa-msg {
-            max-width: 85%;
-            padding: 10px 14px;
-            border-radius: 12px;
-            font-size: 0.88rem;
-            line-height: 1.4;
-        }
-
-        .wa-msg.received {
-            background: #202C33;
-            color: #E9EDEF;
-            align-self: flex-start;
-            border-top-left-radius: 0;
-        }
-
-        .wa-msg.sent {
-            background: #005C4B;
-            color: #E9EDEF;
-            align-self: flex-end;
-            border-top-right-radius: 0;
-        }
-
-        .wa-buttons-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-top: 8px;
-        }
-
-        .wa-btn-reply {
-            background: #2A3942;
-            color: #00A884;
-            border: 1px solid #3B4A54;
-            padding: 8px;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            text-align: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .wa-btn-reply:hover {
-            background: #3B4A54;
-        }
-
-        /* Footer */
-        footer {
-            border-top: 1px solid var(--border-glass);
-            padding: 60px 0 30px;
-            background: #050811;
-        }
-
-        .footer-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr;
-            gap: 40px;
-            margin-bottom: 40px;
-        }
-
-        .footer-brand p {
-            margin-top: 16px;
-            font-size: 0.9rem;
-            color: var(--text-body);
-        }
-
-        .footer-col h4 {
-            font-size: 1rem;
-            margin-bottom: 16px;
-            color: var(--text-title);
-        }
-
-        .footer-col ul {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .footer-col a {
-            color: var(--text-body);
-            text-decoration: none;
-            font-size: 0.88rem;
-            transition: color 0.2s;
-        }
-
-        .footer-col a:hover {
-            color: var(--accent-cyan);
-        }
-
-        .footer-bottom {
-            text-align: center;
-            padding-top: 30px;
-            border-top: 1px solid var(--border-glass);
-            font-size: 0.85rem;
-            color: var(--text-body);
-        }
+        .modal-overlay.active { display: flex; }
 
         .btn-text-mobile { display: none; }
         .btn-text-desktop { display: inline; }
 
         /* Responsive Breakpoints */
         @media (max-width: 1180px) {
+            .hero-grid { grid-template-columns: 1fr; gap: 40px; text-align: center; }
+            .hero-content { text-align: center; }
             .hero h1 { font-size: 2.8rem; }
-            .comparison-grid, .steps-grid, .pricing-grid, .testimonials-grid { grid-template-columns: 1fr; }
+            .hero-ctas { justify-content: center; }
+            .comparison-grid, .steps-grid, .pricing-grid, .testimonials-grid, .ecosystem-grid { grid-template-columns: 1fr; }
             .calculator-card { grid-template-columns: 1fr; gap: 32px; }
-            .footer-grid { grid-template-columns: 1fr 1fr; }
             .mobile-menu-toggle { display: block; }
             .nav-links {
                 display: none;
                 flex-direction: column;
                 position: absolute;
-                top: 80px;
+                top: 84px;
                 left: 0;
                 width: 100%;
-                background: rgba(8, 13, 26, 0.95);
-                backdrop-filter: blur(16px);
+                background: rgba(6, 11, 20, 0.96);
+                backdrop-filter: blur(20px);
                 padding: 24px;
                 border-bottom: 1px solid var(--border-glass);
                 gap: 20px;
                 align-items: center;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
             }
             .nav-links.active { display: flex; }
             .price-card.popular { transform: none; }
@@ -1007,33 +804,27 @@
         @media (max-width: 768px) {
             .container { padding: 0 16px; }
             .logo { font-size: 1.15rem; gap: 8px; order: 1; }
-            .logo-icon { width: 32px; height: 32px; font-size: 0.95rem; }
+            .logo-icon { width: 34px; height: 34px; font-size: 0.95rem; }
             .logo-tag { display: none; }
             #btn-header-demo {
                 order: 2;
                 padding: 6px 12px;
                 font-size: 0.8rem;
-                height: 36px;
+                height: 38px;
                 margin-left: auto;
                 margin-right: 8px;
                 border-radius: 8px;
             }
             .btn-text-desktop { display: none; }
             .btn-text-mobile { display: inline; font-weight: 700; }
-            .mobile-menu-toggle {
-                order: 3;
-                padding: 4px 10px;
-                font-size: 1.2rem;
-                height: 36px;
-            }
+            .mobile-menu-toggle { order: 3; padding: 4px 10px; font-size: 1.2rem; height: 38px; }
         }
 
         @media (max-width: 640px) {
             .hero h1 { font-size: 2.2rem; }
             .hero p { font-size: 1rem; }
-            .footer-grid { grid-template-columns: 1fr; }
+            .phone-container { width: 310px; height: 620px; border-radius: 38px; }
             .guarantee-box { flex-direction: column; text-align: center; padding: 24px; }
-            .simulator-cta-card { padding: 32px 20px; }
         }
     </style>
 </head>
@@ -1052,10 +843,10 @@
             </button>
 
             <ul class="nav-links" id="nav-links">
+                <li><a href="#ecossistema" data-action="nav-link">O Sistema</a></li>
                 <li><a href="#como-funciona" data-action="nav-link">Como Funciona</a></li>
                 <li><a href="#seguranca" data-action="nav-link">Segurança & LGPD</a></li>
                 <li><a href="#calculadora" data-action="nav-link">Calculadora de ROI</a></li>
-                <li><a href="#depoimentos" data-action="nav-link">Depoimentos</a></li>
                 <li><a href="#planos" data-action="nav-link">Planos</a></li>
                 <li><a href="#faq" data-action="nav-link">FAQ</a></li>
             </ul>
@@ -1067,65 +858,159 @@
         </div>
     </header>
 
-    <!-- Hero Section -->
+    <!-- Hero Section (Split Layout: Copy + Real 3D Phone Simulator) -->
     <section class="hero">
         <div class="container">
-            <div class="pill-badge">
-                <span>🟢 Sistema SaaS Auditado & 100% Compliant com LGPD (Resoluções CFM & CFO)</span>
-            </div>
+            <div class="hero-grid">
+                <!-- Left Column: High Converting B2B Copywriting -->
+                <div class="hero-content">
+                    <div class="pill-badge">
+                        <span>🟢 IA Nativa com Meta WhatsApp Cloud API & Resiliência 24/7</span>
+                    </div>
 
-            <h1>Elimine até <span class="text-gradient">75% dos Furos na Agenda</span> da sua Clínica sem Sobrecarregar a Recepção</h1>
+                    <h1>Acabe com o Prejuízo das Faltas na Sua Clínica com o <span class="text-gradient">Agendamento Inteligente 24/7</span> no WhatsApp</h1>
 
-            <p>O ClinicaBot SaaS Pro é a inteligência conversacional que confirma consultas 24h e 2h antes via WhatsApp nativo (fuso de Brasília), permite remarcação autônoma em 1 clique e recupera até <strong>R$ 15.000/mês</strong> em faturamento perdido.</p>
+                    <p>A assistente IA "Ana" atende seus pacientes em segundos, confirma consultas no fuso correto de Brasília, permite remarcações autônomas em 1 clique e recupera até <strong>R$ 15.000/mês</strong> em faltas — sem sobrecarregar sua recepção.</p>
 
-            <div class="hero-ctas">
-                <button class="btn btn-wa" data-action="open-simulator">
-                    👉 TESTAR SIMULADOR AO VIVO NO WHATSAPP
-                </button>
-                <a href="#calculadora" class="btn btn-outline">
-                    📊 CALCULAR PREJUÍZO DA MINHA CLÍNICA
-                </a>
-            </div>
+                    <div class="hero-ctas">
+                        <button class="btn btn-wa" id="btn-hero-demo" data-action="open-simulator">
+                            👉 TESTAR SIMULADOR NO SMARTPHONE
+                        </button>
+                        <a href="#calculadora" class="btn btn-outline" id="btn-hero-roi">
+                            📊 CALCULAR PREJUÍZO DA CLÍNICA
+                        </a>
+                    </div>
 
-            <!-- Trust Badges Grid -->
-            <div class="trust-grid">
-                <div class="trust-card">
-                    <span class="trust-card-icon">🔒</span>
-                    <div class="trust-card-text">
-                        <strong>Criptografia AES-256-GCM</strong>
-                        <span>Dados dos pacientes 100% protegidos</span>
+                    <!-- Trust Badges Grid -->
+                    <div class="trust-grid">
+                        <div class="trust-card">
+                            <span class="trust-card-icon">🔒</span>
+                            <div class="trust-card-text">
+                                <strong>Criptografia AES-256-GCM</strong>
+                                <span>Dados dos pacientes 100% protegidos</span>
+                            </div>
+                        </div>
+
+                        <div class="trust-card">
+                            <span class="trust-card-icon">⚡</span>
+                            <div class="trust-card-text">
+                                <strong>Meta API Oficial</strong>
+                                <span>Botões interativos sem risco de ban</span>
+                            </div>
+                        </div>
+
+                        <div class="trust-card">
+                            <span class="trust-card-icon">🕒</span>
+                            <div class="trust-card-text">
+                                <strong>Precisão Fuso BRT</strong>
+                                <span>Horário oficial (America/Sao_Paulo)</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="trust-card">
-                    <span class="trust-card-icon">⚡</span>
-                    <div class="trust-card-text">
-                        <strong>Meta WhatsApp API Oficial</strong>
-                        <span>Botões interativos sem risco de ban</span>
-                    </div>
-                </div>
+                <!-- Right Column: Ultra-Realistic 3D iPhone Simulator -->
+                <div class="phone-mockup-wrapper">
+                    <div class="phone-container">
+                        <!-- iPhone Top Notch -->
+                        <div class="phone-notch">
+                            <div class="phone-notch-camera"></div>
+                            <div class="phone-notch-speaker"></div>
+                        </div>
 
-                <div class="trust-card">
-                    <span class="trust-card-icon">🕒</span>
-                    <div class="trust-card-text">
-                        <strong>Precisão Fuso BRT</strong>
-                        <span>Horário de Brasília (America/Sao_Paulo)</span>
-                    </div>
-                </div>
+                        <!-- Status Bar -->
+                        <div class="phone-status-bar">
+                            <span>09:41</span>
+                            <div class="phone-status-icons">
+                                <i class="fa-solid fa-signal"></i>
+                                <i class="fa-solid fa-wifi"></i>
+                                <i class="fa-solid fa-battery-full"></i>
+                            </div>
+                        </div>
 
-                <div class="trust-card">
-                    <span class="trust-card-icon">🛡️</span>
-                    <div class="trust-card-text">
-                        <strong>100 Concurrent Tested</strong>
-                        <span>Resiliência auditada sob estresse</span>
+                        <!-- WhatsApp App Screen -->
+                        <div class="wa-app-screen">
+                            <div class="wa-header">
+                                <div class="wa-profile">
+                                    <div class="wa-avatar">Ana</div>
+                                    <div class="wa-info">
+                                        <strong>Ana — Dra. Odonto Riso 😊</strong>
+                                        <span><span class="status-dot"></span> online</span>
+                                    </div>
+                                </div>
+                                <div class="wa-header-actions">
+                                    <i class="fa-solid fa-video"></i>
+                                    <i class="fa-solid fa-phone"></i>
+                                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                                </div>
+                            </div>
+
+                            <div class="wa-body" id="hero-wa-chat-body">
+
+                                <div class="wa-msg received">
+                                    Olá! Sou a Ana, assistente virtual da clínica. 😊<br><br>
+                                    Como posso te ajudar hoje?
+                                    <div class="wa-buttons-group">
+                                        <button class="wa-btn-reply" data-action="sim-reply-hero" data-reply-hero="NovoAgendamento">📅 AGENDAR NOVA CONSULTA</button>
+                                        <button class="wa-btn-reply" data-action="sim-reply-hero" data-reply-hero="ConfirmarLembrete">🔔 TESTAR LEMBRETE / CONFIRMAÇÃO</button>
+                                        <button class="wa-btn-reply" data-action="sim-reply-hero" data-reply-hero="InfoLocal">📍 HORÁRIOS & ENDEREÇO</button>
+                                    </div>
+
+                                    <span class="time">09:41</span>
+                                </div>
+                            </div>
+
+                            <div class="wa-footer-input">
+                                <i class="fa-regular fa-face-smile"></i>
+                                <div class="wa-fake-input">Toque nos botões acima para interagir...</div>
+                                <i class="fa-solid fa-paperclip"></i>
+                                <i class="fa-solid fa-microphone"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
+    <!-- Section: Ecossistema Duplo Impacto (IA no Celular + Painel na Recepção) -->
+    <section class="section-padding" id="ecossistema" style="background: rgba(10, 16, 32, 0.6);">
+        <div class="container">
+            <div class="section-header">
+                <h2>O Ecossistema Completo da Sua Clínica</h2>
+                <p>Muito mais que um robô no WhatsApp: uma plataforma integrada entre o paciente e a sua recepção</p>
+            </div>
+
+            <div class="ecosystem-grid">
+                <!-- Card 1: No Celular do Paciente -->
+                <div class="eco-card">
+                    <span class="eco-card-tag">📱 No WhatsApp do Paciente</span>
+                    <h3>Atendimento Humanizado 24 Horas</h3>
+                    <p>Seu paciente agenda, confirma ou remarca consultas direto pelo WhatsApp no horário de Brasília, com mensagens amigáveis e botões oficiais em 1 clique — sem baixar aplicativos.</p>
+                    <ul class="comp-list">
+                        <li><span class="icon">🟢</span> Confirmação dupla inteligente (24h e 2h antes)</li>
+                        <li><span class="icon">🟢</span> Remarcação autônoma sem fila de espera</li>
+                        <li><span class="icon">🟢</span> Orientações pré-procedimento automáticas</li>
+                    </ul>
+                </div>
+
+                <!-- Card 2: No Computador da Secretária -->
+                <div class="eco-card">
+                    <span class="eco-card-tag">💻 No Computador da Secretária</span>
+                    <h3>Dashboard Pro com Controle Total</h3>
+                    <p>Sua secretária visualiza a agenda em tempo real, gerencia o corpo clínico, acessa o CRM de reengajamento de faltosos e assume a conversa instantaneamente com 1 clique (Handoff).</p>
+                    <ul class="comp-list">
+                        <li><span class="icon">🟢</span> Painel Glassmorphism em tempo real com Alerta Sonoro</li>
+                        <li><span class="icon">🟢</span> Transbordo Humano com Resumo Executivo da IA</li>
+                        <li><span class="icon">🟢</span> Sigilo total sob LGPD com <code>cpfMasked</code></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Section 2: O Custo Oculto da Cadeira Vazia -->
-    <section class="section-padding" id="absenteismo" style="background: rgba(10, 16, 32, 0.5);">
+    <section class="section-padding" id="absenteismo">
         <div class="container">
             <div class="section-header">
                 <h2>Quanto dinheiro sua clínica deixou na mesa no mês passado por causa de faltas?</h2>
@@ -1159,7 +1044,7 @@
     </section>
 
     <!-- Section 3: O Triplo Motor de Eliminação do No-Show -->
-    <section class="section-padding" id="como-funciona">
+    <section class="section-padding" id="como-funciona" style="background: rgba(10, 16, 32, 0.4);">
         <div class="container">
             <div class="section-header">
                 <h2>O Triplo Motor de Eliminação do Absenteísmo</h2>
@@ -1183,35 +1068,6 @@
                     <div class="step-number">03</div>
                     <h3>Checklists Pré-Procedimento</h3>
                     <p>Envio automático de orientações médicas (jejum, exames prévios, documentos) para garantir que o paciente chegue 100% preparado para a consulta.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Section 4: Simulador Interativo In-Page -->
-    <section class="section-padding" id="simulador" style="background: rgba(10, 16, 32, 0.4);">
-        <div class="container">
-            <div class="section-header">
-                <h2>Teste Agora Mesmo o Atendimento da IA "Ana" no Seu WhatsApp</h2>
-                <p>Não tome sua decisão baseado apenas no que lê nesta página. Teste na prática a mesma experiência que seus pacientes terão!</p>
-            </div>
-
-            <div class="simulator-cta-card">
-                <div class="sim-cta-content">
-                    <h3>Experimente a IA "Ana" ao Vivo em 60 Segundos</h3>
-                    <p>Clique no botão abaixo para abrir a demonstração interativa. Você poderá simular o agendamento de uma consulta, receber confirmação com botões nativos e testar a remarcação autônoma no fuso de Brasília (BRT).</p>
-                    
-                    <div class="sim-features-list">
-                        <div class="sim-feature-pill">📱 Demonstração 100% gratuita</div>
-                        <div class="sim-feature-pill">⏱️ Leva menos de 60 segundos</div>
-                        <div class="sim-feature-pill">🛡️ Nenhum dado pessoal armazenado</div>
-                    </div>
-
-                    <div style="margin-top: 28px;">
-                        <button class="btn btn-wa" data-action="open-simulator" style="font-size: 1.1rem; padding: 18px 36px;">
-                            👉 ABRIR SIMULADOR INTERATIVO NO WHATSAPP
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1322,7 +1178,7 @@
             </div>
 
             <div class="testimonials-grid">
-                <!-- Testimonial 1: Médica -->
+                <!-- Testimonial 1 -->
                 <div class="testimonial-card">
                     <div class="testimonial-badge">🏥 Clínica Médica</div>
                     <p class="testimonial-quote">"Tínhamos mais de 30 faltas por semana na infectologia e ginecologia. A secretária passava a manhã toda no telefone. Com o ClinicaBot, nossa taxa de presença subiu para 94% e os dados dos nossos pacientes estão totalmente protegidos sob a LGPD."</p>
@@ -1332,7 +1188,7 @@
                     </div>
                 </div>
 
-                <!-- Testimonial 2: Odonto -->
+                <!-- Testimonial 2 -->
                 <div class="testimonial-card">
                     <div class="testimonial-badge">🦷 Clínica Odontológica</div>
                     <p class="testimonial-quote">"Hora-cadeira vaga em odontologia é prejuízo puro. O recurso de remarcação autônoma em 1 clique salvou nosso faturamento. Quando um paciente desmarca à noite, a IA já oferece a vaga pra lista de espera!"</p>
@@ -1342,7 +1198,7 @@
                     </div>
                 </div>
 
-                <!-- Testimonial 3: Estética -->
+                <!-- Testimonial 3 -->
                 <div class="testimonial-card">
                     <div class="testimonial-badge">💄 Estética & Dermatologia</div>
                     <p class="testimonial-quote">"Perdíamos muitos procedimentos porque as clientes esqueciam de aplicar o anestésico antes de sair de casa. O checklist automático no WhatsApp resolveu isso 100%. Atendimento elegante e muito humanizado."</p>
@@ -1509,10 +1365,10 @@
                 <div class="footer-col">
                     <h4>Navegação</h4>
                     <ul>
+                        <li><a href="#ecossistema">O Sistema</a></li>
                         <li><a href="#como-funciona">Como Funciona</a></li>
                         <li><a href="#seguranca">Segurança & LGPD</a></li>
                         <li><a href="#calculadora">Calculadora de ROI</a></li>
-                        <li><a href="#depoimentos">Depoimentos</a></li>
                         <li><a href="#planos">Planos & Preços</a></li>
                     </ul>
                 </div>
@@ -1577,28 +1433,59 @@
         </div>
     </div>
 
-    <!-- Live WhatsApp Simulator Modal -->
+    <!-- Live WhatsApp Smartphone Simulator Modal -->
     <div class="modal-overlay" id="modal-simulator">
-        <div class="wa-simulator-box">
-            <div class="wa-header">
-                <div class="wa-profile">
-                    <div class="wa-avatar">Ana</div>
-                    <div class="wa-info">
-                        <strong>Ana — Assistente da Clínica 😊</strong>
-                        <span>Online (Meta WhatsApp Cloud API)</span>
-                    </div>
-                </div>
-                <button class="wa-close" data-action="close-simulator" aria-label="Fechar Modal">&times;</button>
+        <div class="phone-container" style="max-width: 360px; height: 680px; box-shadow: 0 25px 60px rgba(0,0,0,0.9); position: relative;">
+            <button class="wa-close" data-action="close-simulator" aria-label="Fechar Modal" style="position: absolute; top: 12px; right: 16px; z-index: 200; font-size: 1.6rem; color: #FFF; background: rgba(0,0,0,0.5); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;">&times;</button>
+            
+            <div class="phone-notch">
+                <div class="phone-notch-camera"></div>
+                <div class="phone-notch-speaker"></div>
             </div>
 
-            <div class="wa-body" id="wa-chat-body">
-                <div class="wa-msg received">
-                    Olá! Sou a Ana, assistente virtual da clínica. 😊<br><br>
-                    Estou aqui para confirmar sua consulta agendada para amanhã às 14:00. Como podemos prosseguir?
-                    <div class="wa-buttons-group">
-                        <button class="wa-btn-reply" data-action="sim-reply" data-reply="Confirmar">✅ CONFIRMAR CONSULTA</button>
-                        <button class="wa-btn-reply" data-action="sim-reply" data-reply="Remarcar">📅 REMARCAR HORÁRIO</button>
+            <div class="phone-status-bar">
+                <span>09:41</span>
+                <div class="phone-status-icons">
+                    <i class="fa-solid fa-signal"></i>
+                    <i class="fa-solid fa-wifi"></i>
+                    <i class="fa-solid fa-battery-full"></i>
+                </div>
+            </div>
+
+            <div class="wa-app-screen">
+                <div class="wa-header">
+                    <div class="wa-profile">
+                        <div class="wa-avatar">Ana</div>
+                        <div class="wa-info">
+                            <strong>Ana — Dra. Odonto Riso 😊</strong>
+                            <span><span class="status-dot"></span> online</span>
+                        </div>
                     </div>
+                    <div class="wa-header-actions" style="margin-right: 36px;">
+                        <i class="fa-solid fa-video"></i>
+                        <i class="fa-solid fa-phone"></i>
+                    </div>
+                </div>
+
+                <div class="wa-body" id="wa-chat-body">
+
+                    <div class="wa-msg received">
+                        Olá! Sou a Ana, assistente virtual da clínica. 😊<br><br>
+                        Como posso te ajudar hoje?
+                        <div class="wa-buttons-group">
+                            <button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR NOVA CONSULTA</button>
+                            <button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE / CONFIRMAÇÃO</button>
+                            <button class="wa-btn-reply" data-action="sim-reply" data-reply="InfoLocal">📍 HORÁRIOS & ENDEREÇO</button>
+                        </div>
+                        <span class="time">09:41</span>
+                    </div>
+                </div>
+
+                <div class="wa-footer-input">
+                    <i class="fa-regular fa-face-smile"></i>
+                    <div class="wa-fake-input">Toque nos botões acima...</div>
+                    <i class="fa-solid fa-paperclip"></i>
+                    <i class="fa-solid fa-microphone"></i>
                 </div>
             </div>
         </div>
@@ -1642,7 +1529,7 @@
             document.getElementById('res-roi').innerText = roiMultiplier + 'x ROI';
         }
 
-        // FAQ Accordion Toggle with Accessibility Support
+        // FAQ Accordion Toggle
         function toggleFaq(headerElement) {
             const item = headerElement.closest('.faq-item');
             if (!item) return;
@@ -1666,12 +1553,9 @@
             navLinks.classList.toggle('active');
         }
 
-        // WhatsApp Simulator Modal & Complete Flow State Machine
-        function resetSimulatorChat() {
-            const body = document.getElementById('wa-chat-body');
-            if (!body) return;
-            
-            body.innerHTML = `
+        // WhatsApp Simulator State Machine & Real Time Typing Effect
+        function getInitialChatHTML() {
+            return `
                 <div class="wa-msg received">
                     Olá! Sou a Ana, assistente virtual da clínica. 😊<br><br>
                     Como posso te ajudar hoje?
@@ -1680,30 +1564,40 @@
                         <button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE / CONFIRMAÇÃO</button>
                         <button class="wa-btn-reply" data-action="sim-reply" data-reply="InfoLocal">📍 HORÁRIOS & ENDEREÇO</button>
                     </div>
+                    <span class="time">09:41</span>
                 </div>
             `;
         }
 
+        function resetSimulatorChat(containerId) {
+            const body = document.getElementById(containerId || 'wa-chat-body');
+            if (!body) return;
+            body.innerHTML = getInitialChatHTML();
+        }
+
         function openSimulatorModal() {
-            resetSimulatorChat();
+            resetSimulatorChat('wa-chat-body');
             const modal = document.getElementById('modal-simulator');
             if (modal) modal.classList.add('active');
         }
+
 
         function closeSimulatorModal() {
             const modal = document.getElementById('modal-simulator');
             if (modal) modal.classList.remove('active');
         }
 
-        function simReply(action) {
-            const body = document.getElementById('wa-chat-body');
+        function simReply(targetBtn, action) {
+            // Identifica qual container do chat foi clicado (Hero ou Modal)
+            const body = targetBtn && targetBtn.closest ? (targetBtn.closest('.wa-body') || document.getElementById('wa-chat-body')) : document.getElementById('wa-chat-body');
             if (!body) return;
+
             
             const sanitizedAction = esc(action);
             let userMsgText = '';
 
             if (sanitizedAction === 'Reset') {
-                resetSimulatorChat();
+                body.innerHTML = getInitialChatHTML();
                 return;
             } else if (sanitizedAction === 'NovoAgendamento') {
                 userMsgText = '📅 Agendar Nova Consulta';
@@ -1734,37 +1628,49 @@
             }
             
             // Add user message
+            const now = new Date();
+            const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            
             const userMsg = document.createElement('div');
             userMsg.className = 'wa-msg sent';
-            userMsg.textContent = userMsgText;
+            userMsg.innerHTML = esc(userMsgText) + '<span class="time">' + timeStr + '</span>';
             body.appendChild(userMsg);
+            body.scrollTop = body.scrollHeight;
 
-            // Scroll to bottom
+            // Typing Indicator
+            const typingMsg = document.createElement('div');
+            typingMsg.className = 'wa-msg received typing';
+            typingMsg.style.fontStyle = 'italic';
+            typingMsg.style.color = '#8696A0';
+            typingMsg.innerHTML = 'Ana está digitando...';
+            body.appendChild(typingMsg);
             body.scrollTop = body.scrollHeight;
 
             // Add Ana response after 500ms
             setTimeout(() => {
+                if (typingMsg.parentNode) typingMsg.parentNode.removeChild(typingMsg);
+
                 const anaMsg = document.createElement('div');
                 anaMsg.className = 'wa-msg received';
                 
                 if (sanitizedAction === 'NovoAgendamento') {
-                    anaMsg.innerHTML = 'Excelente! Para qual especialidade você deseja agendar sua consulta?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="EspMedica">🩺 CONSULTA MÉDICA GERAL</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="EspOdonto">🦷 ODONTOLOGIA / AVALIAÇÃO</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="EspEstetica">✨ ESTÉTICA / HARMONIZAÇÃO</button></div>';
+                    anaMsg.innerHTML = 'Excelente! Para qual especialidade você deseja agendar sua consulta?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="EspMedica">🩺 CONSULTA MÉDICA GERAL</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="EspOdonto">🦷 ODONTOLOGIA / AVALIAÇÃO</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="EspEstetica">✨ ESTÉTICA / HARMONIZAÇÃO</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'ConfirmarLembrete') {
-                    anaMsg.innerHTML = 'Olá! Lembrete da sua consulta agendada para amanhã às 14:00 na clínica. 😊 Como podemos prosseguir?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Confirmar">✅ CONFIRMAR CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Remarcar">📅 REMARCAR HORÁRIO</button></div>';
+                    anaMsg.innerHTML = 'Olá! Lembrete da sua consulta agendada para amanhã às 14:00 na clínica. 😊 Como podemos prosseguir?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Confirmar">✅ CONFIRMAR CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Remarcar">📅 REMARCAR HORÁRIO</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'EspMedica' || sanitizedAction === 'EspOdonto' || sanitizedAction === 'EspEstetica') {
-                    anaMsg.innerHTML = 'Perfeito! Temos os seguintes horários livres na agenda esta semana com nossos especialistas:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora10">🕒 Amanhã às 10:00 (Dr. Carlos)</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora14">🕒 Quinta às 14:30 (Dra. Ana)</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora16">🕒 Sexta às 16:00 (Dr. Roberto)</button></div>';
+                    anaMsg.innerHTML = 'Perfeito! Temos os seguintes horários livres na agenda esta semana com nossos especialistas:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora10">🕒 Amanhã às 10:00 (Dr. Carlos)</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora14">🕒 Quinta às 14:30 (Dra. Ana)</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora16">🕒 Sexta às 16:00 (Dr. Roberto)</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'Hora10' || sanitizedAction === 'Hora14' || sanitizedAction === 'Hora16') {
-                    anaMsg.innerHTML = 'Excelente escolha! Para cadastrar sua consulta no sistema com proteção de dados LGPD 🔒, por favor confirme a reserva:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="FinalizarAgendamento">📝 FINALIZAR CADASTRO & RESERVA</button></div>';
+                    anaMsg.innerHTML = 'Excelente escolha! Para cadastrar sua consulta no sistema com proteção de dados LGPD 🔒, por favor confirme a reserva:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="FinalizarAgendamento">📝 FINALIZAR CADASTRO & RESERVA</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'FinalizarAgendamento') {
-                    anaMsg.innerHTML = '🎉 <strong>CONSULTA AGENDADA COM SUCESSO!</strong><br><br>📅 Data: ' + esc(userMsgText) + '<br>👤 Paciente: Gabriel Silva (CPF: 123.***.***-45 🔒)<br><br>Sua vaga está garantida! O sistema enviará um lembrete automático 24h antes no seu WhatsApp. O que mais deseja testar?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE DE PRESENÇA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Reset">🔄 REINICIAR SIMULAÇÃO</button></div>';
+                    anaMsg.innerHTML = '🎉 <strong>CONSULTA AGENDADA COM SUCESSO!</strong><br><br>📅 Data: ' + esc(userMsgText) + '<br>👤 Paciente: Gabriel Silva (CPF: 123.***.***-45 🔒)<br><br>Sua vaga está garantida! O sistema enviará um lembrete automático 24h antes no seu WhatsApp. O que mais deseja testar?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE DE PRESENÇA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Reset">🔄 REINICIAR SIMULAÇÃO</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'Confirmar') {
-                    anaMsg.innerHTML = 'Excelente! Sua consulta foi <strong>CONFIRMADA</strong> com sucesso no sistema. 🎉<br><br>Lembre-se de chegar com 10 min de antecedência. Nos vemos em breve!<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Reset">🔄 TESTAR OUTRO FLUXO</button></div>';
+                    anaMsg.innerHTML = 'Excelente! Sua consulta foi <strong>CONFIRMADA</strong> com sucesso no sistema. 🎉<br><br>Lembre-se de chegar com 10 min de antecedência. Nos vemos em breve!<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Reset">🔄 TESTAR OUTRO FLUXO</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'Remarcar') {
-                    anaMsg.innerHTML = 'Compreendo! Aqui estão os novos horários disponíveis nesta semana:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora10">🕒 Quinta-feira às 10:00</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora16">🕒 Sexta-feira às 15:30</button></div>';
+                    anaMsg.innerHTML = 'Compreendo! Aqui estão os novos horários disponíveis nesta semana:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora10">🕒 Quinta-feira às 10:00</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora16">🕒 Sexta-feira às 15:30</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'InfoLocal') {
-                    anaMsg.innerHTML = '📍 <strong>Clínica Saúde Pro</strong><br>Av. Paulista, 1000 - Conjunto 502, São Paulo - SP<br><br>⏰ <strong>Atendimento:</strong> Seg a Sex das 08h às 19h | Sáb das 08h às 13h.<br><br>Como posso te ajudar agora?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE</button></div>';
+                    anaMsg.innerHTML = '📍 <strong>Clínica Odonto Riso</strong><br>Av. Paulista, 1000 - Conjunto 502, São Paulo - SP<br><br>⏰ <strong>Atendimento:</strong> Seg a Sex das 08h às 19h | Sáb das 08h às 13h.<br><br>Como posso te ajudar agora?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE</button></div><span class="time">' + timeStr + '</span>';
                 } else {
-                    anaMsg.innerHTML = 'Entendi! Para iniciar seu atendimento, selecione uma das opções abaixo:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR NOVA CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE</button></div>';
+                    anaMsg.innerHTML = 'Entendi! Para iniciar seu atendimento, selecione uma das opções abaixo:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR NOVA CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE</button></div><span class="time">' + timeStr + '</span>';
                 }
                 body.appendChild(anaMsg);
                 body.scrollTop = body.scrollHeight;
@@ -1786,8 +1692,13 @@
             } else if (action === 'sim-reply') {
                 e.preventDefault();
                 const reply = target.getAttribute('data-reply');
-                simReply(reply);
+                simReply(target, reply);
+            } else if (action === 'sim-reply-hero') {
+                e.preventDefault();
+                const reply = target.getAttribute('data-reply-hero');
+                simReply(target, reply);
             } else if (action === 'toggle-faq') {
+
                 toggleFaq(target);
             } else if (action === 'toggle-mobile-menu') {
                 toggleMobileMenu(target);
@@ -1816,7 +1727,7 @@
             }
         });
 
-        // Accessibility Keydown Listener for FAQ triggers (Enter & Space)
+        // Accessibility Keydown Listener for FAQ triggers
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') {
                 const target = e.target.closest('[data-action="toggle-faq"]');
