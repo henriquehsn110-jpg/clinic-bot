@@ -111,17 +111,17 @@
             </div>
 
             <!-- VISÃO TABELA -->
-            <div id="appointments-table-view" class="table-responsive">
-                <table>
+            <div id="appointments-table-view" class="table-responsive" style="overflow-x: auto; width: 100%;">
+                <table style="min-width: 1000px; width: 100%; border-collapse: collapse;">
                     <thead>
                         <tr>
-                            <th>Paciente</th>
-                            <th>Procedimento</th>
-                            <th>Médico / Especialista</th>
-                            <th>Data</th>
-                            <th>Horário</th>
-                            <th>Status</th>
-                            <th>Ações da Recepção</th>
+                            <th style="min-width: 180px; white-space: nowrap;">Paciente</th>
+                            <th style="min-width: 170px; white-space: nowrap;">Procedimento</th>
+                            <th style="min-width: 190px; white-space: nowrap;">Médico / Especialista</th>
+                            <th style="min-width: 110px; white-space: nowrap;">Data</th>
+                            <th style="min-width: 90px; white-space: nowrap;">Horário</th>
+                            <th style="min-width: 120px; white-space: nowrap;">Status</th>
+                            <th style="min-width: 180px; white-space: nowrap; text-align: right;">Ações da Recepção</th>
                         </tr>
                     </thead>
                     <tbody id="appointments-tbody">
@@ -1006,16 +1006,16 @@
 
                 return `
                     <tr>
-                        <td><div style="font-weight: 700; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">${pName}${familyTagHTML}</div><div style="font-size: 12px; color: var(--text-muted);">${pPhone}</div></td>
-                        <td><span style="font-weight: 500;">${appType}</span></td>
-                        <td><span style="color: var(--primary); font-weight: 600; font-size: 13px;"><i class="fa-solid fa-user-doctor"></i> ${esc(docName)}</span></td>
-                        <td>${esc(formatDate(app.appointment_date))}</td>
-                        <td><span style="font-family: var(--font-mono); color: var(--primary);">${esc(app.appointment_time)}</span></td>
-                        <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
-                        <td style="white-space: nowrap;">
-                            <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
-                                ${app.status !== 'confirmed' ? `<button class="btn btn-confirm-appt" data-id="${esc(app.id)}" data-status="confirmed" style="padding: 4px 10px; font-size: 11px; white-space: nowrap;"><i class="fa-solid fa-check"></i> Confirmar</button>` : ''}
-                                ${app.status !== 'cancelled' ? `<button class="btn btn-danger btn-cancel-appt" data-id="${esc(app.id)}" data-status="cancelled" style="padding: 4px 10px; font-size: 11px; white-space: nowrap;"><i class="fa-solid fa-xmark"></i> Cancelar</button>` : ''}
+                        <td style="min-width: 180px;"><div style="font-weight: 700; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">${pName}${familyTagHTML}</div><div style="font-size: 12px; color: var(--text-muted);">${pPhone}</div></td>
+                        <td style="min-width: 170px; white-space: nowrap;"><span style="font-weight: 600; color: #fff;">${appType}</span></td>
+                        <td style="min-width: 190px; white-space: nowrap;"><span style="color: var(--primary); font-weight: 600; font-size: 13px;"><i class="fa-solid fa-user-doctor"></i> ${esc(docName)}</span></td>
+                        <td style="min-width: 110px; white-space: nowrap;">${esc(formatDate(app.appointment_date))}</td>
+                        <td style="min-width: 90px; white-space: nowrap;"><span style="font-family: var(--font-mono); color: var(--primary); font-weight: 600;">${esc(app.appointment_time)}</span></td>
+                        <td style="min-width: 120px; white-space: nowrap;"><span class="status-pill ${statusClass}">${statusLabel}</span></td>
+                        <td style="min-width: 180px; white-space: nowrap; text-align: right;">
+                            <div style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap;">
+                                ${app.status !== 'confirmed' ? `<button class="btn btn-confirm-appt" data-id="${esc(app.id)}" data-status="confirmed" style="padding: 6px 12px; font-size: 11px; font-weight: 700; white-space: nowrap; background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3);"><i class="fa-solid fa-check"></i> Confirmar</button>` : ''}
+                                ${app.status !== 'cancelled' ? `<button class="btn btn-danger btn-cancel-appt" data-id="${esc(app.id)}" data-status="cancelled" style="padding: 6px 12px; font-size: 11px; font-weight: 700; white-space: nowrap; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3);"><i class="fa-solid fa-xmark"></i> Cancelar</button>` : ''}
                                 ${whatsappBtn}
                             </div>
                         </td>

@@ -243,7 +243,28 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .status-pill.cancelled { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 
 /* Action Buttons in Tables */
-td button { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+td button {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-main);
+    width: auto;
+    min-width: 32px;
+    height: 32px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+td button.btn-whatsapp {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+}
 td button:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
 td button.btn-danger:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
 
