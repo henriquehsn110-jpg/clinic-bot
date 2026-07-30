@@ -7,7 +7,7 @@
     <meta name="description" content="Reduza até 75% das faltas na sua clínica médica, odontológica ou de estética com atendimento IA no WhatsApp 24/7, confirmação automática BRT e criptografia LGPD AES-256.">
     <meta name="keywords" content="chatbot clinica, agendamento whatsapp medico, no-show saude, inteligencia artificial odontologia, lgpd clinica medica">
     
-    <!-- Google Fonts -->
+    <!-- Google Fonts & FontAwesome -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -16,8 +16,8 @@
     <style>
         :root {
             --bg-main: #060B14;
-            --bg-card: rgba(14, 22, 42, 0.75);
-            --bg-card-hover: rgba(22, 34, 64, 0.88);
+            --bg-card: rgba(14, 22, 42, 0.7);
+            --bg-card-hover: rgba(22, 34, 64, 0.85);
             --accent-cyan: #00F2FE;
             --accent-blue: #4FACFE;
             --wa-green: #25D366;
@@ -30,9 +30,9 @@
             --text-body: #94A3B8;
             --text-light: #CBD5E1;
             --border-glass: rgba(255, 255, 255, 0.08);
-            --border-highlight: rgba(0, 242, 254, 0.35);
-            --shadow-glow: 0 0 35px rgba(0, 242, 254, 0.18);
-            --shadow-wa: 0 0 30px rgba(37, 211, 102, 0.3);
+            --border-highlight: rgba(0, 242, 254, 0.3);
+            --shadow-glow: 0 0 40px rgba(0, 242, 254, 0.15);
+            --shadow-wa: 0 0 30px rgba(37, 211, 102, 0.25);
             --radius-xl: 24px;
             --radius-lg: 16px;
             --radius-md: 10px;
@@ -52,31 +52,28 @@
             line-height: 1.6;
             overflow-x: hidden;
             background-image: 
-                radial-gradient(circle at 10% 10%, rgba(0, 242, 254, 0.06) 0%, transparent 45%),
-                radial-gradient(circle at 90% 60%, rgba(79, 172, 254, 0.06) 0%, transparent 45%);
+                radial-gradient(circle at 10% 15%, rgba(0, 242, 254, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 60%, rgba(79, 172, 254, 0.05) 0%, transparent 40%);
         }
 
         h1, h2, h3, h4, .font-heading {
             font-family: 'Outfit', sans-serif;
             color: var(--text-title);
-            line-height: 1.2;
+            line-height: 1.25;
         }
 
         .container {
             width: 100%;
-            max-width: 1280px;
+            max-width: 1240px;
             margin: 0 auto;
             padding: 0 24px;
         }
 
-        /* Gradient & Glow Helpers */
         .text-gradient {
             background: linear-gradient(135deg, #00F2FE, #4FACFE);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-
-        .text-wa { color: var(--wa-green); }
 
         /* Buttons & CTAs */
         .btn {
@@ -84,8 +81,8 @@
             align-items: center;
             justify-content: center;
             gap: 10px;
-            padding: 16px 32px;
-            font-size: 1rem;
+            padding: 15px 30px;
+            font-size: 0.98rem;
             font-weight: 700;
             border-radius: var(--radius-lg);
             text-decoration: none;
@@ -101,8 +98,8 @@
         }
 
         .btn-wa:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 35px rgba(37, 211, 102, 0.45);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(37, 211, 102, 0.4);
         }
 
         .btn-outline {
@@ -112,7 +109,7 @@
         }
 
         .btn-outline:hover {
-            background: rgba(0, 242, 254, 0.12);
+            background: rgba(0, 242, 254, 0.1);
             border-color: var(--accent-cyan);
             transform: translateY(-2px);
         }
@@ -125,7 +122,7 @@
             width: 100%;
             z-index: 1000;
             backdrop-filter: blur(20px);
-            background: rgba(6, 11, 20, 0.88);
+            background: rgba(6, 11, 20, 0.9);
             border-bottom: 1px solid var(--border-glass);
         }
 
@@ -133,7 +130,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            height: 84px;
+            height: 80px;
             gap: 16px;
         }
 
@@ -142,25 +139,23 @@
             align-items: center;
             gap: 10px;
             font-family: 'Outfit', sans-serif;
-            font-size: 1.4rem;
+            font-size: 1.35rem;
             font-weight: 800;
             color: var(--text-title);
             text-decoration: none;
             white-space: nowrap;
-            flex-shrink: 0;
         }
 
         .logo-icon {
-            width: 42px;
-            height: 42px;
+            width: 40px;
+            height: 40px;
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.25rem;
-            box-shadow: 0 0 20px rgba(0, 242, 254, 0.35);
-            flex-shrink: 0;
+            font-size: 1.2rem;
+            box-shadow: 0 0 18px rgba(0, 242, 254, 0.3);
         }
 
         .mobile-menu-toggle {
@@ -168,29 +163,19 @@
             background: none;
             border: 1px solid var(--border-glass);
             color: var(--text-title);
-            font-size: 1.5rem;
-            padding: 8px 12px;
+            font-size: 1.4rem;
+            padding: 6px 12px;
             border-radius: var(--radius-md);
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-            flex-shrink: 0;
-        }
-
-        .mobile-menu-toggle:hover {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: var(--accent-cyan);
         }
 
         .nav-links {
             display: flex;
-            gap: clamp(14px, 1.8vw, 28px);
+            gap: 28px;
             list-style: none;
             align-items: center;
-            margin: 0;
-            padding: 0;
         }
 
-        .nav-links li { white-space: nowrap; }
         .nav-links a {
             color: var(--text-body);
             text-decoration: none;
@@ -198,64 +183,53 @@
             font-size: 0.92rem;
             transition: color 0.2s;
         }
+
         .nav-links a:hover { color: var(--accent-cyan); }
 
         #btn-header-demo {
             padding: 10px 20px;
             font-size: 0.88rem;
-            white-space: nowrap;
-            height: 44px;
-            flex-shrink: 0;
-            box-shadow: 0 4px 18px rgba(37, 211, 102, 0.3);
+            height: 42px;
             border-radius: var(--radius-md);
         }
 
-        #btn-header-demo:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 24px rgba(37, 211, 102, 0.45);
-        }
-
-        /* Hero Section (Split Layout) */
+        /* Hero Section (Clean & Balanced Split Layout) */
         .hero {
-            padding: 160px 0 100px;
+            padding: 150px 0 90px;
             position: relative;
         }
 
         .hero-grid {
             display: grid;
-            grid-template-columns: 1.15fr 0.85fr;
-            gap: 48px;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 54px;
             align-items: center;
-        }
-
-        .hero-content {
-            text-align: left;
         }
 
         .pill-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 18px;
+            padding: 6px 16px;
             background: rgba(37, 211, 102, 0.1);
-            border: 1px solid rgba(37, 211, 102, 0.35);
+            border: 1px solid rgba(37, 211, 102, 0.3);
             border-radius: 50px;
-            font-size: 0.86rem;
+            font-size: 0.84rem;
             font-weight: 600;
             color: var(--wa-green);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .hero h1 {
-            font-size: 3.2rem;
+            font-size: 2.9rem;
             font-weight: 800;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             letter-spacing: -0.02em;
         }
 
         .hero p {
-            font-size: 1.18rem;
-            margin-bottom: 36px;
+            font-size: 1.1rem;
+            margin-bottom: 32px;
             color: var(--text-light);
             line-height: 1.6;
         }
@@ -263,80 +237,97 @@
         .hero-ctas {
             display: flex;
             gap: 16px;
-            margin-bottom: 40px;
+            margin-bottom: 36px;
             flex-wrap: wrap;
         }
 
-        /* 📱 REALISTIC 3D SMARTPHONE MOCKUP COMPONENT */
+        .trust-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .trust-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .trust-card-icon { font-size: 1.3rem; flex-shrink: 0; }
+        .trust-card-text strong { display: block; color: var(--text-title); font-size: 0.82rem; }
+        .trust-card-text span { font-size: 0.74rem; color: var(--text-body); }
+
+        /* 📱 ULTRA-REALISTIC 3D SMARTPHONE MOCKUP & WHATSAPP CHAT */
         .phone-mockup-wrapper {
-            position: relative;
             display: flex;
             justify-content: center;
             perspective: 1000px;
         }
 
         .phone-container {
-            width: 350px;
-            height: 700px;
+            width: 340px;
+            height: 670px;
             background: #000000;
-            border-radius: 46px;
+            border-radius: 44px;
             box-shadow: 
-                0 30px 70px rgba(0, 0, 0, 0.95),
-                0 0 45px rgba(0, 242, 254, 0.22),
-                inset 0 0 4px rgba(255, 255, 255, 0.35);
-            border: 10px solid #1E293B;
+                0 25px 60px rgba(0, 0, 0, 0.9),
+                0 0 35px rgba(0, 242, 254, 0.18),
+                inset 0 0 3px rgba(255, 255, 255, 0.3);
+            border: 9px solid #1E293B;
             position: relative;
             overflow: hidden;
-            transition: transform 0.4s ease, box-shadow 0.4s ease;
+            transition: transform 0.4s ease;
         }
 
         .phone-container:hover {
-            transform: translateY(-6px) rotateY(-2deg) rotateX(2deg);
-            box-shadow: 
-                0 40px 90px rgba(0, 0, 0, 0.98),
-                0 0 60px rgba(0, 242, 254, 0.35);
+            transform: translateY(-4px) rotateY(-1deg);
         }
 
+        /* Dynamic Island / iPhone Notch */
         .phone-notch {
             position: absolute;
             top: 10px;
             left: 50%;
             transform: translateX(-50%);
-            width: 120px;
-            height: 24px;
+            width: 105px;
+            height: 22px;
             background: #000000;
             border-radius: 20px;
             z-index: 100;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 12px;
+            padding: 0 10px;
         }
 
         .phone-notch-camera {
-            width: 10px;
-            height: 10px;
+            width: 9px;
+            height: 9px;
             background: #111;
             border-radius: 50%;
             border: 1px solid #222;
         }
 
         .phone-notch-speaker {
-            width: 45px;
+            width: 40px;
             height: 4px;
             background: #222;
             border-radius: 4px;
         }
 
         .phone-status-bar {
-            height: 44px;
-            padding: 12px 20px 0;
+            height: 42px;
+            padding: 12px 18px 0;
             background: #111B21;
             color: #8696A0;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.76rem;
+            font-size: 0.74rem;
             font-weight: 600;
             z-index: 90;
             position: relative;
@@ -346,11 +337,11 @@
             display: flex;
             gap: 6px;
             align-items: center;
-            font-size: 0.72rem;
+            font-size: 0.7rem;
         }
 
         .wa-app-screen {
-            height: calc(100% - 44px);
+            height: calc(100% - 42px);
             display: flex;
             flex-direction: column;
             background: #0B141A;
@@ -358,7 +349,7 @@
 
         .wa-header {
             background: #202C33;
-            padding: 12px 16px;
+            padding: 10px 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -373,8 +364,8 @@
         }
 
         .wa-avatar {
-            width: 38px;
-            height: 38px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background: linear-gradient(135deg, #00A884, #128C7E);
             display: flex;
@@ -382,8 +373,8 @@
             justify-content: center;
             font-weight: 700;
             color: #FFF;
-            font-size: 0.9rem;
-            box-shadow: 0 0 10px rgba(0, 168, 132, 0.4);
+            font-size: 1rem;
+            box-shadow: 0 0 8px rgba(0, 168, 132, 0.4);
             position: relative;
         }
 
@@ -392,30 +383,35 @@
             position: absolute;
             bottom: 0;
             right: 0;
-            width: 10px;
-            height: 10px;
+            width: 9px;
+            height: 9px;
             background: #00E676;
             border: 2px solid #202C33;
             border-radius: 50%;
         }
 
-        .wa-info strong { display: block; font-size: 0.9rem; color: #E9EDEF; }
-        .wa-info span { font-size: 0.72rem; color: #8696A0; display: flex; align-items: center; gap: 4px; }
-        .wa-info span .status-dot { width: 6px; height: 6px; background: #00E676; border-radius: 50%; display: inline-block; }
+        .wa-info strong { display: block; font-size: 0.86rem; color: #E9EDEF; }
+        .wa-info span { font-size: 0.7rem; color: #8696A0; display: flex; align-items: center; gap: 4px; }
+        .wa-info span .status-dot { width: 5px; height: 5px; background: #00E676; border-radius: 50%; display: inline-block; }
 
         .wa-header-actions {
             display: flex;
-            gap: 14px;
+            gap: 12px;
             color: #8696A0;
-            font-size: 1rem;
+            font-size: 0.95rem;
         }
 
+        /* Authentic WhatsApp Chat Background & Wallpaper Pattern */
         .wa-body {
             flex-grow: 1;
-            padding: 16px;
+            padding: 14px;
             overflow-y: auto;
-            background-image: radial-gradient(#182229 1px, transparent 0);
-            background-size: 16px 16px;
+            background-color: #0B141A;
+            background-image: 
+                radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 0),
+                radial-gradient(rgba(0, 242, 254, 0.02) 1px, transparent 0);
+            background-size: 18px 18px;
+            background-position: 0 0, 9px 9px;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -423,9 +419,9 @@
 
         .wa-msg {
             max-width: 88%;
-            padding: 10px 14px;
+            padding: 10px 12px;
             border-radius: 12px;
-            font-size: 0.84rem;
+            font-size: 0.82rem;
             line-height: 1.45;
             position: relative;
             animation: fadeInMsg 0.3s ease;
@@ -441,7 +437,7 @@
             color: #E9EDEF;
             align-self: flex-start;
             border-top-left-radius: 2px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
 
         .wa-msg.sent {
@@ -449,16 +445,21 @@
             color: #E9EDEF;
             align-self: flex-end;
             border-top-right-radius: 2px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
 
         .wa-msg .time {
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             color: #8696A0;
             float: right;
             margin-top: 4px;
             margin-left: 8px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
         }
+
+        .wa-msg.sent .time { color: #8696A0; }
 
         .wa-buttons-group {
             display: flex;
@@ -470,10 +471,10 @@
         .wa-btn-reply {
             background: #2A3942;
             color: #00A884;
-            border: 1px solid #3B4A54;
-            padding: 10px;
+            border: 1px solid rgba(0, 168, 132, 0.3);
+            padding: 9px;
             border-radius: 8px;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 600;
             text-align: center;
             cursor: pointer;
@@ -487,7 +488,6 @@
         .wa-btn-reply:hover {
             background: #3B4A54;
             color: #34D399;
-            transform: scale(1.02);
         }
 
         .wa-footer-input {
@@ -495,7 +495,7 @@
             padding: 8px 12px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             color: #8696A0;
             border-top: 1px solid rgba(255,255,255,0.05);
         }
@@ -505,89 +505,58 @@
             background: #2A3942;
             border-radius: 20px;
             padding: 8px 14px;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             color: #8696A0;
         }
 
-        /* Trust Badges Grid */
-        .trust-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-            margin-top: 20px;
-        }
-
-        .trust-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-glass);
-            border-radius: var(--radius-md);
-            padding: 16px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            backdrop-filter: blur(12px);
-        }
-
-        .trust-card-icon { font-size: 1.5rem; flex-shrink: 0; }
-        .trust-card-text strong { display: block; color: var(--text-title); font-size: 0.88rem; }
-        .trust-card-text span { font-size: 0.78rem; color: var(--text-body); }
-
         /* Section Layouts */
-        .section-padding { padding: 100px 0; }
-        .section-header { text-align: center; max-width: 780px; margin: 0 auto 60px; }
-        .section-header h2 { font-size: 2.6rem; font-weight: 700; margin-bottom: 16px; }
-        .section-header p { font-size: 1.1rem; color: var(--text-body); }
+        .section-padding { padding: 90px 0; }
+        .section-header { text-align: center; max-width: 760px; margin: 0 auto 54px; }
+        .section-header h2 { font-size: 2.5rem; font-weight: 700; margin-bottom: 14px; }
+        .section-header p { font-size: 1.05rem; color: var(--text-body); }
 
-        /* Ecosystem Showcase (IA + Dashboard Split) */
+        /* Ecosystem Showcase */
         .ecosystem-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 32px;
-            align-items: center;
+            gap: 28px;
         }
 
         .eco-card {
             background: linear-gradient(145deg, rgba(14, 22, 42, 0.85), rgba(8, 14, 28, 0.95));
             border: 1px solid var(--border-glass);
             border-radius: var(--radius-xl);
-            padding: 36px;
+            padding: 34px;
             backdrop-filter: blur(16px);
-            transition: border-color 0.3s;
         }
 
-        .eco-card:hover { border-color: var(--border-highlight); }
         .eco-card-tag {
             display: inline-block;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 700;
             color: var(--accent-cyan);
             background: rgba(0, 242, 254, 0.08);
-            padding: 4px 14px;
+            padding: 4px 12px;
             border-radius: 50px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
         }
-        .eco-card h3 { font-size: 1.5rem; margin-bottom: 12px; }
-        .eco-card p { font-size: 0.98rem; color: var(--text-body); margin-bottom: 20px; }
+        .eco-card h3 { font-size: 1.45rem; margin-bottom: 10px; }
+        .eco-card p { font-size: 0.95rem; color: var(--text-body); margin-bottom: 18px; }
 
-        /* Comparison Grid (Before / After) */
+        .comp-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+        .comp-list li { display: flex; gap: 10px; font-size: 0.94rem; }
+
+        /* Comparison Grid */
         .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         .comp-card {
             background: var(--bg-card);
             border-radius: var(--radius-xl);
-            padding: 36px;
+            padding: 34px;
             border: 1px solid var(--border-glass);
-            backdrop-filter: blur(12px);
         }
         .comp-card.before { border-left: 4px solid #EF4444; }
-        .comp-card.after {
-            border-left: 4px solid var(--wa-green);
-            background: rgba(16, 32, 48, 0.85);
-            box-shadow: 0 0 30px rgba(37, 211, 102, 0.08);
-        }
-        .comp-card h3 { font-size: 1.4rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
-        .comp-list { list-style: none; display: flex; flex-direction: column; gap: 16px; }
-        .comp-list li { display: flex; gap: 12px; font-size: 0.98rem; }
-        .comp-list li span.icon { font-size: 1.1rem; flex-shrink: 0; }
+        .comp-card.after { border-left: 4px solid var(--wa-green); background: rgba(16, 32, 48, 0.85); }
+        .comp-card h3 { font-size: 1.35rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
 
         /* Steps Grid */
         .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
@@ -595,13 +564,11 @@
             background: var(--bg-card);
             border: 1px solid var(--border-glass);
             border-radius: var(--radius-xl);
-            padding: 36px 28px;
-            transition: transform 0.3s;
+            padding: 32px 24px;
         }
-        .step-card:hover { transform: translateY(-6px); border-color: var(--border-highlight); }
         .step-number {
-            width: 48px;
-            height: 48px;
+            width: 44px;
+            height: 44px;
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
             color: #000;
             font-weight: 800;
@@ -609,53 +576,45 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
-            margin-bottom: 24px;
+            font-size: 1.15rem;
+            margin-bottom: 20px;
         }
-        .step-card h3 { font-size: 1.25rem; margin-bottom: 12px; }
 
         /* ROI Calculator Component */
         .calculator-card {
             background: linear-gradient(145deg, rgba(16, 24, 48, 0.9), rgba(10, 16, 32, 0.95));
             border: 1px solid var(--border-highlight);
             border-radius: var(--radius-xl);
-            padding: 48px;
-            box-shadow: var(--shadow-glow);
+            padding: 44px;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 48px;
+            gap: 44px;
             align-items: center;
         }
 
-        .calc-inputs { display: flex; flex-direction: column; gap: 28px; }
-        .input-group label { display: flex; justify-content: space-between; color: var(--text-title); font-weight: 600; margin-bottom: 10px; font-size: 0.95rem; }
+        .calc-inputs { display: flex; flex-direction: column; gap: 24px; }
+        .input-group label { display: flex; justify-content: space-between; color: var(--text-title); font-weight: 600; margin-bottom: 8px; font-size: 0.92rem; }
         .input-group label span.val { color: var(--accent-cyan); font-weight: 700; }
         .input-range { width: 100%; height: 8px; border-radius: 4px; background: #1E293B; outline: none; accent-color: var(--accent-cyan); cursor: pointer; }
-        .calc-results { background: rgba(8, 13, 26, 0.85); border-radius: var(--radius-lg); padding: 32px; border: 1px solid var(--border-glass); display: flex; flex-direction: column; gap: 24px; }
-        .result-box { padding-bottom: 16px; border-bottom: 1px solid var(--border-glass); }
+        .calc-results { background: rgba(8, 13, 26, 0.85); border-radius: var(--radius-lg); padding: 28px; border: 1px solid var(--border-glass); display: flex; flex-direction: column; gap: 20px; }
+        .result-box { padding-bottom: 14px; border-bottom: 1px solid var(--border-glass); }
         .result-box:last-child { border-bottom: none; padding-bottom: 0; }
-        .result-box span.title { font-size: 0.85rem; color: var(--text-body); display: block; margin-bottom: 4px; }
-        .result-box span.number { font-size: 2rem; font-weight: 800; font-family: 'Outfit', sans-serif; }
+        .result-box span.title { font-size: 0.82rem; color: var(--text-body); display: block; margin-bottom: 4px; }
+        .result-box span.number { font-size: 1.85rem; font-weight: 800; font-family: 'Outfit', sans-serif; }
         .result-box.danger span.number { color: #EF4444; }
         .result-box.success span.number { color: var(--wa-green); }
         .result-box.roi span.number { color: var(--accent-cyan); }
 
         .roi-callout-box {
-            margin-top: 32px;
+            margin-top: 28px;
             background: rgba(0, 242, 254, 0.06);
             border: 1px solid var(--border-highlight);
             border-radius: var(--radius-lg);
-            padding: 20px 28px;
+            padding: 18px 24px;
             display: flex;
             align-items: center;
-            gap: 16px;
-            max-width: 1000px;
-            margin-left: auto;
-            margin-right: auto;
+            gap: 14px;
         }
-
-        .roi-callout-box .callout-icon { font-size: 1.8rem; flex-shrink: 0; }
-        .roi-callout-box p { font-size: 1.05rem; color: var(--text-title); line-height: 1.5; }
 
         /* Testimonials Component */
         .testimonials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
@@ -663,28 +622,23 @@
             background: var(--bg-card);
             border: 1px solid var(--border-glass);
             border-radius: var(--radius-xl);
-            padding: 32px 28px;
+            padding: 28px 24px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            backdrop-filter: blur(10px);
-            transition: transform 0.3s, border-color 0.3s;
         }
-        .testimonial-card:hover { transform: translateY(-4px); border-color: var(--border-highlight); }
         .testimonial-badge {
             display: inline-block;
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             font-weight: 700;
             color: var(--accent-cyan);
             background: rgba(0, 242, 254, 0.08);
             padding: 4px 12px;
             border-radius: 50px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             align-self: flex-start;
         }
-        .testimonial-quote { font-size: 0.98rem; color: var(--text-light); line-height: 1.6; margin-bottom: 24px; font-style: italic; }
-        .testimonial-author strong { display: block; color: var(--text-title); font-size: 1rem; }
-        .testimonial-author span { font-size: 0.85rem; color: var(--text-body); }
+        .testimonial-quote { font-size: 0.92rem; color: var(--text-light); line-height: 1.6; margin-bottom: 20px; font-style: italic; }
 
         /* Pricing Cards */
         .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: stretch; }
@@ -692,68 +646,116 @@
             background: var(--bg-card);
             border: 1px solid var(--border-glass);
             border-radius: var(--radius-xl);
-            padding: 40px 32px;
+            padding: 36px 28px;
             display: flex;
             flex-direction: column;
             position: relative;
-            backdrop-filter: blur(12px);
         }
         .price-card.popular {
             border-color: var(--accent-cyan);
             background: linear-gradient(145deg, rgba(20, 32, 60, 0.9), rgba(12, 20, 40, 0.95));
             box-shadow: var(--shadow-glow);
-            transform: scale(1.03);
         }
         .badge-popular {
             position: absolute;
-            top: -14px;
+            top: -13px;
             left: 50%;
             transform: translateX(-50%);
             background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
             color: #000;
             font-weight: 700;
-            font-size: 0.78rem;
-            padding: 4px 16px;
+            font-size: 0.75rem;
+            padding: 4px 14px;
             border-radius: 50px;
             text-transform: uppercase;
         }
-        .price-card h3 { font-size: 1.5rem; margin-bottom: 8px; }
-        .price-card .subtitle { font-size: 0.88rem; color: var(--text-body); margin-bottom: 24px; }
-        .price-value { font-size: 2.8rem; font-weight: 800; color: var(--text-title); font-family: 'Outfit', sans-serif; margin-bottom: 4px; }
-        .price-value span { font-size: 1rem; font-weight: 400; color: var(--text-body); }
-        .setup-fee { font-size: 0.85rem; color: var(--accent-cyan); margin-bottom: 28px; font-weight: 600; }
-        .price-features { list-style: none; display: flex; flex-direction: column; gap: 14px; margin-bottom: 36px; flex-grow: 1; }
-        .price-features li { display: flex; align-items: center; gap: 10px; font-size: 0.92rem; }
-        .price-features li::before { content: "✓"; color: var(--wa-green); font-weight: 800; }
 
-        /* Guarantee Box */
         .guarantee-box {
-            margin-top: 48px;
+            margin-top: 40px;
             background: linear-gradient(135deg, rgba(37, 211, 102, 0.08), rgba(0, 168, 132, 0.04));
-            border: 1px solid rgba(37, 211, 102, 0.35);
+            border: 1px solid rgba(37, 211, 102, 0.3);
             border-radius: var(--radius-xl);
-            padding: 32px 40px;
+            padding: 28px 34px;
             display: flex;
             align-items: center;
-            gap: 24px;
-            max-width: 960px;
-            margin-left: auto;
-            margin-right: auto;
+            gap: 20px;
         }
-        .guarantee-icon { font-size: 3rem; flex-shrink: 0; }
-        .guarantee-text h3 { font-size: 1.3rem; color: var(--wa-green); margin-bottom: 8px; }
-        .guarantee-text p { font-size: 0.98rem; color: var(--text-light); line-height: 1.5; }
 
         /* FAQ Accordion */
-        .faq-accordion { max-width: 840px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+        .faq-accordion { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
         .faq-item { background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--radius-lg); overflow: hidden; }
-        .faq-question { padding: 24px; font-size: 1.1rem; font-weight: 600; color: var(--text-title); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
-        .faq-answer { padding: 0 24px 24px 24px; color: var(--text-body); font-size: 0.98rem; display: none; }
+        .faq-question { padding: 22px; font-size: 1.05rem; font-weight: 600; color: var(--text-title); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .faq-answer { padding: 0 22px 22px 22px; color: var(--text-body); font-size: 0.95rem; display: none; }
         .faq-item.active .faq-answer { display: block; }
         .faq-item.active .faq-icon { transform: rotate(45deg); color: var(--accent-cyan); }
-        .faq-icon { font-size: 1.4rem; transition: transform 0.3s; }
+        .faq-icon { font-size: 1.3rem; transition: transform 0.3s; }
 
-        /* WhatsApp Live Simulator Modal */
+        /* 🏢 FOOTER B2B ELEGANTE (FIXED GRID LAYOUT) */
+        footer {
+            background: #030712;
+            border-top: 1px solid var(--border-glass);
+            padding: 80px 0 32px;
+            margin-top: 80px;
+            position: relative;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1.2fr;
+            gap: 48px;
+            margin-bottom: 60px;
+        }
+
+        .footer-brand p {
+            font-size: 0.9rem;
+            color: var(--text-body);
+            margin-top: 16px;
+            line-height: 1.6;
+            max-width: 320px;
+        }
+
+        .footer-col h4 {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-title);
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: 0.02em;
+        }
+
+        .footer-col ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0;
+            margin: 0;
+        }
+
+        .footer-col ul li { margin: 0; padding: 0; }
+
+        .footer-col ul a {
+            color: var(--text-body);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 400;
+            transition: color 0.2s;
+        }
+
+        .footer-col ul a:hover {
+            color: var(--accent-cyan);
+            text-decoration: underline;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--border-glass);
+            padding-top: 28px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #64748B;
+        }
+
+        /* 📱 LIVE WHATSAPP SMARTPHONE SIMULATOR MODAL */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -761,7 +763,7 @@
             width: 100%;
             height: 100%;
             background: rgba(4, 8, 18, 0.88);
-            backdrop-filter: blur(12px);
+            backdrop-filter: blur(14px);
             z-index: 2000;
             display: none;
             align-items: center;
@@ -770,61 +772,85 @@
         }
         .modal-overlay.active { display: flex; }
 
+        .modal-phone-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Floating Close Button outside phone frame so it NEVER covers status bar */
+        .phone-modal-close {
+            position: absolute;
+            top: -18px;
+            right: -18px;
+            z-index: 300;
+            background: #1E293B;
+            border: 2px solid var(--accent-cyan);
+            color: #FFFFFF;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+            transition: transform 0.2s;
+        }
+
+        .phone-modal-close:hover {
+            transform: scale(1.1);
+            background: var(--accent-cyan);
+            color: #000;
+        }
+
         .btn-text-mobile { display: none; }
         .btn-text-desktop { display: inline; }
 
         /* Responsive Breakpoints */
         @media (max-width: 1180px) {
             .hero-grid { grid-template-columns: 1fr; gap: 40px; text-align: center; }
-            .hero-content { text-align: center; }
-            .hero h1 { font-size: 2.8rem; }
+            .hero h1 { font-size: 2.5rem; }
             .hero-ctas { justify-content: center; }
+            .trust-grid { grid-template-columns: repeat(3, 1fr); }
             .comparison-grid, .steps-grid, .pricing-grid, .testimonials-grid, .ecosystem-grid { grid-template-columns: 1fr; }
-            .calculator-card { grid-template-columns: 1fr; gap: 32px; }
+            .calculator-card { grid-template-columns: 1fr; gap: 28px; }
+            .footer-grid { grid-template-columns: 1fr 1fr; gap: 36px; }
             .mobile-menu-toggle { display: block; }
             .nav-links {
                 display: none;
                 flex-direction: column;
                 position: absolute;
-                top: 84px;
+                top: 80px;
                 left: 0;
                 width: 100%;
                 background: rgba(6, 11, 20, 0.96);
                 backdrop-filter: blur(20px);
                 padding: 24px;
                 border-bottom: 1px solid var(--border-glass);
-                gap: 20px;
+                gap: 18px;
                 align-items: center;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
             }
             .nav-links.active { display: flex; }
-            .price-card.popular { transform: none; }
         }
 
         @media (max-width: 768px) {
             .container { padding: 0 16px; }
-            .logo { font-size: 1.15rem; gap: 8px; order: 1; }
+            .logo { font-size: 1.15rem; }
             .logo-icon { width: 34px; height: 34px; font-size: 0.95rem; }
-            .logo-tag { display: none; }
-            #btn-header-demo {
-                order: 2;
-                padding: 6px 12px;
-                font-size: 0.8rem;
-                height: 38px;
-                margin-left: auto;
-                margin-right: 8px;
-                border-radius: 8px;
-            }
+            .trust-grid { grid-template-columns: 1fr; }
+            .footer-grid { grid-template-columns: 1fr; gap: 28px; }
+            #btn-header-demo { height: 38px; padding: 6px 12px; font-size: 0.8rem; }
             .btn-text-desktop { display: none; }
             .btn-text-mobile { display: inline; font-weight: 700; }
-            .mobile-menu-toggle { order: 3; padding: 4px 10px; font-size: 1.2rem; height: 38px; }
         }
 
         @media (max-width: 640px) {
-            .hero h1 { font-size: 2.2rem; }
-            .hero p { font-size: 1rem; }
-            .phone-container { width: 310px; height: 620px; border-radius: 38px; }
-            .guarantee-box { flex-direction: column; text-align: center; padding: 24px; }
+            .hero h1 { font-size: 2.1rem; }
+            .phone-container { width: 310px; height: 610px; border-radius: 38px; }
+            .guarantee-box { flex-direction: column; text-align: center; padding: 22px; }
         }
     </style>
 </head>
@@ -835,7 +861,7 @@
         <div class="container nav-wrapper">
             <a href="#top" class="logo">
                 <div class="logo-icon">🩺</div>
-                <span>ClinicaBot <span class="logo-tag text-gradient">SaaS Pro</span></span>
+                <span>ClinicaBot <span class="text-gradient">SaaS Pro</span></span>
             </a>
             
             <button class="mobile-menu-toggle" id="mobile-menu-toggle" data-action="toggle-mobile-menu" aria-label="Abrir Menu" aria-expanded="false">
@@ -845,7 +871,6 @@
             <ul class="nav-links" id="nav-links">
                 <li><a href="#ecossistema" data-action="nav-link">O Sistema</a></li>
                 <li><a href="#como-funciona" data-action="nav-link">Como Funciona</a></li>
-                <li><a href="#seguranca" data-action="nav-link">Segurança & LGPD</a></li>
                 <li><a href="#calculadora" data-action="nav-link">Calculadora de ROI</a></li>
                 <li><a href="#planos" data-action="nav-link">Planos</a></li>
                 <li><a href="#faq" data-action="nav-link">FAQ</a></li>
@@ -858,7 +883,7 @@
         </div>
     </header>
 
-    <!-- Hero Section (Split Layout: Copy + Real 3D Phone Simulator) -->
+    <!-- Hero Section (Clean & Balanced Split Layout) -->
     <section class="hero">
         <div class="container">
             <div class="hero-grid">
@@ -868,9 +893,9 @@
                         <span>🟢 IA Nativa com Meta WhatsApp Cloud API & Resiliência 24/7</span>
                     </div>
 
-                    <h1>Acabe com o Prejuízo das Faltas na Sua Clínica com o <span class="text-gradient">Agendamento Inteligente 24/7</span> no WhatsApp</h1>
+                    <h1>Reduza até 75% das faltas na sua clínica com o <span class="text-gradient">Agendamento 24/7</span> no WhatsApp</h1>
 
-                    <p>A assistente IA "Ana" atende seus pacientes em segundos, confirma consultas no fuso correto de Brasília, permite remarcações autônomas em 1 clique e recupera até <strong>R$ 15.000/mês</strong> em faltas — sem sobrecarregar sua recepção.</p>
+                    <p>A assistente IA "Ana" atende seus pacientes em segundos, confirma consultas no fuso de Brasília, remarca horários autonomamente em 1 clique e recupera o faturamento da sua agenda.</p>
 
                     <div class="hero-ctas">
                         <button class="btn btn-wa" id="btn-hero-demo" data-action="open-simulator">
@@ -886,24 +911,24 @@
                         <div class="trust-card">
                             <span class="trust-card-icon">🔒</span>
                             <div class="trust-card-text">
-                                <strong>Criptografia AES-256-GCM</strong>
-                                <span>Dados dos pacientes 100% protegidos</span>
+                                <strong>Criptografia AES-256</strong>
+                                <span>Dados 100% protegidos</span>
                             </div>
                         </div>
 
                         <div class="trust-card">
                             <span class="trust-card-icon">⚡</span>
                             <div class="trust-card-text">
-                                <strong>Meta API Oficial</strong>
-                                <span>Botões interativos sem risco de ban</span>
+                                <strong>Meta Cloud API</strong>
+                                <span>Botões interativos oficiais</span>
                             </div>
                         </div>
 
                         <div class="trust-card">
                             <span class="trust-card-icon">🕒</span>
                             <div class="trust-card-text">
-                                <strong>Precisão Fuso BRT</strong>
-                                <span>Horário oficial (America/Sao_Paulo)</span>
+                                <strong>Fuso Horário BRT</strong>
+                                <span>Precisão Brasília 24h</span>
                             </div>
                         </div>
                     </div>
@@ -912,7 +937,7 @@
                 <!-- Right Column: Ultra-Realistic 3D iPhone Simulator -->
                 <div class="phone-mockup-wrapper">
                     <div class="phone-container">
-                        <!-- iPhone Top Notch -->
+                        <!-- iPhone Dynamic Island -->
                         <div class="phone-notch">
                             <div class="phone-notch-camera"></div>
                             <div class="phone-notch-speaker"></div>
@@ -932,7 +957,7 @@
                         <div class="wa-app-screen">
                             <div class="wa-header">
                                 <div class="wa-profile">
-                                    <div class="wa-avatar">Ana</div>
+                                    <div class="wa-avatar">👩‍⚕️</div>
                                     <div class="wa-info">
                                         <strong>Ana — Dra. Odonto Riso 😊</strong>
                                         <span><span class="status-dot"></span> online</span>
@@ -941,12 +966,10 @@
                                 <div class="wa-header-actions">
                                     <i class="fa-solid fa-video"></i>
                                     <i class="fa-solid fa-phone"></i>
-                                    <i class="fa-solid fa-ellipsis-vertical"></i>
                                 </div>
                             </div>
 
                             <div class="wa-body" id="hero-wa-chat-body">
-
                                 <div class="wa-msg received">
                                     Olá! Sou a Ana, assistente virtual da clínica. 😊<br><br>
                                     Como posso te ajudar hoje?
@@ -955,14 +978,13 @@
                                         <button class="wa-btn-reply" data-action="sim-reply-hero" data-reply-hero="ConfirmarLembrete">🔔 TESTAR LEMBRETE / CONFIRMAÇÃO</button>
                                         <button class="wa-btn-reply" data-action="sim-reply-hero" data-reply-hero="InfoLocal">📍 HORÁRIOS & ENDEREÇO</button>
                                     </div>
-
                                     <span class="time">09:41</span>
                                 </div>
                             </div>
 
                             <div class="wa-footer-input">
                                 <i class="fa-regular fa-face-smile"></i>
-                                <div class="wa-fake-input">Toque nos botões acima para interagir...</div>
+                                <div class="wa-fake-input">Toque nos botões acima...</div>
                                 <i class="fa-solid fa-paperclip"></i>
                                 <i class="fa-solid fa-microphone"></i>
                             </div>
@@ -978,15 +1000,14 @@
         <div class="container">
             <div class="section-header">
                 <h2>O Ecossistema Completo da Sua Clínica</h2>
-                <p>Muito mais que um robô no WhatsApp: uma plataforma integrada entre o paciente e a sua recepção</p>
+                <p>Uma solução integrada para o paciente no celular e a recepção no computador</p>
             </div>
 
             <div class="ecosystem-grid">
-                <!-- Card 1: No Celular do Paciente -->
                 <div class="eco-card">
                     <span class="eco-card-tag">📱 No WhatsApp do Paciente</span>
                     <h3>Atendimento Humanizado 24 Horas</h3>
-                    <p>Seu paciente agenda, confirma ou remarca consultas direto pelo WhatsApp no horário de Brasília, com mensagens amigáveis e botões oficiais em 1 clique — sem baixar aplicativos.</p>
+                    <p>Seu paciente agenda, confirma ou remarca consultas direto pelo WhatsApp no horário de Brasília, com mensagens amigáveis e botões oficiais em 1 clique — sem baixar nada.</p>
                     <ul class="comp-list">
                         <li><span class="icon">🟢</span> Confirmação dupla inteligente (24h e 2h antes)</li>
                         <li><span class="icon">🟢</span> Remarcação autônoma sem fila de espera</li>
@@ -994,14 +1015,13 @@
                     </ul>
                 </div>
 
-                <!-- Card 2: No Computador da Secretária -->
                 <div class="eco-card">
                     <span class="eco-card-tag">💻 No Computador da Secretária</span>
                     <h3>Dashboard Pro com Controle Total</h3>
-                    <p>Sua secretária visualiza a agenda em tempo real, gerencia o corpo clínico, acessa o CRM de reengajamento de faltosos e assume a conversa instantaneamente com 1 clique (Handoff).</p>
+                    <p>Sua secretária visualiza a agenda em tempo real, gerencia o corpo clínico, acessa o CRM de reengajamento de faltosos e assume a conversa instantaneamente com 1 clique.</p>
                     <ul class="comp-list">
-                        <li><span class="icon">🟢</span> Painel Glassmorphism em tempo real com Alerta Sonoro</li>
-                        <li><span class="icon">🟢</span> Transbordo Humano com Resumo Executivo da IA</li>
+                        <li><span class="icon">🟢</span> Painel Glassmorphism com Alerta Sonoro</li>
+                        <li><span class="icon">🟢</span> Transbordo Humano com Resumo Executivo</li>
                         <li><span class="icon">🟢</span> Sigilo total sob LGPD com <code>cpfMasked</code></li>
                     </ul>
                 </div>
@@ -1013,122 +1033,76 @@
     <section class="section-padding" id="absenteismo">
         <div class="container">
             <div class="section-header">
-                <h2>Quanto dinheiro sua clínica deixou na mesa no mês passado por causa de faltas?</h2>
-                <p>No Brasil, clínicas médicas, odontológicas e de estética sofrem com uma taxa média de absenteísmo de 20% a 35%. Cada horário vago representa médicos parados e insumos desperdiçados.</p>
+                <h2>O Prejuízo das Faltas na Sua Clínica</h2>
+                <p>No Brasil, clínicas médicas e odontológicas sofrem com absenteísmo médio de 20% a 35%. Cada horário vago representa médicos parados e insumos desperdiçados.</p>
             </div>
 
             <div class="comparison-grid">
                 <div class="comp-card before">
                     <h3>❌ Gestão Manual Tradicional</h3>
                     <ul class="comp-list">
-                        <li><span class="icon">🔴</span> <strong>30% de absenteísmo médio:</strong> Pacientes esquecem ou faltam sem avisar a recepção.</li>
-                        <li><span class="icon">🔴</span> <strong>Secretária estressada:</strong> Gasta de 2 a 3 horas diárias enviando mensagens manuais repetitivas.</li>
-                        <li><span class="icon">🔴</span> <strong>Horários vagos perdidos:</strong> Quando o paciente cancela em cima da hora, a vaga fica vazia.</li>
-                        <li><span class="icon">🔴</span> <strong>Falta de orientações prévias:</strong> Consulta cancelada na porta por falta de jejum ou preparo.</li>
-                        <li><span class="icon">🔴</span> <strong>Risco de multas da LGPD:</strong> Dados mantidos em planilhas ou WhatsApps pessoais desprotegidos.</li>
+                        <li><span class="icon">🔴</span> <strong>30% de absenteísmo médio:</strong> Pacientes esquecem ou faltam sem avisar.</li>
+                        <li><span class="icon">🔴</span> <strong>Secretária sobrecarregada:</strong> Gasta horas enviando mensagens manuais.</li>
+                        <li><span class="icon">🔴</span> <strong>Horários vagos perdidos:</strong> Cancelamentos de última hora deixam a agenda vazia.</li>
+                        <li><span class="icon">🔴</span> <strong>Risco de multas LGPD:</strong> Dados mantidos em planilhas desprotegidas.</li>
                     </ul>
                 </div>
 
                 <div class="comp-card after">
                     <h3>✅ Com ClinicaBot SaaS Pro</h3>
                     <ul class="comp-list">
-                        <li><span class="icon">🟢</span> <strong>Absenteísmo &lt; 8%:</strong> Lembretes duplos ativos 24h e 2h antes no fuso de Brasília.</li>
-                        <li><span class="icon">🟢</span> <strong>Recepção focada no acolhimento:</strong> Confirmações rodando no piloto automático 24/7.</li>
-                        <li><span class="icon">🟢</span> <strong>Remarcação autônoma em 1 clique:</strong> O paciente remarca sozinho e o horário vago é liberado na hora.</li>
-                        <li><span class="icon">🟢</span> <strong>Checklists automáticos de preparo:</strong> Envio automatizado de orientações no WhatsApp.</li>
-                        <li><span class="icon">🟢</span> <strong>Segurança de nível bancário:</strong> Criptografia AES-256-GCM, mascaramento de CPF (<code>cpfMasked</code>).</li>
+                        <li><span class="icon">🟢</span> <strong>Absenteísmo &lt; 8%:</strong> Lembretes duplos ativos 24h e 2h antes.</li>
+                        <li><span class="icon">🟢</span> <strong>Recepção focada no acolhimento:</strong> Confirmações rodando no piloto automático.</li>
+                        <li><span class="icon">🟢</span> <strong>Remarcação autônoma em 1 clique:</strong> Liberação imediata de horários vagos.</li>
+                        <li><span class="icon">🟢</span> <strong>Segurança de nível bancário:</strong> Criptografia AES-256 e mascaramento de CPF.</li>
                     </ul>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Section 3: O Triplo Motor de Eliminação do No-Show -->
+    <!-- Section 3: Como Funciona em 3 Passos -->
     <section class="section-padding" id="como-funciona" style="background: rgba(10, 16, 32, 0.4);">
         <div class="container">
             <div class="section-header">
-                <h2>O Triplo Motor de Eliminação do Absenteísmo</h2>
-                <p>Veja como o ClinicaBot resolve o problema das faltas em 3 passos automatizados</p>
+                <h2>Como Funciona em 3 Passos</h2>
+                <p>Veja como o ClinicaBot resolve o problema das faltas na prática</p>
             </div>
 
             <div class="steps-grid">
                 <div class="step-card">
                     <div class="step-number">01</div>
                     <h3>Lembrete Duplo (24h e 2h BRT)</h3>
-                    <p>O sistema consulta a agenda no fuso <code>America/Sao_Paulo</code> e envia lembretes interativos no WhatsApp do paciente com botões nativos <strong>[CONFIRMAR]</strong> ou <strong>[REMARCAR]</strong>.</p>
+                    <p>O sistema consulta a agenda no fuso <code>America/Sao_Paulo</code> e envia lembretes no WhatsApp com botões de <strong>[CONFIRMAR]</strong> ou <strong>[REMARCAR]</strong>.</p>
                 </div>
 
                 <div class="step-card">
                     <div class="step-number">02</div>
-                    <h3>Remarcação Autônoma em 1 Clique</h3>
-                    <p>Ao clicar em remarcar, a IA "Ana" apresenta os horários livres atualizados. O paciente escolhe a nova data e o horário antigo fica disponível na hora para encaixes.</p>
+                    <h3>Remarcação Autônoma</h3>
+                    <p>Ao remarcar, a IA "Ana" oferece horários vagos. O paciente escolhe o novo horário e o antigo fica liberado instantaneamente na agenda.</p>
                 </div>
 
                 <div class="step-card">
                     <div class="step-number">03</div>
-                    <h3>Checklists Pré-Procedimento</h3>
-                    <p>Envio automático de orientações médicas (jejum, exames prévios, documentos) para garantir que o paciente chegue 100% preparado para a consulta.</p>
+                    <h3>Checklists Pré-Consulta</h3>
+                    <p>Envio automático de orientações médicas (jejum, exames prévios) para garantir que o paciente chegue 100% preparado.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Section 5: Prova Técnica & LGPD -->
-    <section class="section-padding" id="seguranca" style="background: rgba(10, 16, 32, 0.6);">
-        <div class="container">
-            <div class="section-header">
-                <h2>Segurança de Nível Bancário e Conformidade LGPD</h2>
-                <p>Desenvolvido sob a premissa de Privacy by Design para sigilo médico e proteção irrestrita de dados</p>
-            </div>
-
-            <div class="trust-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
-                <div class="trust-card" style="padding: 24px;">
-                    <span class="trust-card-icon">🛡️</span>
-                    <div class="trust-card-text">
-                        <strong>Criptografia AES-256-GCM</strong>
-                        <span>CPFs e dados sensíveis criptografados na base Supabase PostgreSQL.</span>
-                    </div>
-                </div>
-
-                <div class="trust-card" style="padding: 24px;">
-                    <span class="trust-card-icon">🔒</span>
-                    <div class="trust-card-text">
-                        <strong>Mascaramento de CPF (cpfMasked)</strong>
-                        <span>Respostas do dashboard exibem estritamente ex: <code>123.***.***-45</code>.</span>
-                    </div>
-                </div>
-
-                <div class="trust-card" style="padding: 24px;">
-                    <span class="trust-card-icon">🔑</span>
-                    <div class="trust-card-text">
-                        <strong>Assinatura HMAC SHA-256</strong>
-                        <span>Webhook Meta autenticado criptograficamente (bloqueia requisições forjadas).</span>
-                    </div>
-                </div>
-
-                <div class="trust-card" style="padding: 24px;">
-                    <span class="trust-card-icon">⚡</span>
-                    <div class="trust-card-text">
-                        <strong>100 Concurrent Stress Tested</strong>
-                        <span>Suíte automatizada com 100% de aprovação (HTTP 200 OK) sob carga severa.</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Section 6: Calculadora de ROI Interativa -->
+    <!-- Section 4: Calculadora de ROI Interativa -->
     <section class="section-padding" id="calculadora">
         <div class="container">
             <div class="section-header">
-                <h2>Calculadora de ROI da sua Clínica</h2>
-                <p>Simule a receita que sua clínica está deixando de faturar e quanto recuperará todos os meses.</p>
+                <h2>Calculadora de ROI da Clínica</h2>
+                <p>Simule quanto sua clínica está deixando de faturar e quanto recuperará todos os meses.</p>
             </div>
 
             <div class="calculator-card">
                 <div class="calc-inputs">
                     <div class="input-group">
-                        <label>Consultas / Procedimentos por Mês: <span class="val" id="lbl-consultas">200</span></label>
+                        <label>Consultas / Mês: <span class="val" id="lbl-consultas">200</span></label>
                         <input type="range" class="input-range" id="rng-consultas" min="50" max="1500" value="200" step="10">
                     </div>
 
@@ -1138,162 +1112,118 @@
                     </div>
 
                     <div class="input-group">
-                        <label>Taxa Atual Estimada de Faltas (%): <span class="val" id="lbl-faltas">25%</span></label>
+                        <label>Taxa de Faltas (%): <span class="val" id="lbl-faltas">25%</span></label>
                         <input type="range" class="input-range" id="rng-faltas" min="5" max="40" value="25" step="1">
                     </div>
                 </div>
 
                 <div class="calc-results">
                     <div class="result-box danger">
-                        <span class="title">🔴 Prejuízo Mensal Atual por Absenteísmo</span>
+                        <span class="title">🔴 Prejuízo Mensal Atual</span>
                         <span class="number" id="res-prejuizo">R$ 12.500,00</span>
                     </div>
 
                     <div class="result-box success">
-                        <span class="title">🟢 Faturamento Recuperado com ClinicaBot (75% eficácia)</span>
+                        <span class="title">🟢 Receita Recuperada com ClinicaBot</span>
                         <span class="number" id="res-recuperado">R$ 9.375,00</span>
                     </div>
 
                     <div class="result-box roi">
-                        <span class="title">🚀 Retorno sobre o Investimento (Plano Pro R$ 397/mês)</span>
+                        <span class="title">🚀 Retorno sobre o Investimento</span>
                         <span class="number" id="res-roi">23.6x ROI</span>
                     </div>
                 </div>
             </div>
 
-            <!-- ROI Closing Callout -->
             <div class="roi-callout-box">
-                <span class="callout-icon">💡</span>
-                <p><strong>"Se o ClinicaBot recuperar APENAS 2 CONSULTAS no mês todo, o sistema JÁ SE PAGOU... Tudo o que vier além disso é lucro líquido direto no caixa da sua clínica."</strong></p>
+                <span style="font-size: 1.6rem;">💡</span>
+                <p style="color: var(--text-title); font-size: 0.98rem;"><strong>"Se o ClinicaBot recuperar APENAS 2 CONSULTAS no mês todo, o sistema JÁ SE PAGOU... Tudo o que vier além disso é lucro líquido direto no seu caixa."</strong></p>
             </div>
         </div>
     </section>
 
-    <!-- Section 7: Depoimentos & Casos de Sucesso -->
-    <section class="section-padding" id="depoimentos" style="background: rgba(8, 13, 26, 0.6);">
-        <div class="container">
-            <div class="section-header">
-                <h2>O que dizem os Médicos e Gestores de Clínicas</h2>
-                <p>Histórias reais de clínicas médicas, odontológicas e estéticas que erradicaram o absenteísmo</p>
-            </div>
-
-            <div class="testimonials-grid">
-                <!-- Testimonial 1 -->
-                <div class="testimonial-card">
-                    <div class="testimonial-badge">🏥 Clínica Médica</div>
-                    <p class="testimonial-quote">"Tínhamos mais de 30 faltas por semana na infectologia e ginecologia. A secretária passava a manhã toda no telefone. Com o ClinicaBot, nossa taxa de presença subiu para 94% e os dados dos nossos pacientes estão totalmente protegidos sob a LGPD."</p>
-                    <div class="testimonial-author">
-                        <strong>Dr. Eduardo Ramos</strong>
-                        <span>Diretor Técnico de Centro Médico (SP)</span>
-                    </div>
-                </div>
-
-                <!-- Testimonial 2 -->
-                <div class="testimonial-card">
-                    <div class="testimonial-badge">🦷 Clínica Odontológica</div>
-                    <p class="testimonial-quote">"Hora-cadeira vaga em odontologia é prejuízo puro. O recurso de remarcação autônoma em 1 clique salvou nosso faturamento. Quando um paciente desmarca à noite, a IA já oferece a vaga pra lista de espera!"</p>
-                    <div class="testimonial-author">
-                        <strong>Dra. Vanessa Camargo</strong>
-                        <span>Cirurgiã-Dentista Proprietária (PR)</span>
-                    </div>
-                </div>
-
-                <!-- Testimonial 3 -->
-                <div class="testimonial-card">
-                    <div class="testimonial-badge">💄 Estética & Dermatologia</div>
-                    <p class="testimonial-quote">"Perdíamos muitos procedimentos porque as clientes esqueciam de aplicar o anestésico antes de sair de casa. O checklist automático no WhatsApp resolveu isso 100%. Atendimento elegante e muito humanizado."</p>
-                    <div class="testimonial-author">
-                        <strong>Dra. Juliana Mendes</strong>
-                        <span>Biomédica Esteta (RJ)</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Section 8: Planos de Assinatura -->
+    <!-- Section 5: Planos de Assinatura -->
     <section class="section-padding" id="planos" style="background: rgba(10, 16, 32, 0.5);">
         <div class="container">
             <div class="section-header">
-                <h2>Planos Transparentes sem Letras Miúdas</h2>
-                <p>Escolha o plano ideal para a escala de atendimento da sua clínica</p>
+                <h2>Planos Transparentes</h2>
+                <p>Escolha a escala ideal para o atendimento da sua clínica</p>
             </div>
 
             <div class="pricing-grid">
                 <!-- Starter -->
                 <div class="price-card">
-                    <h3>Starter</h3>
-                    <div class="subtitle">Ideal para Consultórios Solo (1 Agenda)</div>
-                    <div class="price-value">R$ 197 <span>/mês</span></div>
-                    <div class="setup-fee">+ Setup inicial de R$ 297</div>
+                    <h3 style="font-size: 1.4rem; margin-bottom: 6px;">Starter</h3>
+                    <div style="font-size: 0.85rem; color: var(--text-body); margin-bottom: 20px;">Ideal para Consultório Solo (1 Agenda)</div>
+                    <div style="font-size: 2.6rem; font-weight: 800; color: var(--text-title); font-family: 'Outfit'; margin-bottom: 4px;">R$ 197 <span style="font-size: 0.95rem; font-weight: 400;">/mês</span></div>
+                    <div style="font-size: 0.82rem; color: var(--accent-cyan); margin-bottom: 24px; font-weight: 600;">+ Setup inicial R$ 297</div>
 
-                    <ul class="price-features">
-                        <li>1 Agenda ativa / profissional</li>
-                        <li>IA "Ana" 24/7 no WhatsApp</li>
-                        <li>Lembretes automáticos 24h e 2h BRT</li>
-                        <li>Dashboard com <code>cpfMasked</code></li>
-                        <li>Criptografia AES-256-GCM</li>
+                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; flex-grow: 1; font-size: 0.9rem;">
+                        <li>✓ 1 Agenda ativa / profissional</li>
+                        <li>✓ IA "Ana" 24/7 no WhatsApp</li>
+                        <li>✓ Lembretes duplos 24h e 2h BRT</li>
+                        <li>✓ Dashboard com <code>cpfMasked</code></li>
+                        <li>✓ Criptografia AES-256-GCM</li>
                     </ul>
 
-                    <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20assinar%20o%20Plano%20Starter%20do%20ClinicaBot%20SaaS%20Pro%20(R%24%20197%2Fm%C3%AAs)." target="_blank" rel="noopener noreferrer" class="btn btn-outline" style="text-decoration: none;">Começar com Starter</a>
+                    <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20assinar%20o%20Plano%20Starter%20do%20ClinicaBot%20SaaS%20Pro%20(R%24%20197%2Fm%C3%AAs)." target="_blank" rel="noopener noreferrer" class="btn btn-outline">Começar com Starter</a>
                 </div>
 
                 <!-- Pro (Popular) -->
                 <div class="price-card popular">
                     <div class="badge-popular">Mais Vendido</div>
-                    <h3>Pro</h3>
-                    <div class="subtitle">Para Clínicas em Expansão (até 5 Médicos)</div>
-                    <div class="price-value">R$ 397 <span>/mês</span></div>
-                    <div class="setup-fee">+ Setup inicial de R$ 397</div>
+                    <h3 style="font-size: 1.4rem; margin-bottom: 6px;">Pro</h3>
+                    <div style="font-size: 0.85rem; color: var(--text-body); margin-bottom: 20px;">Para Clínicas em Expansão (até 5 Médicos)</div>
+                    <div style="font-size: 2.6rem; font-weight: 800; color: var(--text-title); font-family: 'Outfit'; margin-bottom: 4px;">R$ 397 <span style="font-size: 0.95rem; font-weight: 400;">/mês</span></div>
+                    <div style="font-size: 0.82rem; color: var(--accent-cyan); margin-bottom: 24px; font-weight: 600;">+ Setup inicial R$ 397</div>
 
-                    <ul class="price-features">
-                        <li>Até 5 Agendas / Profissionais</li>
-                        <li>Remarcação Autônoma em 1 Clique</li>
-                        <li>Checklists de Preparo de Exames</li>
-                        <li>Multi-atendimento de recepção</li>
-                        <li>Relatórios de Confirmação em Tempo Real</li>
-                        <li>Suporte Prioritário no WhatsApp</li>
+                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; flex-grow: 1; font-size: 0.9rem;">
+                        <li>✓ Até 5 Agendas / Profissionais</li>
+                        <li>✓ Remarcação Autônoma em 1 Clique</li>
+                        <li>✓ Checklists de Preparo de Exames</li>
+                        <li>✓ Multi-atendimento de recepção</li>
+                        <li>✓ Relatórios em Tempo Real</li>
+                        <li>✓ Suporte Prioritário no WhatsApp</li>
                     </ul>
 
-                    <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20assinar%20o%20Plano%20Pro%20do%20ClinicaBot%20SaaS%20Pro%20(R%24%20397%2Fm%C3%AAs)." target="_blank" rel="noopener noreferrer" class="btn btn-wa" style="text-decoration: none;">Assinar Plano Pro</a>
+                    <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20assinar%20o%20Plano%20Pro%20do%20ClinicaBot%20SaaS%20Pro%20(R%24%20397%2Fm%C3%AAs)." target="_blank" rel="noopener noreferrer" class="btn btn-wa">Assinar Plano Pro</a>
                 </div>
 
                 <!-- Enterprise -->
                 <div class="price-card">
-                    <h3>Enterprise</h3>
-                    <div class="subtitle">Redes & Policlínicas Multicampus</div>
-                    <div class="price-value">R$ 697 <span>/mês</span></div>
-                    <div class="setup-fee">+ Setup inicial de R$ 497</div>
+                    <h3 style="font-size: 1.4rem; margin-bottom: 6px;">Enterprise</h3>
+                    <div style="font-size: 0.85rem; color: var(--text-body); margin-bottom: 20px;">Redes & Policlínicas Multicampus</div>
+                    <div style="font-size: 2.6rem; font-weight: 800; color: var(--text-title); font-family: 'Outfit'; margin-bottom: 4px;">R$ 697 <span style="font-size: 0.95rem; font-weight: 400;">/mês</span></div>
+                    <div style="font-size: 0.82rem; color: var(--accent-cyan); margin-bottom: 24px; font-weight: 600;">+ Setup inicial R$ 497</div>
 
-                    <ul class="price-features">
-                        <li>Agendas e unidades ilimitadas</li>
-                        <li>Múltiplos números de WhatsApp Meta API</li>
-                        <li>Isolamento de banco Multi-Tenant RLS</li>
-                        <li>Gerente de Conta VIP dedicado</li>
-                        <li>SLA de 99.9% de disponibilidade auditada</li>
+                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; flex-grow: 1; font-size: 0.9rem;">
+                        <li>✓ Agendas e unidades ilimitadas</li>
+                        <li>✓ Múltiplos números Meta API</li>
+                        <li>✓ Isolamento Multi-Tenant RLS</li>
+                        <li>✓ Gerente de Conta VIP dedicado</li>
+                        <li>✓ SLA de 99.9% auditado</li>
                     </ul>
 
-                    <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20falar%20com%20um%20consultor%20sobre%20o%20Plano%20Enterprise%20do%20ClinicaBot%20SaaS%20Pro." target="_blank" rel="noopener noreferrer" class="btn btn-outline" style="text-decoration: none;">Falar com Consultor</a>
+                    <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20falar%20com%20um%20consultor%20sobre%20o%20Plano%20Enterprise%20do%20ClinicaBot%20SaaS%20Pro." target="_blank" rel="noopener noreferrer" class="btn btn-outline">Falar com Consultor</a>
                 </div>
             </div>
 
-            <!-- 14-Day Guarantee Box -->
             <div class="guarantee-box">
-                <div class="guarantee-icon">🛡️</div>
-                <div class="guarantee-text">
-                    <h3>Garantia Incondicional de 14 Dias de Teste</h3>
-                    <p>Teste o ClinicaBot SaaS Pro na sua clínica por 14 dias inteiros. Se você e sua equipe de recepção não notarem uma queda drástica no absenteísmo dos pacientes, devolvemos 100% do seu dinheiro. Sem letras miúdas.</p>
+                <div style="font-size: 2.8rem;">🛡️</div>
+                <div>
+                    <h3 style="font-size: 1.25rem; color: var(--wa-green); margin-bottom: 6px;">Garantia Incondicional de 14 Dias</h3>
+                    <p style="font-size: 0.95rem; color: var(--text-light);">Teste o ClinicaBot SaaS Pro por 14 dias inteiros. Se você e sua equipe não notarem uma redução drástica nas faltas, devolvemos 100% do valor do setup.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Section 9: FAQ Accordion -->
+    <!-- Section 6: FAQ Accordion -->
     <section class="section-padding" id="faq">
         <div class="container">
             <div class="section-header">
                 <h2>Perguntas Frequentes</h2>
-                <p>Esclareça suas dúvidas sobre a implementação e segurança do ClinicaBot</p>
+                <p>Esclareça suas dúvidas sobre implementação e segurança</p>
             </div>
 
             <div class="faq-accordion">
@@ -1350,10 +1280,11 @@
         </div>
     </section>
 
-    <!-- Footer -->
+    <!-- 🏢 FOOTER B2B COMPLETO E ELEGANTE (CORRIGIDO EM 4 COLUNAS) -->
     <footer>
         <div class="container">
             <div class="footer-grid">
+                <!-- Coluna 1: Brand & Descrição -->
                 <div class="footer-brand">
                     <a href="#top" class="logo">
                         <div class="logo-icon">🩺</div>
@@ -1362,29 +1293,32 @@
                     <p>Plataforma de inteligência conversacional nativa no WhatsApp para redução de no-show e automação de agendamentos em clínicas médicas e odontológicas.</p>
                 </div>
 
+                <!-- Coluna 2: Navegação -->
                 <div class="footer-col">
                     <h4>Navegação</h4>
                     <ul>
                         <li><a href="#ecossistema">O Sistema</a></li>
                         <li><a href="#como-funciona">Como Funciona</a></li>
-                        <li><a href="#seguranca">Segurança & LGPD</a></li>
                         <li><a href="#calculadora">Calculadora de ROI</a></li>
                         <li><a href="#planos">Planos & Preços</a></li>
+                        <li><a href="#faq">Perguntas Frequentes</a></li>
                     </ul>
                 </div>
 
+                <!-- Coluna 3: Conformidade & LGPD -->
                 <div class="footer-col">
                     <h4>Conformidade</h4>
                     <ul>
                         <li><a href="#" data-action="open-lgpd-modal">Termos de Uso</a></li>
                         <li><a href="#" data-action="open-lgpd-modal">Política de Privacidade</a></li>
-                        <li><a href="#" data-action="open-lgpd-modal">Relatório LGPD AES-256</a></li>
+                        <li><a href="#" data-action="open-lgpd-modal">Dossiê LGPD AES-256</a></li>
                         <li><a href="#" data-action="open-lgpd-modal">Resoluções CFM & CFO</a></li>
                     </ul>
                 </div>
 
+                <!-- Coluna 4: Contato & Suporte -->
                 <div class="footer-col">
-                    <h4>Contato</h4>
+                    <h4>Contato & Suporte</h4>
                     <ul>
                         <li><a href="mailto:suporte@clinicabot.com.br">suporte@clinicabot.com.br</a></li>
                         <li><a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Vim%20pelo%20site%20e%20gostaria%20de%20falar%20com%20o%20suporte%2Fatendimento%20do%20ClinicaBot%20SaaS%20Pro." target="_blank" rel="noopener noreferrer">WhatsApp: (11) 97999-2719</a></li>
@@ -1401,91 +1335,90 @@
 
     <!-- LGPD & Compliance Modal -->
     <div class="modal-overlay" id="modal-lgpd-report">
-        <div class="wa-simulator-box" style="max-width: 650px; background: #0E1626; border: 1px solid var(--border-highlight); border-radius: var(--radius-xl); padding: 32px; color: var(--text-title); text-align: left;">
+        <div style="max-width: 620px; background: #0E1626; border: 1px solid var(--border-highlight); border-radius: var(--radius-xl); padding: 32px; color: var(--text-title);">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass); padding-bottom: 16px; margin-bottom: 20px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <span style="font-size: 2rem;">🛡️</span>
                     <div>
-                        <h3 style="font-size: 1.3rem; font-family: 'Outfit', sans-serif;">Dossiê de Conformidade & Sigilo LGPD</h3>
-                        <span style="font-size: 0.82rem; color: var(--accent-cyan);">ClinicaBot SaaS Pro — Auditoria Técnica & Resoluções Médicas</span>
+                        <h3 style="font-size: 1.25rem; font-family: 'Outfit', sans-serif;">Dossiê de Conformidade & Sigilo LGPD</h3>
+                        <span style="font-size: 0.8rem; color: var(--accent-cyan);">ClinicaBot SaaS Pro — Auditoria Técnica & Resoluções Médicas</span>
                     </div>
                 </div>
-                <button class="wa-close" data-action="close-lgpd-modal" aria-label="Fechar Modal" style="font-size: 1.8rem; cursor: pointer; background: none; border: none; color: #FFF;">&times;</button>
+                <button data-action="close-lgpd-modal" aria-label="Fechar Modal" style="font-size: 1.8rem; cursor: pointer; background: none; border: none; color: #FFF;">&times;</button>
             </div>
 
-            <div style="font-size: 0.92rem; line-height: 1.6; color: var(--text-light); max-height: 420px; overflow-y: auto; padding-right: 8px;">
-                <h4 style="color: var(--accent-cyan); margin-bottom: 8px;">1. Criptografia Militar de Dados Médicos (AES-256-GCM)</h4>
-                <p style="margin-bottom: 16px;">Todos os dados sensíveis dos pacientes (CPFs, nomes, históricos de consultas e prontuários) são encriptados na camada de banco de dados Supabase PostgreSQL utilizando algoritmo simétrico AES-256-GCM com suporte a HMAC-SHA256 Blind Indexing.</p>
+            <div style="font-size: 0.9rem; line-height: 1.6; color: var(--text-light); max-height: 380px; overflow-y: auto; padding-right: 8px;">
+                <h4 style="color: var(--accent-cyan); margin-bottom: 6px;">1. Criptografia Militar de Dados Médicos (AES-256-GCM)</h4>
+                <p style="margin-bottom: 14px;">Todos os dados sensíveis dos pacientes (CPFs, nomes, históricos de consultas e prontuários) são encriptados na camada de banco de dados Supabase PostgreSQL utilizando algoritmo simétrico AES-256-GCM.</p>
 
-                <h4 style="color: var(--accent-cyan); margin-bottom: 8px;">2. Anonimização & Mascaramento Activo (cpfMasked)</h4>
-                <p style="margin-bottom: 16px;">Em conformidade estrita com o Artigo 13 da LGPD (Lei nº 13.709/2018), todos os endpoints públicos e telas de recepção tratam o CPF do paciente no formato mascarado <code>•••.•••.•••-••</code>, impedindo vazamentos ou captura por terceiros.</p>
+                <h4 style="color: var(--accent-cyan); margin-bottom: 6px;">2. Anonimização & Mascaramento Activo (cpfMasked)</h4>
+                <p style="margin-bottom: 14px;">Em conformidade estrita com a LGPD (Lei nº 13.709/2018), todos os endpoints públicos e telas de recepção tratam o CPF no formato mascarado <code>•••.•••.•••-••</code>.</p>
 
-                <h4 style="color: var(--accent-cyan); margin-bottom: 8px;">3. Conformidade com a Resolução CFM nº 2.314/2022 & CFO nº 224/2020</h4>
-                <p style="margin-bottom: 16px;">Regras operacionais homologadas para sigilo médico, agendamentos remotos de telemedicina e consultas odontológicas, com isolamento multi-tenant via Row Level Security (RLS).</p>
-
-                <h4 style="color: var(--accent-cyan); margin-bottom: 8px;">4. Autenticação Criptográfica de Webhooks Meta API</h4>
-                <p style="margin-bottom: 16px;">Assinaturas criptográficas <code>X-Hub-Signature-256</code> validadas via <code>crypto.timingSafeEqual</code> para assegurar que nenhuma requisição forjada seja injetada no sistema da clínica.</p>
+                <h4 style="color: var(--accent-cyan); margin-bottom: 6px;">3. Resoluções CFM nº 2.314/2022 & CFO nº 224/2020</h4>
+                <p style="margin-bottom: 14px;">Regras operacionais homologadas para sigilo médico e agendamentos remotos, com isolamento multi-tenant via Row Level Security (RLS).</p>
             </div>
 
-            <div style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid var(--border-glass); padding-top: 16px;">
-                <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20o%20PDF%20do%20Relat%C3%B3rio%20Completo%20de%20Seguran%C3%A7a%20LGPD%20do%20ClinicaBot." target="_blank" rel="noopener noreferrer" class="btn btn-wa" style="font-size: 0.88rem; padding: 10px 20px; text-decoration: none;">📄 Solicitar PDF do Dossiê Completo</a>
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border-glass); padding-top: 14px;">
+                <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20o%20PDF%20do%20Relat%C3%B3rio%20Completo%20de%20Seguran%C3%A7a%20LGPD%20do%20ClinicaBot." target="_blank" rel="noopener noreferrer" class="btn btn-wa" style="font-size: 0.85rem; padding: 8px 18px;">📄 Solicitar PDF do Dossiê Completo</a>
             </div>
         </div>
     </div>
 
     <!-- Live WhatsApp Smartphone Simulator Modal -->
     <div class="modal-overlay" id="modal-simulator">
-        <div class="phone-container" style="max-width: 360px; height: 680px; box-shadow: 0 25px 60px rgba(0,0,0,0.9); position: relative;">
-            <button class="wa-close" data-action="close-simulator" aria-label="Fechar Modal" style="position: absolute; top: 12px; right: 16px; z-index: 200; font-size: 1.6rem; color: #FFF; background: rgba(0,0,0,0.5); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;">&times;</button>
+        <div class="modal-phone-wrapper">
+            <!-- Floating Close Button outside phone frame so it NEVER covers status bar -->
+            <button class="phone-modal-close" data-action="close-simulator" aria-label="Fechar Modal">&times;</button>
             
-            <div class="phone-notch">
-                <div class="phone-notch-camera"></div>
-                <div class="phone-notch-speaker"></div>
-            </div>
-
-            <div class="phone-status-bar">
-                <span>09:41</span>
-                <div class="phone-status-icons">
-                    <i class="fa-solid fa-signal"></i>
-                    <i class="fa-solid fa-wifi"></i>
-                    <i class="fa-solid fa-battery-full"></i>
+            <div class="phone-container" style="max-width: 350px; height: 670px;">
+                <div class="phone-notch">
+                    <div class="phone-notch-camera"></div>
+                    <div class="phone-notch-speaker"></div>
                 </div>
-            </div>
 
-            <div class="wa-app-screen">
-                <div class="wa-header">
-                    <div class="wa-profile">
-                        <div class="wa-avatar">Ana</div>
-                        <div class="wa-info">
-                            <strong>Ana — Dra. Odonto Riso 😊</strong>
-                            <span><span class="status-dot"></span> online</span>
+                <div class="phone-status-bar">
+                    <span>09:41</span>
+                    <div class="phone-status-icons">
+                        <i class="fa-solid fa-signal"></i>
+                        <i class="fa-solid fa-wifi"></i>
+                        <i class="fa-solid fa-battery-full"></i>
+                    </div>
+                </div>
+
+                <div class="wa-app-screen">
+                    <div class="wa-header">
+                        <div class="wa-profile">
+                            <div class="wa-avatar">👩‍⚕️</div>
+                            <div class="wa-info">
+                                <strong>Ana — Dra. Odonto Riso 😊</strong>
+                                <span><span class="status-dot"></span> online</span>
+                            </div>
+                        </div>
+                        <div class="wa-header-actions">
+                            <i class="fa-solid fa-video"></i>
+                            <i class="fa-solid fa-phone"></i>
                         </div>
                     </div>
-                    <div class="wa-header-actions" style="margin-right: 36px;">
-                        <i class="fa-solid fa-video"></i>
-                        <i class="fa-solid fa-phone"></i>
-                    </div>
-                </div>
 
-                <div class="wa-body" id="wa-chat-body">
-
-                    <div class="wa-msg received">
-                        Olá! Sou a Ana, assistente virtual da clínica. 😊<br><br>
-                        Como posso te ajudar hoje?
-                        <div class="wa-buttons-group">
-                            <button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR NOVA CONSULTA</button>
-                            <button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE / CONFIRMAÇÃO</button>
-                            <button class="wa-btn-reply" data-action="sim-reply" data-reply="InfoLocal">📍 HORÁRIOS & ENDEREÇO</button>
+                    <div class="wa-body" id="wa-chat-body">
+                        <div class="wa-msg received">
+                            Olá! Sou a Ana, assistente virtual da clínica. 😊<br><br>
+                            Como posso te ajudar hoje?
+                            <div class="wa-buttons-group">
+                                <button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR NOVA CONSULTA</button>
+                                <button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE / CONFIRMAÇÃO</button>
+                                <button class="wa-btn-reply" data-action="sim-reply" data-reply="InfoLocal">📍 HORÁRIOS & ENDEREÇO</button>
+                            </div>
+                            <span class="time">09:41</span>
                         </div>
-                        <span class="time">09:41</span>
                     </div>
-                </div>
 
-                <div class="wa-footer-input">
-                    <i class="fa-regular fa-face-smile"></i>
-                    <div class="wa-fake-input">Toque nos botões acima...</div>
-                    <i class="fa-solid fa-paperclip"></i>
-                    <i class="fa-solid fa-microphone"></i>
+                    <div class="wa-footer-input">
+                        <i class="fa-regular fa-face-smile"></i>
+                        <div class="wa-fake-input">Toque nos botões acima...</div>
+                        <i class="fa-solid fa-paperclip"></i>
+                        <i class="fa-solid fa-microphone"></i>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1493,7 +1426,6 @@
 
     <!-- Scripts JS -->
     <script>
-        // XSS Sanitizer Function
         function esc(str) {
             if (str === null || str === undefined) return '';
             return String(str)
@@ -1504,7 +1436,6 @@
                 .replace(/'/g, '&#39;');
         }
 
-        // ROI Calculator Logic
         function updateCalculator() {
             const elConsultas = document.getElementById('rng-consultas');
             const elValor = document.getElementById('rng-valor');
@@ -1521,7 +1452,7 @@
 
             const totalFaltas = consultas * (faltasPct / 100);
             const prejuizo = totalFaltas * valor;
-            const recuperado = prejuizo * 0.75; // 75% eficácia
+            const recuperado = prejuizo * 0.75;
             const roiMultiplier = (recuperado / 397).toFixed(1);
 
             document.getElementById('res-prejuizo').innerText = 'R$ ' + prejuizo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1529,7 +1460,6 @@
             document.getElementById('res-roi').innerText = roiMultiplier + 'x ROI';
         }
 
-        // FAQ Accordion Toggle
         function toggleFaq(headerElement) {
             const item = headerElement.closest('.faq-item');
             if (!item) return;
@@ -1544,7 +1474,6 @@
             }
         }
 
-        // Mobile Navigation Toggle
         function toggleMobileMenu(btnElement) {
             const navLinks = document.getElementById('nav-links');
             if (!navLinks) return;
@@ -1553,7 +1482,6 @@
             navLinks.classList.toggle('active');
         }
 
-        // WhatsApp Simulator State Machine & Real Time Typing Effect
         function getInitialChatHTML() {
             return `
                 <div class="wa-msg received">
@@ -1581,17 +1509,14 @@
             if (modal) modal.classList.add('active');
         }
 
-
         function closeSimulatorModal() {
             const modal = document.getElementById('modal-simulator');
             if (modal) modal.classList.remove('active');
         }
 
         function simReply(targetBtn, action) {
-            // Identifica qual container do chat foi clicado (Hero ou Modal)
             const body = targetBtn && targetBtn.closest ? (targetBtn.closest('.wa-body') || document.getElementById('wa-chat-body')) : document.getElementById('wa-chat-body');
             if (!body) return;
-
             
             const sanitizedAction = esc(action);
             let userMsgText = '';
@@ -1627,17 +1552,15 @@
                 userMsgText = sanitizedAction;
             }
             
-            // Add user message
             const now = new Date();
             const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
             
             const userMsg = document.createElement('div');
             userMsg.className = 'wa-msg sent';
-            userMsg.innerHTML = esc(userMsgText) + '<span class="time">' + timeStr + '</span>';
+            userMsg.innerHTML = esc(userMsgText) + '<span class="time">' + timeStr + ' <i class="fa-solid fa-check-double" style="color: #53bdeb;"></i></span>';
             body.appendChild(userMsg);
             body.scrollTop = body.scrollHeight;
 
-            // Typing Indicator
             const typingMsg = document.createElement('div');
             typingMsg.className = 'wa-msg received typing';
             typingMsg.style.fontStyle = 'italic';
@@ -1646,7 +1569,6 @@
             body.appendChild(typingMsg);
             body.scrollTop = body.scrollHeight;
 
-            // Add Ana response after 500ms
             setTimeout(() => {
                 if (typingMsg.parentNode) typingMsg.parentNode.removeChild(typingMsg);
 
@@ -1677,7 +1599,6 @@
             }, 500);
         }
 
-        // Global Event Delegation (Rule 5 compliance)
         document.addEventListener('click', function(e) {
             const target = e.target.closest('[data-action]');
             if (!target) return;
@@ -1698,7 +1619,6 @@
                 const reply = target.getAttribute('data-reply-hero');
                 simReply(target, reply);
             } else if (action === 'toggle-faq') {
-
                 toggleFaq(target);
             } else if (action === 'toggle-mobile-menu') {
                 toggleMobileMenu(target);
@@ -1720,14 +1640,12 @@
             }
         });
 
-        // Range Input Delegation for ROI Calculator
         document.addEventListener('input', function(e) {
             if (e.target.matches('#rng-consultas, #rng-valor, #rng-faltas')) {
                 updateCalculator();
             }
         });
 
-        // Accessibility Keydown Listener for FAQ triggers
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') {
                 const target = e.target.closest('[data-action="toggle-faq"]');
@@ -1738,7 +1656,6 @@
             }
         });
 
-        // Close Modal on Backdrop Click
         document.addEventListener('click', function(e) {
             const modal = document.getElementById('modal-simulator');
             if (modal && e.target === modal) {
@@ -1746,7 +1663,6 @@
             }
         });
 
-        // Initial setup
         updateCalculator();
     </script>
 </body>
