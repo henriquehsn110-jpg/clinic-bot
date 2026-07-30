@@ -133,6 +133,7 @@ async function runDashboardE2EAudit() {
             { targetTab: 'tab-patients', name: 'Base de Pacientes' },
             { targetTab: 'tab-handoff', name: 'Transbordo Humano' },
             { targetTab: 'tab-doctors', name: 'Corpo Clínico & Médicos' },
+            { targetTab: 'tab-crm', name: 'CRM & Remarketing' },
             { targetTab: 'tab-settings', name: 'Configurações da IA & WhatsApp' }
         ];
 
@@ -150,6 +151,13 @@ async function runDashboardE2EAudit() {
 
             await new Promise(r => setTimeout(r, 400));
             assert(`Navegação e exibição da aba "${tab.name}"`, tabSuccess);
+
+            if (tab.targetTab === 'tab-crm') {
+                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_crm_tab.png') });
+            }
+            if (tab.targetTab === 'tab-settings') {
+                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_settings_mockup.png') });
+            }
         }
 
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_3_tabs.png') });
