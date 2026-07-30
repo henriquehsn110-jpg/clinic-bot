@@ -1012,10 +1012,10 @@
                         <td>${esc(formatDate(app.appointment_date))}</td>
                         <td><span style="font-family: var(--font-mono); color: var(--primary);">${esc(app.appointment_time)}</span></td>
                         <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
-                        <td>
-                            <div style="display: flex; gap: 6px;">
-                                ${app.status !== 'confirmed' ? `<button class="btn btn-confirm-appt" data-id="${esc(app.id)}" data-status="confirmed" style="padding: 4px 10px; font-size: 11px;"><i class="fa-solid fa-check"></i> Confirmar</button>` : ''}
-                                ${app.status !== 'cancelled' ? `<button class="btn btn-danger btn-cancel-appt" data-id="${esc(app.id)}" data-status="cancelled" style="padding: 4px 10px; font-size: 11px;"><i class="fa-solid fa-xmark"></i> Cancelar</button>` : ''}
+                        <td style="white-space: nowrap;">
+                            <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                                ${app.status !== 'confirmed' ? `<button class="btn btn-confirm-appt" data-id="${esc(app.id)}" data-status="confirmed" style="padding: 4px 10px; font-size: 11px; white-space: nowrap;"><i class="fa-solid fa-check"></i> Confirmar</button>` : ''}
+                                ${app.status !== 'cancelled' ? `<button class="btn btn-danger btn-cancel-appt" data-id="${esc(app.id)}" data-status="cancelled" style="padding: 4px 10px; font-size: 11px; white-space: nowrap;"><i class="fa-solid fa-xmark"></i> Cancelar</button>` : ''}
                                 ${whatsappBtn}
                             </div>
                         </td>
