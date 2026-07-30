@@ -320,6 +320,10 @@ class ConversationController {
             if (!clinicSettings.address && cData?.address) clinicSettings.address = cData.address;
             if (!clinicSettings.evalPrice && cData?.eval_price) clinicSettings.evalPrice = String(cData.eval_price);
         } catch {}
+
+        const personaName = clinicSettings.personaName || 'Ana';
+        const clinicName = clinicSettings.name || 'Clínica Modelo';
+
         try {
             const patient = await db.patients.findOrCreate(phone, clinicId);
             await db.conversations.log(patient.id, 'user', text);
@@ -344,20 +348,21 @@ class ConversationController {
             );
 
             if (isHumanSupport) {
-                if (/\b(voltar|robô|robo|ia|inteligência artificial|reiniciar|menu|cancelar|falar com a ia)\b/i.test(sanitizedText)) {
+                if (new RegExp(`\\b(voltar|robô|robo|ia|inteligência artificial|reiniciar|menu|cancelar|falar com a ia|falar com a ${personaName})\\b`, 'i').test(sanitizedText)) {
                     logger.info('HUMAN_HANDOFF_CANCELED', `Paciente [${phone}] solicitou retorno à IA. Histórico e rascunho resetados.`);
                     history = [];
                     draft = {};
                     await db.sessions.set(phone, history, clinicId);
                     await db.sessions.setDraft(phone, null, clinicId);
                 } else {
-                    const responseText = "Sua mensagem foi encaminhada para a nossa recepção e em breve um atendente irá responder! 😊\n\nSe preferir voltar ao atendimento automático com a Ana, basta clicar no botão abaixo:";
+                    const responseText = `Sua mensagem foi encaminhada para a nossa recepção e em breve um atendente irá responder! 😊\n\nSe preferir voltar ao atendimento automático com a ${personaName}, basta clicar no botão abaixo:`;
+                    const btnLabel = `Falar com a IA (${personaName})`;
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, responseText, ["Falar com a IA (Ana)"], phoneId, clinicToken).catch(() => {});
+                        await whatsappService.sendButtonMessage(phone, responseText, [btnLabel], phoneId, clinicToken).catch(() => {});
                     }
                     return {
                         text: responseText,
-                        buttons: ["Falar com a IA (Ana)"],
+                        buttons: [btnLabel],
                         showCalendar: false,
                         showTimeSlots: false,
                         showProceduresList: false,
@@ -384,7 +389,7 @@ class ConversationController {
 
                 return {
                     text: "Com certeza! Estou transferindo seu atendimento para a nossa recepção humano. Em breve um atendente irá responder você aqui!",
-                    buttons: ["Falar com a IA (Ana)"],
+                    buttons: [`Falar com a IA (${personaName})`],
                     showCalendar: false,
                     showTimeSlots: false,
                     showProceduresList: false,
@@ -408,7 +413,7 @@ class ConversationController {
 
                 return {
                     text: handoffMsg,
-                    buttons: ["Falar com a IA (Ana)"],
+                    buttons: [`Falar com a IA (${personaName})`],
                     showCalendar: false,
                     showTimeSlots: false,
                     showProceduresList: false,
@@ -421,7 +426,7 @@ class ConversationController {
             // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato genérico)
             const hasDirectIntent = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /agendar|remarcar|cancelar/i.test(sanitizedText);
             if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar') && !hasDirectIntent) {
-                const welcomeText = "Olá! Sou a Ana, da Clínica Modelo 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?";
+                const welcomeText = `Olá! Sou a ${personaName}, da ${clinicName} 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?`;
                 const welcomeButtons = ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"];
 
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
@@ -446,6 +451,7 @@ class ConversationController {
             }
 
             // 2. Atalho para botão "Agendar Consulta"
+
             if (sanitizedText.toLowerCase() === 'agendar consulta' || sanitizedText.toLowerCase() === 'agendar') {
                 const procText = "Ótimo! Escolha qual procedimento você gostaria de agendar:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
