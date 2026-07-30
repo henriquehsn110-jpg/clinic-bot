@@ -152,26 +152,33 @@ async function runDashboardE2EAudit() {
             await new Promise(r => setTimeout(r, 400));
             assert(`Navegação e exibição da aba "${tab.name}"`, tabSuccess);
 
-            if (tab.targetTab === 'tab-crm') {
-                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_crm_tab.png') });
-                // Testa disparo do Modal de Confirmação
-                const crmModalActive = await page.evaluate(() => {
-                    if (typeof triggerCrmCampaign === 'function') {
-                        triggerCrmCampaign('preventive');
-                        const modal = document.getElementById('modal-confirm-crm');
-                        return modal && modal.classList.contains('active');
+            if (tab.targetTab === 'tab-appointments') {
+                // Testa a alternância para o Calendário Visual em Grid de 7 Colunas
+                const calGridRes = await page.evaluate(() => {
+                    if (typeof switchViewMode === 'function') {
+                        switchViewMode('calendar');
+                        const calDiv = document.getElementById('appointments-calendar-view');
+                        const gridBody = document.getElementById('calendar-grid-body');
+                        return calDiv && calDiv.style.display !== 'none' && gridBody && gridBody.children.length > 0;
                     }
                     return false;
                 });
-                assert('Modal de Segurança e Confirmação de Disparo CRM abre com sucesso', crmModalActive);
-                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_crm_modal_confirm.png') });
-                // Fecha o modal
+                assert('Calendário Visual Renderizado com Sucesso em Grid de 7 Colunas', calGridRes);
+                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_calendar_view.png') });
+                // Volta para a visualização em Tabela
                 await page.evaluate(() => {
-                    if (typeof closeModal === 'function') closeModal('modal-confirm-crm');
+                    if (typeof switchViewMode === 'function') switchViewMode('table');
                 });
             }
+
             if (tab.targetTab === 'tab-settings') {
                 await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_settings_mockup.png') });
+                await page.evaluate(() => {
+                    const el = document.querySelector('#cfg-min-cancellation');
+                    if (el) el.scrollIntoView({ block: 'center' });
+                });
+                await new Promise(r => setTimeout(r, 400));
+                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dashboard_settings_item5.png') });
             }
         }
 

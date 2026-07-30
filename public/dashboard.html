@@ -410,27 +410,27 @@
 
                         <div class="settings-card">
                             <div class="settings-card-title"><i class="fa-solid fa-clock"></i> 5. Horários de Atendimento & Regras de Cancelamento</div>
-                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-                                <div class="form-group" style="flex: 1; min-width: 120px;">
-                                    <label>Abertura *</label>
-                                    <input type="time" id="cfg-time-start" value="08:00" required>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch;">
+                                <div class="form-group" style="flex: 1; min-width: 120px; display: flex; flex-direction: column;">
+                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Abertura *</label>
+                                    <input type="time" id="cfg-time-start" value="08:00" style="margin-top: auto;" required>
                                 </div>
-                                <div class="form-group" style="flex: 1; min-width: 120px;">
-                                    <label>Fechamento *</label>
-                                    <input type="time" id="cfg-time-end" value="18:00" required>
+                                <div class="form-group" style="flex: 1; min-width: 120px; display: flex; flex-direction: column;">
+                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Fechamento *</label>
+                                    <input type="time" id="cfg-time-end" value="18:00" style="margin-top: auto;" required>
                                 </div>
-                                <div class="form-group" style="flex: 1; min-width: 160px;">
-                                    <label>Antecedência Mínima Cancelamento *</label>
-                                    <select id="cfg-min-cancellation">
+                                <div class="form-group" style="flex: 1.2; min-width: 180px; display: flex; flex-direction: column;">
+                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Antecedência Cancelamento *</label>
+                                    <select id="cfg-min-cancellation" style="margin-top: auto;">
                                         <option value="2">2 Horas antes</option>
                                         <option value="4" selected>4 Horas antes (Recomendado)</option>
                                         <option value="12">12 Horas antes</option>
                                         <option value="24">24 Horas antes</option>
                                     </select>
                                 </div>
-                                <div class="form-group" style="flex: 1.5; min-width: 200px;">
-                                    <label>Dias *</label>
-                                    <select id="cfg-work-days">
+                                <div class="form-group" style="flex: 1.5; min-width: 200px; display: flex; flex-direction: column;">
+                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Dias de Atendimento *</label>
+                                    <select id="cfg-work-days" style="margin-top: auto;">
                                         <option value="Segunda a Sexta-feira, das 08:00 às 18:00" selected>Segunda a Sexta</option>
                                         <option value="Segunda a Sábado, das 08:00 às 17:00">Segunda a Sábado</option>
                                     </select>
