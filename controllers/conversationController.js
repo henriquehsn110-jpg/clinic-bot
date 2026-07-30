@@ -308,11 +308,17 @@ class ConversationController {
         let clinicListTitle = "Opções de Agendamento";
         let clinicSettings = {};
         try {
-            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token, whatsapp_list_title, settings, name').eq('id', clinicId).maybeSingle();
+            const { data: cData } = await db.supabase.from('clinics').select('whatsapp_token, token, whatsapp_list_title, settings, name, address, work_hours, eval_price').eq('id', clinicId).maybeSingle();
             clinicToken = cData?.whatsapp_token || cData?.token || null;
             if (cData?.whatsapp_list_title) clinicListTitle = cData.whatsapp_list_title;
-            clinicSettings = cData?.settings || {};
+            if (cData?.settings && typeof cData.settings === 'object') {
+                clinicSettings = cData.settings;
+            } else if (cData?.work_hours && cData.work_hours.startsWith('{')) {
+                try { clinicSettings = JSON.parse(cData.work_hours); } catch {}
+            }
             if (!clinicSettings.name && cData?.name) clinicSettings.name = cData.name;
+            if (!clinicSettings.address && cData?.address) clinicSettings.address = cData.address;
+            if (!clinicSettings.evalPrice && cData?.eval_price) clinicSettings.evalPrice = String(cData.eval_price);
         } catch {}
         try {
             const patient = await db.patients.findOrCreate(phone, clinicId);
@@ -1018,8 +1024,13 @@ class ConversationController {
             }
 
             // ── COMPILAÇÃO INCREMENTAL DO RASCUNHO (DRAFT) DE AGENDAMENTO ───────
-            // 1. Extração do Procedimento/Tratamento (N5 - Match Exato)
-            const selectedProc = PROCEDURES_LIST.find(p => sanitizedText.toLowerCase() === p.toLowerCase());
+            // 1. Extração do Procedimento/Tratamento (N5 - Match Exato / Dinâmico da Clínica)
+            const customProcedures = clinicSettings?.procedures
+                ? clinicSettings.procedures.split(',').map(p => p.trim()).filter(Boolean)
+                : [];
+            const activeProceduresList = [...new Set([...PROCEDURES_LIST, ...customProcedures])];
+
+            const selectedProc = activeProceduresList.find(p => sanitizedText.toLowerCase() === p.toLowerCase() || (p.length > 3 && sanitizedText.toLowerCase().includes(p.toLowerCase())));
             if (selectedProc) {
                 draft.type = selectedProc;
                 

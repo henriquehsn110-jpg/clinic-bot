@@ -190,6 +190,7 @@ class DashboardController {
             let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)', { count: 'exact' }).is('deleted_at', null).order('appointment_date', { ascending: true }).range(offset, offset + limit - 1);
             let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
             let sessionsQuery = db.supabase.from('sessions').select('*').is('deleted_at', null);
+            let clinicQuery = targetClinicId ? db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, settings').eq('id', targetClinicId).maybeSingle() : Promise.resolve({ data: null });
 
             if (!req.isSuperAdmin && !targetClinicId) {
                 return res.status(403).json({ error: 'Acesso negado: clínica não resolvida.' });
@@ -201,15 +202,17 @@ class DashboardController {
                 sessionsQuery = sessionsQuery.eq('clinic_id', targetClinicId);
             }
 
-            const [apptsRes, patientsRes, sessionsRes] = await Promise.all([
+            const [apptsRes, patientsRes, sessionsRes, clinicRes] = await Promise.all([
                 apptsQuery,
                 patientsQuery,
-                sessionsQuery
+                sessionsQuery,
+                clinicQuery
             ]);
 
             let appts = apptsRes.data || [];
             let patientsList = patientsRes.data || [];
             let sessionsList = sessionsRes.data || [];
+            let clinicData = clinicRes?.data || null;
 
             // Sanitização LGPD de CPFs para exibição no frontend (mascara os números e remove CPF bruto)
             const safePatients = (patientsList || []).map(p => {
@@ -239,6 +242,18 @@ class DashboardController {
                 { id: 'doc_3', name: 'Dr. Roberto Alves', specialty: 'Implantes & Próteses', cro: 'CRO-SP 778899', available_days: 'Seg, Ter, Qui (08h às 18h)', status: 'Ativo', avatar: '👨‍⚕️' }
             ];
 
+            let parsedSettings = {};
+            if (clinicData) {
+                if (clinicData.settings && typeof clinicData.settings === 'object') {
+                    parsedSettings = clinicData.settings;
+                } else if (clinicData.work_hours && clinicData.work_hours.startsWith('{')) {
+                    try { parsedSettings = JSON.parse(clinicData.work_hours); } catch {}
+                }
+                if (!parsedSettings.name && clinicData.name) parsedSettings.name = clinicData.name;
+                if (!parsedSettings.address && clinicData.address) parsedSettings.address = clinicData.address;
+                if (!parsedSettings.evalPrice && clinicData.eval_price) parsedSettings.evalPrice = String(clinicData.eval_price);
+            }
+
             res.json({
                 pagination: {
                     page,
@@ -255,7 +270,10 @@ class DashboardController {
                 appointments: appts || [],
                 patients: safePatients,
                 handoffs: humanHandoffs,
-                doctors: doctorsList
+                doctors: doctorsList,
+                clinicName: clinicData?.name || null,
+                whatsappListTitle: clinicData?.whatsapp_list_title || 'Tratamentos',
+                settings: parsedSettings
             });
 
         } catch (err) {
@@ -455,7 +473,7 @@ class DashboardController {
     // Salva configurações personalizadas da clínica e da IA
     async updateSettings(req, res) {
         try {
-            const { name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours } = req.body;
+            const { name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours, procedures } = req.body;
             const targetClinicId = req.resolvedClinicId;
 
             if (!targetClinicId && !req.isSuperAdmin) {
@@ -473,17 +491,24 @@ class DashboardController {
                 emergency,
                 workHours,
                 minCancellationHours: minCancellationHours || '4',
+                procedures: procedures || 'Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental',
                 updatedAt: new Date().toISOString()
             };
 
             // SEGURANÇA MULTI-TENANT (VULN-03): Salva usando a UUID da clínica resolvida (não o slug)
             if (db.supabase && targetClinicId) {
-                await db.supabase.from('clinics').upsert({
-                    id: targetClinicId,
+                const updatePayload = {
                     name,
+                    address: address || null,
+                    eval_price: parseFloat(evalPrice) || 150,
                     whatsapp_list_title: whatsappListTitle || 'Tratamentos',
-                    settings
-                });
+                    work_hours: JSON.stringify(settings)
+                };
+
+                const { error: err1 } = await db.supabase.from('clinics').update({ ...updatePayload, settings }).eq('id', targetClinicId);
+                if (err1) {
+                    await db.supabase.from('clinics').update(updatePayload).eq('id', targetClinicId);
+                }
             }
 
             logger.info('DASHBOARD_SETTINGS', `Configurações da clínica [${targetClinicId}] atualizadas via painel.`);

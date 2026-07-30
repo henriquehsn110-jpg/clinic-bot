@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <link rel="stylesheet" href="/index.css">
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="/public/index.css">
 </head>
 <body>
 
@@ -240,6 +242,10 @@
                             <div class="form-group">
                                 <label>Título do Menu do WhatsApp (Ex: Tratamentos, Especialidades, Opções)</label>
                                 <input type="text" id="cfg-list-title" value="Tratamentos" placeholder="Aparece no topo do menu de botões do WhatsApp">
+                            </div>
+                            <div class="form-group">
+                                <label>Procedimentos & Especialidades da Clínica (Separados por vírgula) *</label>
+                                <textarea id="cfg-procedures" rows="2" onkeyup="updateLivePreview()" placeholder="Ex: Consulta Geral, Limpeza, Ortodontia, Implantes, Clareamento Dental">Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental</textarea>
                             </div>
                         </div>
 
@@ -741,6 +747,7 @@
                 renderHandoffTable(allSessions);
                 renderDoctorsCards(allDoctors);
                 populatePatientDropdown(allPatients);
+                populateSettingsForm(data);
 
                 if (indicator) {
                     indicator.classList.remove('offline');
@@ -1230,12 +1237,13 @@
             }
         }
 
-        // SALVAMENTO REAL NO BACKEND DA API /settings (Correção da apontada de Claude e Perplexity)
+        // SALVAMENTO REAL NO BACKEND DA API /settings
         async function handleSaveClinicSettings(e) {
             e.preventDefault();
             const name = document.getElementById('cfg-clinic-name').value.trim();
             const personaName = document.getElementById('cfg-persona-name').value.trim();
             const whatsappListTitle = document.getElementById('cfg-list-title').value.trim();
+            const procedures = document.getElementById('cfg-procedures')?.value.trim() || 'Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental';
             const address = document.getElementById('cfg-clinic-address').value.trim();
             const phone = document.getElementById('cfg-clinic-phone').value.trim();
             const evalPrice = document.getElementById('cfg-clinic-eval-price').value;
@@ -1247,12 +1255,52 @@
 
             try {
                 await apiRequest('/settings', 'POST', {
-                    name, personaName, whatsappListTitle, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours
+                    name, personaName, whatsappListTitle, procedures, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours
                 });
-                showToast(`✅ Configurações salvas no servidor! A IA (${personaName}) atualizou a antecedência para ${minCancellationHours}h.`);
+                showToast(`✅ Configurações salvas no servidor! A IA (${personaName}) foi atualizada com sucesso.`);
             } catch (err) {
                 showToast(`❌ Erro ao salvar configurações: ${err.message}`);
             }
+        }
+
+        let _settingsFormPopulated = false;
+        function populateSettingsForm(data) {
+            if (!data) return;
+            const s = data.settings || {};
+            const clinicNameInput = document.getElementById('cfg-clinic-name');
+            const personaNameInput = document.getElementById('cfg-persona-name');
+            const listTitleInput = document.getElementById('cfg-list-title');
+            const proceduresInput = document.getElementById('cfg-procedures');
+            const addressInput = document.getElementById('cfg-clinic-address');
+            const phoneInput = document.getElementById('cfg-clinic-phone');
+            const priceInput = document.getElementById('cfg-clinic-eval-price');
+            const insurancesInput = document.getElementById('cfg-insurances');
+            const paymentsInput = document.getElementById('cfg-payments');
+            const emergencyInput = document.getElementById('cfg-emergency');
+            const workDaysInput = document.getElementById('cfg-work-days');
+            const minCancelInput = document.getElementById('cfg-min-cancellation');
+
+            // Não sobrescreve se o usuário estiver digitando no formulário
+            const activeElem = document.activeElement;
+            if (activeElem && activeElem.closest('#tab-settings') && _settingsFormPopulated) {
+                return;
+            }
+
+            if (clinicNameInput && (s.name || data.clinicName)) clinicNameInput.value = s.name || data.clinicName;
+            if (personaNameInput && s.personaName) personaNameInput.value = s.personaName;
+            if (listTitleInput && data.whatsappListTitle) listTitleInput.value = data.whatsappListTitle;
+            if (proceduresInput && s.procedures) proceduresInput.value = s.procedures;
+            if (addressInput && s.address) addressInput.value = s.address;
+            if (phoneInput && s.phone) phoneInput.value = s.phone;
+            if (priceInput && s.evalPrice) priceInput.value = s.evalPrice;
+            if (insurancesInput && s.insurances) insurancesInput.value = s.insurances;
+            if (paymentsInput && s.paymentMethods) paymentsInput.value = s.paymentMethods;
+            if (emergencyInput && s.emergency) emergencyInput.value = s.emergency;
+            if (workDaysInput && s.workHours) workDaysInput.value = s.workHours;
+            if (minCancelInput && s.minCancellationHours) minCancelInput.value = s.minCancellationHours;
+
+            _settingsFormPopulated = true;
+            updateLivePreview();
         }
 
         function updateLivePreview() {

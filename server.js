@@ -42,12 +42,15 @@ if (process.env.NODE_ENV !== 'production') {
     app.use('/simulator', localOnly, express.static(path.join(__dirname, 'public/simulator')));
 }
 
-// Arquivos estáticos auxiliares
-app.use('/public', express.static(path.join(__dirname, 'public'), {
+// Arquivos estáticos da pasta public (servidos na raiz e em /public com index: false para não sobrepor rotas explícitas - R10)
+const staticOptions = {
+    index: false,
     setHeaders: (res) => {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
-}));
+};
+app.use('/public', express.static(path.join(__dirname, 'public'), staticOptions));
+app.use(express.static(path.join(__dirname, 'public'), staticOptions));
 
 // Rota da Landing Page de Vendas (Home)
 app.get(['/', '/landing', '/home'], (req, res) => {

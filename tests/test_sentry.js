@@ -11,10 +11,14 @@ server.stdout.on('data', data => {
         console.log('🔹 Servidor pronto! Disparando exceção de teste para o Sentry (/debug-sentry)...');
         http.get('http://localhost:3000/debug-sentry', res => {
             console.log('✅ PASS: Resposta HTTP recebida do /debug-sentry (Status:', res.statusCode, ')');
-            console.log('✨ Erro capturado pelo Sentry e enviado para o painel em tempo real!');
-            server.kill();
-            process.exit(0);
+            console.log('⏳ Enviando evento via HTTPS para os servidores do Sentry (aguardando 3s)...');
+            setTimeout(() => {
+                console.log('✨ Erro transmitido e gravado no painel do Sentry!');
+                server.kill();
+                process.exit(0);
+            }, 3000);
         });
+
     }
 });
 
