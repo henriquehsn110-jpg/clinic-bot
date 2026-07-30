@@ -431,8 +431,9 @@
                                 <div class="form-group" style="flex: 1.5; min-width: 200px; display: flex; flex-direction: column;">
                                     <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Dias de Atendimento *</label>
                                     <select id="cfg-work-days" style="margin-top: auto;">
-                                        <option value="Segunda a Sexta-feira, das 08:00 às 18:00" selected>Segunda a Sexta</option>
-                                        <option value="Segunda a Sábado, das 08:00 às 17:00">Segunda a Sábado</option>
+                                        <option value="Segunda a Sexta-feira, das 08:00 às 18:00" selected>Segunda a Sexta (08h às 18h)</option>
+                                        <option value="Segunda a Sábado, das 08:00 às 17:00">Segunda a Sábado (08h às 17h)</option>
+                                        <option value="08:00 às 18:00 (Seg a Sex)">Segunda a Sexta (Horário Padrão)</option>
                                     </select>
                                 </div>
                             </div>
@@ -1401,7 +1402,8 @@
             const insurances = document.getElementById('cfg-insurances').value.trim();
             const paymentMethods = document.getElementById('cfg-payments').value.trim();
             const emergency = document.getElementById('cfg-emergency').value.trim();
-            const workHours = document.getElementById('cfg-work-days').value;
+            const rawWorkHours = document.getElementById('cfg-work-days')?.value;
+            const workHours = (rawWorkHours && rawWorkHours.trim()) ? rawWorkHours.trim() : 'Segunda a Sexta-feira, das 08:00 às 18:00';
             const minCancellationHours = document.getElementById('cfg-min-cancellation')?.value || '4';
 
             try {
@@ -1447,8 +1449,27 @@
             if (insurancesInput && s.insurances) insurancesInput.value = s.insurances;
             if (paymentsInput && s.paymentMethods) paymentsInput.value = s.paymentMethods;
             if (emergencyInput && s.emergency) emergencyInput.value = s.emergency;
-            if (workDaysInput && s.workHours) workDaysInput.value = s.workHours;
-            if (minCancelInput && s.minCancellationHours) minCancelInput.value = s.minCancellationHours;
+            
+            if (workDaysInput) {
+                const targetWorkHours = s.workHours || 'Segunda a Sexta-feira, das 08:00 às 18:00';
+                workDaysInput.value = targetWorkHours;
+                if (workDaysInput.selectedIndex === -1 || !workDaysInput.value) {
+                    const lower = String(targetWorkHours).toLowerCase();
+                    if (lower.includes('sábado') || lower.includes('sab')) {
+                        workDaysInput.value = 'Segunda a Sábado, das 08:00 às 17:00';
+                    } else {
+                        workDaysInput.selectedIndex = 0; // Força seleção do primeiro item se valor não coincidir exato
+                    }
+                }
+            }
+
+            if (minCancelInput) {
+                const targetCancel = s.minCancellationHours || '4';
+                minCancelInput.value = targetCancel;
+                if (minCancelInput.selectedIndex === -1 || !minCancelInput.value) {
+                    minCancelInput.value = '4';
+                }
+            }
 
             _settingsFormPopulated = true;
             updateLivePreview();

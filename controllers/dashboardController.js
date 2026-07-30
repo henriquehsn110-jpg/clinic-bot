@@ -491,6 +491,10 @@ class DashboardController {
                 return res.status(400).json({ error: 'Clínica não encontrada para atualização de configurações.' });
             }
 
+            const safeWorkHours = (workHours && typeof workHours === 'string' && workHours.trim())
+                ? workHours.trim()
+                : 'Segunda a Sexta-feira, das 08:00 às 18:00';
+
             const settings = {
                 name,
                 personaName,
@@ -500,7 +504,7 @@ class DashboardController {
                 insurances,
                 paymentMethods,
                 emergency,
-                workHours,
+                workHours: safeWorkHours,
                 minCancellationHours: minCancellationHours || '4',
                 procedures: procedures || 'Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental',
                 updatedAt: new Date().toISOString()
