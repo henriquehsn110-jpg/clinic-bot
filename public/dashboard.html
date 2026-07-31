@@ -649,14 +649,6 @@
             </div>
             <form onsubmit="handleLogin(event)">
                 <div class="form-group">
-                    <label>Selecione a Clínica de Acesso</label>
-                    <select id="login-clinic-slug">
-                        <option value="clinica-modelo">Clínica Modelo Odontológica</option>
-                        <option value="odonto-riso">Clínica Odonto Riso</option>
-                        <option value="all">Super Admin SaaS (Visão Geral)</option>
-                    </select>
-                </div>
-                <div class="form-group">
                     <label>E-mail do Administrador *</label>
                     <input type="email" id="login-email" placeholder="admin@suaclinica.com.br" required>
                 </div>
@@ -791,7 +783,7 @@
             e.preventDefault();
             const email = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value;
-            const clinicSlug = document.getElementById('login-clinic-slug').value;
+            const clinicSlug = document.getElementById('login-clinic-slug')?.value || null;
 
             try {
                 const res = await fetch(`${API_BASE}/auth/login`, {
