@@ -543,8 +543,11 @@
         .eco-card h3 { font-size: 1.45rem; margin-bottom: 10px; }
         .eco-card p { font-size: 0.95rem; color: var(--text-body); margin-bottom: 18px; }
 
-        .comp-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
-        .comp-list li { display: flex; gap: 10px; font-size: 0.94rem; }
+        .comp-list { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+        .comp-list li { display: flex; align-items: flex-start; gap: 12px; font-size: 0.96rem; line-height: 1.5; text-align: left; }
+        .comp-list .icon { font-size: 1.1rem; line-height: 1.4; flex-shrink: 0; }
+        .comp-list .comp-text { flex: 1; color: var(--text-body); text-align: left; }
+        .comp-list .comp-text strong { color: #ffffff; font-weight: 700; margin-right: 4px; }
 
         /* Comparison Grid */
         .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -556,7 +559,7 @@
         }
         .comp-card.before { border-left: 4px solid #EF4444; }
         .comp-card.after { border-left: 4px solid var(--wa-green); background: rgba(16, 32, 48, 0.85); }
-        .comp-card h3 { font-size: 1.35rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .comp-card h3 { font-size: 1.35rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
 
         /* Steps Grid */
         .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
@@ -1009,9 +1012,9 @@
                     <h3>Atendimento Humanizado 24 Horas</h3>
                     <p>Seu paciente agenda, confirma ou remarca consultas direto pelo WhatsApp no horário de Brasília, com mensagens amigáveis e botões oficiais em 1 clique — sem baixar nada.</p>
                     <ul class="comp-list">
-                        <li><span class="icon">🟢</span> Confirmação dupla inteligente (24h e 2h antes)</li>
-                        <li><span class="icon">🟢</span> Remarcação autônoma sem fila de espera</li>
-                        <li><span class="icon">🟢</span> Orientações pré-procedimento automáticas</li>
+                        <li><span class="icon">🟢</span><div class="comp-text">Confirmação dupla inteligente (24h e 2h antes)</div></li>
+                        <li><span class="icon">🟢</span><div class="comp-text">Remarcação autônoma sem fila de espera</div></li>
+                        <li><span class="icon">🟢</span><div class="comp-text">Orientações pré-procedimento automáticas</div></li>
                     </ul>
                 </div>
 
@@ -1020,9 +1023,9 @@
                     <h3>Dashboard Pro com Controle Total</h3>
                     <p>Sua secretária visualiza a agenda em tempo real, gerencia o corpo clínico, acessa o CRM de reengajamento de faltosos e assume a conversa instantaneamente com 1 clique.</p>
                     <ul class="comp-list">
-                        <li><span class="icon">🟢</span> Painel Glassmorphism com Alerta Sonoro</li>
-                        <li><span class="icon">🟢</span> Transbordo Humano com Resumo Executivo</li>
-                        <li><span class="icon">🟢</span> Sigilo total sob LGPD com <code>cpfMasked</code></li>
+                        <li><span class="icon">🟢</span><div class="comp-text">Painel Glassmorphism com Alerta Sonoro</div></li>
+                        <li><span class="icon">🟢</span><div class="comp-text">Transbordo Humano com Resumo Executivo</div></li>
+                        <li><span class="icon">🟢</span><div class="comp-text">Sigilo total sob LGPD com <code>cpfMasked</code></div></li>
                     </ul>
                 </div>
             </div>
@@ -1041,20 +1044,20 @@
                 <div class="comp-card before">
                     <h3>❌ Gestão Manual Tradicional</h3>
                     <ul class="comp-list">
-                        <li><span class="icon">🔴</span> <strong>30% de absenteísmo médio:</strong> Pacientes esquecem ou faltam sem avisar.</li>
-                        <li><span class="icon">🔴</span> <strong>Secretária sobrecarregada:</strong> Gasta horas enviando mensagens manuais.</li>
-                        <li><span class="icon">🔴</span> <strong>Horários vagos perdidos:</strong> Cancelamentos de última hora deixam a agenda vazia.</li>
-                        <li><span class="icon">🔴</span> <strong>Risco de multas LGPD:</strong> Dados mantidos em planilhas desprotegidas.</li>
+                        <li><span class="icon">🔴</span><div class="comp-text"><strong>30% de absenteísmo médio:</strong> Pacientes esquecem ou faltam sem avisar.</div></li>
+                        <li><span class="icon">🔴</span><div class="comp-text"><strong>Secretária sobrecarregada:</strong> Gasta horas enviando mensagens manuais.</div></li>
+                        <li><span class="icon">🔴</span><div class="comp-text"><strong>Horários vagos perdidos:</strong> Cancelamentos de última hora deixam a agenda vazia.</div></li>
+                        <li><span class="icon">🔴</span><div class="comp-text"><strong>Risco de multas LGPD:</strong> Dados mantidos em planilhas desprotegidas.</div></li>
                     </ul>
                 </div>
 
                 <div class="comp-card after">
                     <h3>✅ Com ClinicaBot SaaS Pro</h3>
                     <ul class="comp-list">
-                        <li><span class="icon">🟢</span> <strong>Absenteísmo &lt; 8%:</strong> Lembretes duplos ativos 24h e 2h antes.</li>
-                        <li><span class="icon">🟢</span> <strong>Recepção focada no acolhimento:</strong> Confirmações rodando no piloto automático.</li>
-                        <li><span class="icon">🟢</span> <strong>Remarcação autônoma em 1 clique:</strong> Liberação imediata de horários vagos.</li>
-                        <li><span class="icon">🟢</span> <strong>Segurança de nível bancário:</strong> Criptografia AES-256 e mascaramento de CPF.</li>
+                        <li><span class="icon">🟢</span><div class="comp-text"><strong>Absenteísmo &lt; 8%:</strong> Lembretes duplos ativos 24h e 2h antes.</div></li>
+                        <li><span class="icon">🟢</span><div class="comp-text"><strong>Recepção focada no acolhimento:</strong> Confirmações rodando no piloto automático.</div></li>
+                        <li><span class="icon">🟢</span><div class="comp-text"><strong>Remarcação autônoma em 1 clique:</strong> Liberação imediata de horários vagos.</div></li>
+                        <li><span class="icon">🟢</span><div class="comp-text"><strong>Segurança de nível bancário:</strong> Criptografia AES-256 e mascaramento de CPF.</div></li>
                     </ul>
                 </div>
             </div>
