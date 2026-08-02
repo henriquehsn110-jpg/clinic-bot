@@ -34,6 +34,7 @@
 - **ADR-002:** Uso do Gemini 2.0 Flash para a persona "Ana" devido à altíssima velocidade de resposta (<1.5s) e custo-benefício por token.
 - **ADR-003:** Script de onboarding via CLI (`onboard_tenant.js`) em vez de painel self-service complexo, focado em vendas corporativas *White-Glove* de alto ticket.
 - **ADR-004:** Adoção de ESLint no repositório (`.eslintrc.json`) com regras estritas de `no-undef` e `no-use-before-define` como bloqueio de segurança contra bugs de escopo antes do commit/deploy.
+- **ADR-005:** Arquitetura de Alta Disponibilidade 24h em 3 Camadas (Watchdog PM2 Auto-Recovery + Buffer Fila Segura sem Perda de Dados + Bot Guardião de Emergência com envio direto de WhatsApp via Meta Cloud API com resposta HTTP 200 confirmada).
 
 ---
 

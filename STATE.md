@@ -40,6 +40,8 @@ Finalizar o Deploy na Nuvem (Render / Railway) para colocar o sistema 24/7 onlin
 - [x] **[TASK-VERIFIED-10]** Correção do bug `.catch()` em query builders do PostgREST (`server.js`) e auditoria de Promises no backend + Suíte de Testes (100% PASS)
 - [x] **[TASK-VERIFIED-11]** Correção do ciclo de boas-vindas em loop (Sessões órfãs com `clinic_id: null` e correção de `ReferenceError: responseText` na linha 233 de `conversationController.js`)
 - [x] **[TASK-VERIFIED-12]** Auditoria preventiva de código (`.eslintrc.json` configurado) + Correção de 4 variáveis não declaradas + Correção da busca de horários na agenda (`clinicId` em `getAvailableSlots`). Suíte de Testes QA (22 testes overnight + 100 reqs stress + RLS + HMAC) 100% APROVADA.
+- [x] **[TASK-VERIFIED-13]** Implementação e validação E2E real das 3 Camadas de Alta Disponibilidade 24h & Contingência (Watchdog, Buffer Fila Segura e Bot Guardião com envio ao vivo comprovado no WhatsApp via Meta API — `test_e2e_three_layers_contingency.js` 100% PASS).
+- [x] **[TASK-VERIFIED-14]** Configuração do gerenciador de processos PM2 (`ecosystem.config.js`) e atualização de `render.yaml` com `npx pm2-runtime start ecosystem.config.js` para hospedagem 24/7 sem quedas no Render.
 
 ---
 
