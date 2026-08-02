@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apresentação Comercial — ClinicaBot SaaS Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #090E1A;
+            --bg-card: #111A2E;
+            --accent-cyan: #00F2FE;
+            --accent-blue: #4FACFE;
+            --wa-green: #25D366;
+            --text-main: #F1F5F9;
+            --text-sub: #94A3B8;
+            --border-glass: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-dark); color: var(--text-main); line-height: 1.6; padding: 30px 15px; }
+
+        .container { max-width: 900px; margin: 0 auto; }
+
+        .slide {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            position: relative;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(0, 242, 254, 0.12);
+            color: var(--accent-cyan);
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 6px 14px;
+            border-radius: 50px;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h1 { font-family: 'Outfit', sans-serif; font-size: 2.5rem; margin-bottom: 16px; line-height: 1.2; background: linear-gradient(135deg, #FFF, var(--accent-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.8rem; margin-bottom: 16px; color: #FFF; }
+        p { font-size: 1.05rem; color: var(--text-sub); margin-bottom: 20px; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+
+        .card-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            padding: 22px;
+        }
+
+        .card-box.danger { border-left: 4px solid #FF4D4D; }
+        .card-box.success { border-left: 4px solid var(--wa-green); background: rgba(37, 211, 102, 0.05); }
+
+        .card-box h3 { font-size: 1.15rem; color: #FFF; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .card-box p { font-size: 0.95rem; margin-bottom: 0; }
+
+        .big-number { font-size: 2.2rem; font-weight: 800; font-family: 'Outfit', sans-serif; margin: 10px 0; }
+        .green-text { color: var(--wa-green); }
+        .red-text { color: #FF4D4D; }
+        .cyan-text { color: var(--accent-cyan); }
+
+        .price-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .price-card.featured {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 242, 254, 0.04);
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.1);
+        }
+
+        .price-card .price { font-size: 2.2rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #FFF; margin: 12px 0 6px 0; }
+        .price-card ul { list-style: none; text-align: left; font-size: 0.9rem; color: var(--text-sub); margin-top: 16px; }
+        .price-card ul li { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+
+        .cta-btn {
+            display: inline-block;
+            width: 100%;
+            background: linear-gradient(135deg, var(--wa-green), #1EBE5D);
+            color: #000;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-decoration: none;
+            padding: 16px 28px;
+            border-radius: 50px;
+            text-align: center;
+            margin-top: 20px;
+            box-shadow: 0 10px 25px rgba(37, 211, 102, 0.3);
+            transition: all 0.3s;
+        }
+
+        .cta-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .slide { padding: 24px; }
+            h1 { font-size: 1.9rem; }
+            h2 { font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- BLOCO 1: Capa -->
+    <div class="slide">
+        <span class="badge">Apresentação Comercial</span>
+        <h1>ClinicaBot SaaS Pro</h1>
+        <p style="font-size: 1.2rem; color: #FFF; font-weight: 500;">A Secretária Virtual Inteligente que Zera as Faltas de Pacientes no WhatsApp e Aumenta o Faturamento da Sua Clínica.</p>
+        <p>Atendimento humanizado 24 horas por dia, confirmação em 1 clique e remarcação automática de consultas — tudo integrado ao celular do seu paciente sem baixar nada.</p>
+    </div>
+
+    <!-- BLOCO 2: O Problema -->
+    <div class="slide">
+        <span class="badge">O Desafio do Mercado</span>
+        <h2>Quanto Dinheiro Sua Clínica Perde Todos os Meses com Faltas?</h2>
+        <p>No Brasil, cerca de <strong>20% a 35% dos pacientes agendados não comparecem às consultas</strong>. Cada horário vago representa um médico parado e receita perdida.</p>
+
+        <div class="grid-2">
+            <div class="card-box danger">
+                <h3>🔴 Sem o ClinicaBot (Gestão Tradicional)</h3>
+                <p>• Pacientes esquecem ou desmarcam em cima da hora.<br>
+                • Secretária passa horas enviando mensagens manuais.<br>
+                • Se o paciente cancela à noite, o horário fica vago.<br>
+                • Dúvidas fora do horário comercial ficam sem resposta.</p>
+            </div>
+            <div class="card-box success">
+                <h3>✅ Com o ClinicaBot SaaS Pro</h3>
+                <p>• <strong>Faltas reduzidas para menos de 8%</strong> com lembretes ativos.<br>
+                • Atendimento 24h por dia no WhatsApp no Horário de Brasília.<br>
+                • O paciente remarca sozinho e o horário vago é liberado.<br>
+                • Sua recepção livre para acolher bem quem está no balcão.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLOCO 3: Benefícios & Ferramenta -->
+    <div class="slide">
+        <span class="badge">Como Funciona</span>
+        <h2>O Que o ClinicaBot Faz Pela Sua Clínica</h2>
+        <p>Uma ferramenta simples e intuitiva que funciona direto no WhatsApp oficial da clínica:</p>
+
+        <div class="grid-3">
+            <div class="card-box">
+                <h3>🔔 Confirmação em 1 Clique</h3>
+                <p>O paciente recebe um lembrete no WhatsApp 24h e 2h antes e confirma clicando num único botão.</p>
+            </div>
+            <div class="card-box">
+                <h3>📅 Remarcação Sem Fila</h3>
+                <p>Se o paciente não puder ir, ele remarca direto pelo WhatsApp e o sistema já libera a vaga antiga para encaixe.</p>
+            </div>
+            <div class="card-box">
+                <h3>🖥️ Painel Fáceis de Usar</h3>
+                <p>Sua secretária visualiza todos os agendamentos organizados por cores em tempo real no computador.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLOCO 4: Exemplo Financeiro -->
+    <div class="slide">
+        <span class="badge">Exemplo Prático de Ganhos</span>
+        <h2>Veja o Impacto Financeiro Direto no Caixa da Sua Clínica</h2>
+        <p>Simulação real baseada em uma clínica com <strong>200 consultas por mês</strong> e ticket médio de <strong>R$ 250,00 por consulta</strong>:</p>
+
+        <div class="grid-2">
+            <div class="card-box danger">
+                <p>Prejuízo Mensal com Faltas (25% de faltas):</p>
+                <div class="big-number red-text">R$ 12.500,00 /mês</div>
+                <p>50 consultas perdidas todos os meses por falta de confirmação.</p>
+            </div>
+            <div class="card-box success">
+                <p>Faturamento Recuperado com ClinicaBot:</p>
+                <div class="big-number green-text">+ R$ 9.375,00 /mês</div>
+                <p class="cyan-text"><strong>Resgate de 38 consultas por mês!</strong><br>Mais de R$ 110.000,00 extras de faturamento no ano.</p>
+            </div>
+        </div>
+
+        <div style="background: rgba(0, 242, 254, 0.08); border: 1px solid var(--accent-cyan); border-radius: 12px; padding: 18px; margin-top: 20px; text-align: center;">
+            <p style="color: #FFF; font-size: 1.1rem; margin-bottom: 0;">💡 <strong>Argumento Imbatível:</strong> Se o ClinicaBot recuperar <strong>APENAS 2 CONSULTAS</strong> no mês inteiro, o sistema já se pagou 100%. Tudo o que vier além disso é lucro puro!</p>
+        </div>
+    </div>
+
+    <!-- BLOCO 5: Segurança -->
+    <div class="slide">
+        <span class="badge">Segurança & Respeito</span>
+        <h2>Tranquilidade Total com a Segurança dos Seus Dados</h2>
+        <p>Em conformidade com a LGPD e regras médicas/odontológicas:</p>
+
+        <div class="grid-2">
+            <div class="card-box">
+                <h3>🔒 Sigilo de Nível Bancário</h3>
+                <p>Criptografia completa de dados. O CPF do paciente é mantido em formato mascarado na tela (ex: <code>123.***.***-45</code>), evitando qualquer risco de vazamento.</p>
+            </div>
+            <div class="card-box">
+                <h3>⏰ Horário de Brasília</h3>
+                <p>Mensagens disparadas exclusivamente em horários adequados, respeitando o sossego do paciente e as regras comerciais.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLOCO 6: Preços -->
+    <div class="slide">
+        <span class="badge">Investimento Transparente</span>
+        <h2>Planos Comerciais sem Surpresas</h2>
+        <p>Escolha o plano ideal para o tamanho da sua equipe:</p>
+
+        <div class="grid-3">
+            <div class="price-card">
+                <h3 style="color: #FFF;">Plano Starter</h3>
+                <p>Para Consultórios Solo</p>
+                <div class="price">R$ 197 <span style="font-size: 1rem; color: var(--text-sub);">/mês</span></div>
+                <p style="font-size: 0.85rem; color: var(--accent-cyan);">+ Taxa de Ativação R$ 297</p>
+                <ul>
+                    <li>✓ 1 Agenda médica/odontológica</li>
+                    <li>✓ IA "Ana" 24h no WhatsApp</li>
+                    <li>✓ Lembretes 24h e 2h antes</li>
+                    <li>✓ Painel da Recepção</li>
+                </ul>
+            </div>
+
+            <div class="price-card featured">
+                <span style="background: var(--accent-cyan); color: #000; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: 50px; text-transform: uppercase;">Mais Vendido</span>
+                <h3 style="color: #FFF; margin-top: 8px;">Plano Pro</h3>
+                <p>Para Clínicas em Expansão</p>
+                <div class="price" style="color: var(--accent-cyan);">R$ 397 <span style="font-size: 1rem; color: var(--text-sub);">/mês</span></div>
+                <p style="font-size: 0.85rem; color: var(--accent-cyan);">+ Taxa de Ativação R$ 397</p>
+                <ul>
+                    <li>✓ Até 5 Médicos/Profissionais</li>
+                    <li>✓ Remarcação Autônoma</li>
+                    <li>✓ Reengajamento de Faltosos</li>
+                    <li>✓ Relatórios de Desempenho</li>
+                </ul>
+            </div>
+
+            <div class="price-card">
+                <h3 style="color: #FFF;">Plano Enterprise</h3>
+                <p>Para Redes & Policlínicas</p>
+                <div class="price">R$ 697 <span style="font-size: 1rem; color: var(--text-sub);">/mês</span></div>
+                <p style="font-size: 0.85rem; color: var(--accent-cyan);">+ Taxa de Ativação R$ 497</p>
+                <ul>
+                    <li>✓ Profissionais e Unidades ilimitadas</li>
+                    <li>✓ Atendimento Multicampus</li>
+                    <li>✓ Consultor de Sucesso Dedicado</li>
+                    <li>✓ Suporte Prioritário VIP</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLOCO 7: Apelos de Fechamento -->
+    <div class="slide" style="border-color: var(--wa-green); background: linear-gradient(180deg, #111A2E, rgba(37, 211, 102, 0.05));">
+        <span class="badge" style="background: rgba(37, 211, 102, 0.15); color: var(--wa-green);">Garantia & Fechamento</span>
+        <h2>Por Que Contratar o ClinicaBot Hoje É Negócio Seguro?</h2>
+        
+        <div class="grid-2" style="margin-bottom: 24px;">
+            <div class="card-box">
+                <h3>🛡️ Garantia de 30 Dias</h3>
+                <p>Se a taxa de faltas da sua clínica não diminuir nos primeiros 30 dias de uso, devolvemos 100% da taxa de ativação sem complicações.</p>
+            </div>
+            <div class="card-box">
+                <h3>⚡ Ativação em Menos de 24 Horas</h3>
+                <p>Sua clínica não precisa mudar de sistema nem parar o atendimento. Nós configuramos tudo e entregamos o robô funcionando em menos de 24 horas.</p>
+            </div>
+        </div>
+
+        <a href="https://wa.me/5511979992719?text=Ol%C3%A1!%20Vi%20a%20apresenta%C3%A7%C3%A3o%20do%20ClinicaBot%20e%20gostaria%20de%20ativar%20o%20teste%20na%20minha%20cl%C3%ADnica." target="_blank" rel="noopener noreferrer" class="cta-btn">
+            👉 QUERO TESTAR O CLINICABOT NA MINHA CLÍNICA AGORA
+        </a>
+    </div>
+
+</div>
+
+</body>
+</html>

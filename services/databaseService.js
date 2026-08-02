@@ -782,5 +782,54 @@ const webhooks = {
     }
 };
 
+/**
+ * Utilitário Unificado para Extrair e Normalizar as Configurações da Clínica
+ * Trata work_hours como JSON string ou JS Object e mescla colunas de nível superior da tabela clinics.
+ */
+function parseClinicSettings(cData) {
+    let settings = {};
+    if (!cData) return settings;
+
+    // 1. Tenta extrair de work_hours (suporta JSON string ou JS Object retornado pelo Supabase)
+    if (cData.work_hours) {
+        if (typeof cData.work_hours === 'object' && cData.work_hours !== null) {
+            settings = { ...cData.work_hours };
+        } else if (typeof cData.work_hours === 'string') {
+            const trimmed = cData.work_hours.trim();
+            if (trimmed.startsWith('{')) {
+                try { settings = JSON.parse(trimmed); } catch (e) {}
+            }
+        }
+    }
+
+    // 2. Mescla/Sobrescreve com colunas de nível superior da tabela clinics
+    if (cData.name) settings.name = cData.name;
+    if (cData.address) settings.address = cData.address;
+    if (cData.eval_price) settings.evalPrice = String(cData.eval_price);
+
+    // 3. Garante fallbacks padrões para todos os campos essenciais se estiverem ausentes
+    if (!settings.personaName) settings.personaName = 'Ana';
+    if (!settings.workHours || settings.workHours === '08:00 às 18:00 (Seg a Sex)') {
+        settings.workHours = 'Segunda a Sexta-feira, das 08:00 às 18:00';
+    }
+    if (!settings.procedures) {
+        settings.procedures = 'Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental';
+    }
+    if (!settings.insurances) {
+        settings.insurances = 'Bradesco Saúde, Amil Dental, SulAmérica e Atendimento Particular';
+    }
+    if (!settings.paymentMethods) {
+        settings.paymentMethods = 'PIX com 5% de desconto, Cartão de Crédito em até 12x sem juros, Dinheiro';
+    }
+    if (!settings.emergency) {
+        settings.emergency = 'Em caso de dor intensa ou emergência, orientamos ligar imediatamente para o nosso telefone de urgência ou vir diretamente à clínica.';
+    }
+    if (!settings.minCancellationHours) {
+        settings.minCancellationHours = '4';
+    }
+
+    return settings;
+}
+
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar };
+module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings };

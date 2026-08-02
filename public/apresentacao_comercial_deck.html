@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pitch Deck Comercial — ClinicaBot SaaS Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #080D1A;
+            --bg-card: #0E1626;
+            --accent-cyan: #00F2FE;
+            --accent-blue: #4FACFE;
+            --wa-green: #25D366;
+            --text-title: #FFFFFF;
+            --text-body: #94A3B8;
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --shadow-glow: 0 0 40px rgba(0, 242, 254, 0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-dark); color: var(--text-title); overflow-x: hidden; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
+
+        .deck-container {
+            width: 100%;
+            max-width: 1000px;
+            height: 600px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), var(--shadow-glow);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .slide-header {
+            padding: 24px 40px;
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(8, 13, 26, 0.4);
+        }
+
+        .brand-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .slide-counter {
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            font-weight: 600;
+            background: rgba(0, 242, 254, 0.1);
+            padding: 4px 12px;
+            border-radius: 50px;
+        }
+
+        .slide-content {
+            flex: 1;
+            padding: 40px;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .slide-content.active { display: flex; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1, h2 { font-family: 'Outfit', sans-serif; }
+        h2 { font-size: 2.2rem; margin-bottom: 16px; color: var(--text-title); }
+        p { font-size: 1.05rem; color: var(--text-body); line-height: 1.6; margin-bottom: 24px; }
+
+        .highlight { color: var(--accent-cyan); font-weight: 700; }
+        .green-highlight { color: var(--wa-green); font-weight: 700; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .card h3 { font-size: 1.2rem; margin-bottom: 8px; color: var(--accent-cyan); }
+        .card p { font-size: 0.9rem; margin-bottom: 0; }
+
+        .deck-controls {
+            padding: 20px 40px;
+            border-top: 1px solid var(--border-glass);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(8, 13, 26, 0.6);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            color: #000;
+            font-weight: 700;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover { transform: translateY(-2px); opacity: 0.9; }
+        .btn-outline { background: transparent; border: 1px solid var(--border-glass); color: var(--text-title); }
+
+        .notes-box {
+            margin-top: 20px;
+            max-width: 1000px;
+            width: 100%;
+            background: #0E1626;
+            border: 1px dashed var(--accent-cyan);
+            border-radius: 16px;
+            padding: 20px;
+            font-size: 0.9rem;
+            color: var(--text-body);
+        }
+
+        .notes-box strong { color: var(--accent-cyan); }
+    </style>
+</head>
+<body>
+
+    <div class="deck-container">
+        <div class="slide-header">
+            <div class="brand-badge">🩺 ClinicaBot <span style="color:var(--accent-cyan)">SaaS Pro</span></div>
+            <div class="slide-counter" id="slide-num">Slide 1 de 8</div>
+        </div>
+
+        <!-- Slide 1: Capa -->
+        <div class="slide-content active">
+            <span style="font-size: 3rem; margin-bottom: 12px;">🚀</span>
+            <h2>ClinicaBot SaaS Pro</h2>
+            <p>Estratégia de Lançamento Comercial B2B & Automação Conversacional para Clínicas Médicas e Odontológicas no Brasil.</p>
+            <div class="card" style="border-color: var(--accent-cyan);">
+                <p><strong>Visão Geral:</strong> Proposta de valor ancorada na erradicação de faltas em consultas (no-shows) e recuperação imediata de receita para a clínica.</p>
+            </div>
+        </div>
+
+        <!-- Slide 2: A Dor do Mercado -->
+        <div class="slide-content">
+            <h2>1. A Dor Real das Clínicas no Brasil</h2>
+            <p>O absenteísmo é o maior ralo de dinheiro invisível da área da saúde.</p>
+            <div class="grid-2">
+                <div class="card">
+                    <h3>🔴 25% a 35% de Faltas</h3>
+                    <p>Pacientes esquecem a consulta ou desmarcam em cima da hora, deixando médicos e insumos parados.</p>
+                </div>
+                <div class="card">
+                    <h3>🔴 Recepção Sobrecarregada</h3>
+                    <p>Secretárias gastam 3h por dia enviando mensagens manuais repetitivas sem controle centralizado.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: A Solução -->
+        <div class="slide-content">
+            <h2>2. A Solução: IA Conversacional "Ana"</h2>
+            <p>Atendimento nativo no WhatsApp 24/7 com precisão de fuso horário de Brasília (BRT).</p>
+            <div class="grid-3">
+                <div class="card">
+                    <h3>🔔 Lembrete 24h & 2h</h3>
+                    <p>Disparos automáticos no fuso oficial BRT com botões interativos em 1 clique.</p>
+                </div>
+                <div class="card">
+                    <h3>📅 Remarcação Autônoma</h3>
+                    <p>O paciente remarca sozinho no WhatsApp e libera a vaga antiga imediatamente.</p>
+                </div>
+                <div class="card">
+                    <h3>🛡️ Conformidade LGPD</h3>
+                    <p>Criptografia militar AES-256 e mascaramento de CPF (cpfMasked).</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: A Prova Financeira (ROI) -->
+        <div class="slide-content">
+            <h2>3. Calculadora de ROI (Ancoragem)</h2>
+            <p>Demonstração matemática imediata de retorno financeiro para o gestor.</p>
+            <div class="grid-2">
+                <div class="card" style="border-color: rgba(255, 77, 77, 0.4);">
+                    <h3 style="color:#FF4D4D">🔴 Prejuízo Mensal Típico</h3>
+                    <p style="font-size: 1.8rem; font-weight:800; color:#FFF; margin-top:8px;">R$ 12.500,00</p>
+                    <p>(200 consultas/mês a R$ 250 com 25% de faltas)</p>
+                </div>
+                <div class="card" style="border-color: var(--wa-green);">
+                    <h3 style="color:var(--wa-green)">🟢 Receita Recuperada com ClinicaBot</h3>
+                    <p style="font-size: 1.8rem; font-weight:800; color:#FFF; margin-top:8px;">R$ 9.375,00/mês</p>
+                    <p style="color:var(--accent-cyan); font-weight:700;">➔ Retorno de 23.6x o valor do software (Plano Pro R$ 397/mês)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: Funil Outbound -->
+        <div class="slide-content">
+            <h2>4. Funil de Prospecção Outbound B2B</h2>
+            <p>Cadência em 4 passos para atrair e converter secretárias e donos de clínica.</p>
+            <div class="grid-2">
+                <div class="card">
+                    <h3>📲 Abordagem Fria (3 Linhas)</h3>
+                    <p>Mensagem no WhatsApp focada no custo da cadeira vazia + link do Simulador ao vivo.</p>
+                </div>
+                <div class="card">
+                    <h3>🎬 Demonstração em Tela Dividida</h3>
+                    <p>Simulador da Ana de um lado e o Dashboard da recepção atualizando em tempo real do outro.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Objeções & Battlecard -->
+        <div class="slide-content">
+            <h2>5. Tratamento de Objeções (Battlecard)</h2>
+            <p>Como desarmamos a concorrência e objeções comuns.</p>
+            <div class="grid-2">
+                <div class="card">
+                    <h3>"Já pagamos por médico no ERP"</h3>
+                    <p><strong>Resposta:</strong> No ClinicaBot a precificação é por clínica (Preço Fixo) com médicos ilimitados. Economia imediata de +R$ 800/mês!</p>
+                </div>
+                <div class="card">
+                    <h3>"Robô no WhatsApp é chato"</h3>
+                    <p><strong>Resposta:</strong> Nossa IA entende linguagem natural e áudio. Nada de menus engessados de 1 a 5.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Planos & Preços -->
+        <div class="slide-content">
+            <h2>6. Precificação & Margem SaaS (>70%)</h2>
+            <div class="grid-3">
+                <div class="card">
+                    <h3>Starter</h3>
+                    <p style="font-size:1.5rem; font-weight:800; color:#FFF; margin:8px 0;">R$ 197 <span style="font-size:0.8rem">/mês</span></p>
+                    <p>Consultórios Solo (1 Agenda)<br>+ Setup R$ 297</p>
+                </div>
+                <div class="card" style="border-color:var(--accent-cyan); background:rgba(0,242,254,0.05);">
+                    <h3 style="color:var(--accent-cyan)">Pro (Mais Vendido)</h3>
+                    <p style="font-size:1.5rem; font-weight:800; color:#FFF; margin:8px 0;">R$ 397 <span style="font-size:0.8rem">/mês</span></p>
+                    <p>Até 5 Médicos + Remarcação Autônoma<br>+ Setup R$ 397</p>
+                </div>
+                <div class="card">
+                    <h3>Enterprise</h3>
+                    <p style="font-size:1.5rem; font-weight:800; color:#FFF; margin:8px 0;">R$ 697 <span style="font-size:0.8rem">/mês</span></p>
+                    <p>Redes & Policlínicas Multicampus<br>+ Setup R$ 497</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Homologação Técnica -->
+        <div class="slide-content">
+            <h2>7. Garantia de Qualidade & Testes E2E</h2>
+            <p>Infraestrutura 100% testada e homologada com evidências de terminal e navegador real.</p>
+            <div class="grid-2">
+                <div class="card">
+                    <h3>🎭 Headless Chromium E2E</h3>
+                    <p>13/13 testes aprovados via Puppeteer em 4 resoluções de tela (mobile, tablet, laptop, desktop).</p>
+                </div>
+                <div class="card">
+                    <h3>⚡ Onboarding 60 Segundos</h3>
+                    <p>Provisionamento automático de novas clínicas no Supabase com isolamento de dados RLS.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="deck-controls">
+            <button class="btn btn-outline" id="prev-btn" onclick="changeSlide(-1)">◀ Anterior</button>
+            <button class="btn" id="next-btn" onclick="changeSlide(1)">Próximo Slide ▶</button>
+        </div>
+    </div>
+
+    <div class="notes-box" id="notes-container">
+        <strong>💡 Roteiro de Fala para o Slide:</strong>
+        <span id="slide-notes">Apresentação executiva da proposta de valor do ClinicaBot SaaS Pro.</span>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide-content');
+        const slideNumEl = document.getElementById('slide-num');
+        const notesEl = document.getElementById('slide-notes');
+
+        const notesText = [
+            "Apresentação executiva da proposta de valor do ClinicaBot SaaS Pro: Inteligência conversacional que zera faltas em clínicas médicas e odontológicas.",
+            "Mostre a dor real: 25% a 35% de absenteísmo significa médicos parados e insumos desperdiçados todos os meses.",
+            "Apresente a solução: A IA 'Ana' atende 24/7 no WhatsApp, envia lembretes duplos no fuso de Brasília e faz remarcações autônomas.",
+            "Ancoragem financeira: Mostre que recuperar APENAS 2 consultas no mês inteiro já paga 100% do valor do software.",
+            "Explique a estratégia Outbound: Cadência em 4 passos direcionada às secretárias e médicos proprietários.",
+            "Battlecard de Vendas: Como desarmamos objeções de concorrentes cobrando por médico (ex: Feegow e Doctoralia).",
+            "Tabela de preços: Margem de lucro SaaS > 70% dividida nos planos Starter (R$ 197), Pro (R$ 397) e Enterprise (R$ 697).",
+            "Homologação técnica: Mostre que a plataforma passou por 13/13 testes em navegador Chromium E2E sem erros."
+        ];
+
+        function changeSlide(direction) {
+            slides[currentSlide].classList.remove('active');
+            currentSlide += direction;
+
+            if (currentSlide < 0) currentSlide = 0;
+            if (currentSlide >= slides.length) currentSlide = slides.length - 1;
+
+            slides[currentSlide].classList.add('active');
+            slideNumEl.innerText = `Slide ${currentSlide + 1} de ${slides.length}`;
+            notesEl.innerText = notesText[currentSlide];
+
+            document.getElementById('prev-btn').disabled = (currentSlide === 0);
+            document.getElementById('next-btn').disabled = (currentSlide === slides.length - 1);
+        }
+
+        changeSlide(0);
+    </script>
+</body>
+</html>

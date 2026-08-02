@@ -251,13 +251,7 @@ class DashboardController {
 
             let parsedSettings = {};
             if (clinicData) {
-                if (clinicData.work_hours && clinicData.work_hours.startsWith('{')) {
-                    try { parsedSettings = JSON.parse(clinicData.work_hours); } catch {}
-                }
-                if (!parsedSettings.name && clinicData.name) parsedSettings.name = clinicData.name;
-                if (!parsedSettings.address && clinicData.address) parsedSettings.address = clinicData.address;
-                if (!parsedSettings.evalPrice && clinicData.eval_price) parsedSettings.evalPrice = String(clinicData.eval_price);
-                if (!parsedSettings.personaName) parsedSettings.personaName = 'Ana';
+                parsedSettings = db.parseClinicSettings(clinicData);
             }
 
             res.json({

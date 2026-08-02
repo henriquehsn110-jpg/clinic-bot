@@ -1358,7 +1358,7 @@
                 <p style="margin-bottom: 14px;">Em conformidade estrita com a LGPD (Lei nº 13.709/2018), todos os endpoints públicos e telas de recepção tratam o CPF no formato mascarado <code>•••.•••.•••-••</code>.</p>
 
                 <h4 style="color: var(--accent-cyan); margin-bottom: 6px;">3. Resoluções CFM nº 2.314/2022 & CFO nº 224/2020</h4>
-                <p style="margin-bottom: 14px;">Regras operacionais homologadas para sigilo médico e agendamentos remotos, com isolamento multi-tenant via Row Level Security (RLS).</p>
+                <p style="margin-bottom: 14px;">Regras operacionais homologadas para sigilo médico e agendamentos remotos, com isolamento multi-tenant via Row Level Security (RLS) e autenticação de Webhooks via HMAC SHA-256.</p>
             </div>
 
             <div style="margin-top: 20px; display: flex; justify-content: flex-end; border-top: 1px solid var(--border-glass); padding-top: 14px;">
@@ -1593,7 +1593,7 @@
                 } else if (sanitizedAction === 'Remarcar') {
                     anaMsg.innerHTML = 'Compreendo! Aqui estão os novos horários disponíveis nesta semana:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora10">🕒 Quinta-feira às 10:00</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="Hora16">🕒 Sexta-feira às 15:30</button></div><span class="time">' + timeStr + '</span>';
                 } else if (sanitizedAction === 'InfoLocal') {
-                    anaMsg.innerHTML = '📍 <strong>Clínica Odonto Riso</strong><br>Av. Paulista, 1000 - Conjunto 502, São Paulo - SP<br><br>⏰ <strong>Atendimento:</strong> Seg a Sex das 08h às 19h | Sáb das 08h às 13h.<br><br>Como posso te ajudar agora?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE</button></div><span class="time">' + timeStr + '</span>';
+                    anaMsg.innerHTML = '📍 <strong>Clínica Saúde Pro</strong><br>Av. Paulista, 1000 - Conjunto 502, São Paulo - SP<br><br>⏰ <strong>Atendimento:</strong> Seg a Sex das 08h às 19h | Sáb das 08h às 13h.<br><br>Como posso te ajudar agora?<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE</button></div><span class="time">' + timeStr + '</span>';
                 } else {
                     anaMsg.innerHTML = 'Entendi! Para iniciar seu atendimento, selecione uma das opções abaixo:<div class="wa-buttons-group"><button class="wa-btn-reply" data-action="sim-reply" data-reply="NovoAgendamento">📅 AGENDAR NOVA CONSULTA</button><button class="wa-btn-reply" data-action="sim-reply" data-reply="ConfirmarLembrete">🔔 TESTAR LEMBRETE</button></div><span class="time">' + timeStr + '</span>';
                 }

@@ -313,12 +313,7 @@ class ConversationController {
             cData = res?.data || null;
             clinicToken = cData?.whatsapp_token || null;
             if (cData?.whatsapp_list_title) clinicListTitle = cData.whatsapp_list_title;
-            if (cData?.work_hours && cData.work_hours.startsWith('{')) {
-                try { clinicSettings = JSON.parse(cData.work_hours); } catch {}
-            }
-            if (!clinicSettings.name && cData?.name) clinicSettings.name = cData.name;
-            if (!clinicSettings.address && cData?.address) clinicSettings.address = cData.address;
-            if (!clinicSettings.evalPrice && cData?.eval_price) clinicSettings.evalPrice = String(cData.eval_price);
+            clinicSettings = db.parseClinicSettings(cData);
         } catch (e) { console.error('ERR_LOADING_CLINIC:', e); }
 
         const personaName = clinicSettings.personaName || 'Ana';
