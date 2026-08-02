@@ -356,8 +356,17 @@
                                 <input type="text" id="cfg-list-title" value="Tratamentos" placeholder="Aparece no topo do menu de botões do WhatsApp">
                             </div>
                             <div class="form-group">
-                                <label>Procedimentos & Especialidades da Clínica (Separados por vírgula) *</label>
-                                <textarea id="cfg-procedures" rows="2" onkeyup="updateLivePreview()" placeholder="Ex: Consulta Geral, Limpeza, Ortodontia, Implantes, Clareamento Dental">Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental</textarea>
+                                <label>Procedimentos &amp; Especialidades da Clínica (Separados por vírgula) *</label>
+                                <textarea id="cfg-procedures" rows="2" onkeyup="updateLivePreview(); renderProcedureDurationsConfig();" placeholder="Ex: Consulta Geral, Limpeza, Ortodontia, Implantes, Clareamento Dental">Consulta Geral, Limpeza, Tratamento de Canal, Implantes, Clareamento Dental</textarea>
+                            </div>
+                            <div class="form-group" style="margin-top: 12px;">
+                                <label style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span><i class="fa-solid fa-hourglass-half" style="color: var(--accent-cyan);"></i> Duração Estimada dos Atendimentos (para cálculo dos horários no WhatsApp)</span>
+                                    <span style="font-size: 11px; color: var(--accent-cyan); font-weight: 500;">✓ Configuração de Tempo</span>
+                                </label>
+                                <div id="procedure-durations-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 8px;">
+                                    <!-- Preenchido dinamicamente por JS ao carregar ou alterar cfg-procedures -->
+                                </div>
                             </div>
                         </div>
 
@@ -689,10 +698,10 @@
                     </div>
                 </div>
 
-                <!-- HORÁRIOS DE ATENDIMENTO PADRONIZADOS -->
-                <div style="display: flex; gap: 16px;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Horário de Entrada *</label>
+                <!-- HORÁRIOS DE ATENDIMENTO PADRONIZADOS COM PAUSA DE ALMOÇO -->
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 110px;">
+                        <label>Entrada *</label>
                         <select id="doc-start-time" onchange="updateDoctorDaysFormatted()">
                             <option value="06:00">06:00</option>
                             <option value="06:15">06:15</option>
@@ -719,53 +728,52 @@
                             <option value="11:30">11:30</option>
                             <option value="11:45">11:45</option>
                             <option value="12:00">12:00</option>
-                            <option value="13:00">13:00</option>
-                            <option value="14:00">14:00</option>
                         </select>
                     </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label>Horário de Saída *</label>
-                        <select id="doc-end-time" onchange="updateDoctorDaysFormatted()">
-                            <option value="12:00">12:00</option>
+                    <div class="form-group" style="flex: 1; min-width: 110px;">
+                        <label>Saída Almoço *</label>
+                        <select id="doc-lunch-start" onchange="updateDoctorDaysFormatted()">
+                            <option value="none">Sem Pausa</option>
+                            <option value="11:30">11:30</option>
+                            <option value="11:45">11:45</option>
+                            <option value="12:00" selected>12:00</option>
                             <option value="12:15">12:15</option>
                             <option value="12:30">12:30</option>
                             <option value="12:45">12:45</option>
                             <option value="13:00">13:00</option>
+                            <option value="13:30">13:30</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 110px;">
+                        <label>Retorno Almoço *</label>
+                        <select id="doc-lunch-end" onchange="updateDoctorDaysFormatted()">
+                            <option value="none">Sem Pausa</option>
+                            <option value="12:30">12:30</option>
+                            <option value="12:45">12:45</option>
+                            <option value="13:00" selected>13:00</option>
                             <option value="13:15">13:15</option>
                             <option value="13:30">13:30</option>
                             <option value="13:45">13:45</option>
                             <option value="14:00">14:00</option>
-                            <option value="14:15">14:15</option>
                             <option value="14:30">14:30</option>
-                            <option value="14:45">14:45</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 110px;">
+                        <label>Saída *</label>
+                        <select id="doc-end-time" onchange="updateDoctorDaysFormatted()">
+                            <option value="12:00">12:00</option>
+                            <option value="13:00">13:00</option>
+                            <option value="14:00">14:00</option>
                             <option value="15:00">15:00</option>
-                            <option value="15:15">15:15</option>
-                            <option value="15:30">15:30</option>
-                            <option value="15:45">15:45</option>
                             <option value="16:00">16:00</option>
-                            <option value="16:15">16:15</option>
-                            <option value="16:30">16:30</option>
-                            <option value="16:45">16:45</option>
                             <option value="17:00">17:00</option>
-                            <option value="17:15">17:15</option>
                             <option value="17:30">17:30</option>
-                            <option value="17:45">17:45</option>
                             <option value="18:00" selected>18:00</option>
-                            <option value="18:15">18:15</option>
                             <option value="18:30">18:30</option>
-                            <option value="18:45">18:45</option>
                             <option value="19:00">19:00</option>
-                            <option value="19:15">19:15</option>
                             <option value="19:30">19:30</option>
-                            <option value="19:45">19:45</option>
                             <option value="20:00">20:00</option>
-                            <option value="20:15">20:15</option>
-                            <option value="20:30">20:30</option>
-                            <option value="20:45">20:45</option>
                             <option value="21:00">21:00</option>
-                            <option value="21:15">21:15</option>
-                            <option value="21:30">21:30</option>
-                            <option value="21:45">21:45</option>
                             <option value="22:00">22:00</option>
                         </select>
                     </div>
@@ -1570,14 +1578,61 @@
             const workHours = (rawWorkHours && rawWorkHours.trim()) ? rawWorkHours.trim() : 'Segunda a Sexta-feira, das 08:00 às 18:00';
             const minCancellationHours = document.getElementById('cfg-min-cancellation')?.value || '4';
 
+            const proceduresDuration = {};
+            document.querySelectorAll('.proc-duration-select').forEach(sel => {
+                const procName = sel.dataset.proc;
+                if (procName) {
+                    proceduresDuration[procName] = parseInt(sel.value) || 30;
+                }
+            });
+            window.currentProceduresDuration = proceduresDuration;
+
             try {
                 await apiRequest('/settings', 'POST', {
-                    name, personaName, whatsappListTitle, procedures, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours
+                    name, personaName, whatsappListTitle, procedures, proceduresDuration, address, phone, evalPrice, insurances, paymentMethods, emergency, workHours, minCancellationHours
                 });
                 showToast(`✅ Configurações salvas no servidor! A IA (${personaName}) foi atualizada com sucesso.`);
             } catch (err) {
                 showToast(`❌ Erro ao salvar configurações: ${err.message}`);
             }
+        }
+
+        function renderProcedureDurationsConfig(savedDurations = {}) {
+            const container = document.getElementById('procedure-durations-grid');
+            if (!container) return;
+            const rawProc = document.getElementById('cfg-procedures')?.value || '';
+            const procs = rawProc.split(',').map(s => s.trim()).filter(Boolean);
+            
+            if (procs.length === 0) {
+                container.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Nenhum procedimento cadastrado.</span>';
+                return;
+            }
+
+            if (savedDurations && Object.keys(savedDurations).length > 0) {
+                window.currentProceduresDuration = { ...window.currentProceduresDuration, ...savedDurations };
+            }
+            
+            container.innerHTML = procs.map(proc => {
+                const currentDur = (window.currentProceduresDuration && window.currentProceduresDuration[proc]) || 30;
+                return `
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span style="font-size: 12px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${esc(proc)}">${esc(proc)}</span>
+                        <select class="proc-duration-select" data-proc="${esc(proc)}" onchange="updateProcedureDurationMemory('${esc(proc)}', this.value)" style="padding: 4px 8px; font-size: 12px; border-radius: 6px; background: #1a2332; color: #00f2fe; border: 1px solid rgba(0,242,254,0.3); outline: none;">
+                            <option value="15" ${currentDur == 15 ? 'selected' : ''}>15 min</option>
+                            <option value="30" ${currentDur == 30 ? 'selected' : ''}>30 min</option>
+                            <option value="45" ${currentDur == 45 ? 'selected' : ''}>45 min</option>
+                            <option value="60" ${currentDur == 60 ? 'selected' : ''}>60 min (1h)</option>
+                            <option value="90" ${currentDur == 90 ? 'selected' : ''}>90 min (1h30)</option>
+                            <option value="120" ${currentDur == 120 ? 'selected' : ''}>120 min (2h)</option>
+                        </select>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateProcedureDurationMemory(proc, val) {
+            if (!window.currentProceduresDuration) window.currentProceduresDuration = {};
+            window.currentProceduresDuration[proc] = parseInt(val) || 30;
         }
 
         let _settingsFormPopulated = false;
@@ -1625,6 +1680,13 @@
                 if (minCancelInput.selectedIndex === -1 || !minCancelInput.value) {
                     minCancelInput.value = '4';
                 }
+            }
+
+            if (s.proceduresDuration) {
+                window.currentProceduresDuration = s.proceduresDuration;
+                renderProcedureDurationsConfig(s.proceduresDuration);
+            } else {
+                renderProcedureDurationsConfig();
             }
 
             _settingsFormPopulated = true;
@@ -1776,6 +1838,8 @@
             const selectedDays = activeBtns.map(b => b.dataset.day);
             
             const startTime = document.getElementById('doc-start-time')?.value || '08:00';
+            const lunchStart = document.getElementById('doc-lunch-start')?.value || '12:00';
+            const lunchEnd = document.getElementById('doc-lunch-end')?.value || '13:00';
             const endTime = document.getElementById('doc-end-time')?.value || '18:00';
             
             const daysInput = document.getElementById('doc-days');
@@ -1786,7 +1850,13 @@
             } else {
                 const startFormatted = startTime.split(':')[0] + 'h';
                 const endFormatted = endTime.split(':')[0] + 'h';
-                daysInput.value = `${selectedDays.join(', ')} (${startFormatted} às ${endFormatted})`;
+                if (lunchStart !== 'none' && lunchEnd !== 'none') {
+                    const lStartFormatted = lunchStart.split(':')[0] + 'h';
+                    const lEndFormatted = lunchEnd.split(':')[0] + 'h';
+                    daysInput.value = `${selectedDays.join(', ')} (${startFormatted} às ${lStartFormatted} e ${lEndFormatted} às ${endFormatted})`;
+                } else {
+                    daysInput.value = `${selectedDays.join(', ')} (${startFormatted} às ${endFormatted})`;
+                }
             }
         }
 
@@ -1807,15 +1877,32 @@
                 }
             });
             
-            const timeMatch = daysStr.match(/(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?/i);
-            if (timeMatch) {
-                const startHour = String(timeMatch[1]).padStart(2, '0') + ':00';
-                const endHour = String(timeMatch[2]).padStart(2, '0') + ':00';
+            const doubleRangeMatch = daysStr.match(/(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?\s*e\s*(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?/i);
+            const singleRangeMatch = daysStr.match(/(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?/i);
+            
+            const startSelect = document.getElementById('doc-start-time');
+            const lunchStartSelect = document.getElementById('doc-lunch-start');
+            const lunchEndSelect = document.getElementById('doc-lunch-end');
+            const endSelect = document.getElementById('doc-end-time');
+            
+            if (doubleRangeMatch) {
+                const start = String(doubleRangeMatch[1]).padStart(2, '0') + ':00';
+                const lStart = String(doubleRangeMatch[2]).padStart(2, '0') + ':00';
+                const lEnd = String(doubleRangeMatch[3]).padStart(2, '0') + ':00';
+                const end = String(doubleRangeMatch[4]).padStart(2, '0') + ':00';
                 
-                const startSelect = document.getElementById('doc-start-time');
-                const endSelect = document.getElementById('doc-end-time');
-                if (startSelect && Array.from(startSelect.options).some(o => o.value === startHour)) startSelect.value = startHour;
-                if (endSelect && Array.from(endSelect.options).some(o => o.value === endHour)) endSelect.value = endHour;
+                if (startSelect) startSelect.value = start;
+                if (lunchStartSelect) lunchStartSelect.value = lStart;
+                if (lunchEndSelect) lunchEndSelect.value = lEnd;
+                if (endSelect) endSelect.value = end;
+            } else if (singleRangeMatch) {
+                const start = String(singleRangeMatch[1]).padStart(2, '0') + ':00';
+                const end = String(singleRangeMatch[2]).padStart(2, '0') + ':00';
+                
+                if (startSelect) startSelect.value = start;
+                if (lunchStartSelect) lunchStartSelect.value = 'none';
+                if (lunchEndSelect) lunchEndSelect.value = 'none';
+                if (endSelect) endSelect.value = end;
             }
             
             updateDoctorDaysFormatted();

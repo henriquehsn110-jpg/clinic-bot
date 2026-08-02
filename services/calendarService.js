@@ -5,17 +5,54 @@ const logger = require('./logger');
 const DEFAULT_SLOTS = ['08:00', '09:00', '10:00', '10:30', '11:00',
                        '14:00', '14:30', '15:00', '16:00', '17:00'];
 
+function generateSlotsForRange(startTime = '08:00', endTime = '18:00', lunchStart = '12:00', lunchEnd = '13:00', stepMinutes = 30) {
+    const slots = [];
+    
+    function timeToMin(t) {
+        if (!t || t === 'none') return null;
+        const parts = String(t).split(':').map(Number);
+        if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+        return parts[0] * 60 + parts[1];
+    }
+    
+    function minToTime(m) {
+        const hh = String(Math.floor(m / 60)).padStart(2, '0');
+        const mm = String(m % 60).padStart(2, '0');
+        return `${hh}:${mm}`;
+    }
+    
+    const startMin = timeToMin(startTime) ?? (8 * 60);
+    const endMin = timeToMin(endTime) ?? (18 * 60);
+    const lStartMin = timeToMin(lunchStart);
+    const lEndMin = timeToMin(lunchEnd);
+    const step = parseInt(stepMinutes) || 30;
+    
+    for (let cur = startMin; cur + step <= endMin; cur += step) {
+        const slotEnd = cur + step;
+        // Pula slots que colidem com a pausa de almoço
+        if (lStartMin !== null && lEndMin !== null) {
+            if (cur < lEndMin && slotEnd > lStartMin) {
+                continue;
+            }
+        }
+        slots.push(minToTime(cur));
+    }
+    return slots.length > 0 ? slots : DEFAULT_SLOTS;
+}
+
 class CalendarService {
 
     /**
      * Retorna os horários disponíveis para uma data.
-     * Suporta checagem de feriados e horários customizados por clínica (P14/P15).
+     * Suporta checagem de feriados, intervalo de almoço do médico e duração do procedimento.
      *
      * @param {string} dateStr - formato "YYYY-MM-DD"
      * @param {string} clinicId - UUID da clínica
-     * @returns {string[]} - ex: ["09:00", "14:30", "16:00"]
+     * @param {string|null} doctorId - UUID do médico
+     * @param {string|null} procedureName - Nome do procedimento selecionado
+     * @returns {string[]} - ex: ["08:00", "09:00", "10:00"]
      */
-    async getAvailableSlots(dateStr, clinicId, doctorId = null) {
+    async getAvailableSlots(dateStr, clinicId, doctorId = null, procedureName = null) {
         if (!clinicId) throw new Error('clinicId é obrigatório em getAvailableSlots');
 
         try {
@@ -56,12 +93,58 @@ class CalendarService {
             const { data: appts } = await occupiedQuery;
             const occupied = (appts || []).map(a => a.appointment_time.substring(0, 5));
 
-            // 3. Tenta buscar grade de horários customizados do médico ou clínica
-            let baseSlots = DEFAULT_SLOTS;
+            // 3. Tenta buscar a clínica para determinar o tempo do procedimento e horários de funcionamento
+            let durationMinutes = 30;
+            let startTime = '08:00';
+            let endTime = '18:00';
+            let lunchStart = '12:00';
+            let lunchEnd = '13:00';
+
             try {
-                const dateObj = new Date(`${dateStr}T12:00:00Z`);
-                const dayOfWeek = dateObj.getDay(); // 0-6
-                
+                const { data: cData } = await db.supabase.from('clinics').select('work_hours').eq('id', clinicId).maybeSingle();
+                if (cData) {
+                    const parsed = db.parseClinicSettings(cData);
+                    if (procedureName && parsed.proceduresDuration && parsed.proceduresDuration[procedureName]) {
+                        durationMinutes = parseInt(parsed.proceduresDuration[procedureName]) || 30;
+                    }
+                    if (parsed.workHours) {
+                        const timeMatch = parsed.workHours.match(/(\d{1,2}:\d{2})\s*às\s*(\d{1,2}:\d{2})/i);
+                        if (timeMatch) {
+                            startTime = timeMatch[1];
+                            endTime = timeMatch[2];
+                        }
+                    }
+                }
+            } catch (err) {
+                logger.warn('CALENDAR', `Falha ao extrair duração de procedimento: ${err.message}`);
+            }
+
+            // 4. Tenta buscar a escala individual do médico ou da clínica
+            if (doctorId) {
+                try {
+                    const { data: docRow } = await db.supabase.from('doctors').select('available_days').eq('id', doctorId).maybeSingle();
+                    if (docRow && docRow.available_days) {
+                        const doubleRange = docRow.available_days.match(/(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?\s*e\s*(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?/i);
+                        const singleRange = docRow.available_days.match(/(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?/i);
+                        if (doubleRange) {
+                            startTime = String(doubleRange[1]).padStart(2, '0') + ':00';
+                            lunchStart = String(doubleRange[2]).padStart(2, '0') + ':00';
+                            lunchEnd = String(doubleRange[3]).padStart(2, '0') + ':00';
+                            endTime = String(doubleRange[4]).padStart(2, '0') + ':00';
+                        } else if (singleRange) {
+                            startTime = String(singleRange[1]).padStart(2, '0') + ':00';
+                            endTime = String(singleRange[2]).padStart(2, '0') + ':00';
+                            lunchStart = 'none';
+                            lunchEnd = 'none';
+                        }
+                    }
+                } catch (docErr) {
+                    logger.warn('CALENDAR', `Falha ao ler escala do médico ${doctorId}: ${docErr.message}`);
+                }
+            }
+
+            let baseSlots = generateSlotsForRange(startTime, endTime, lunchStart, lunchEnd, durationMinutes);
+            try {
                 let customHours = null;
                 if (doctorId) {
                     const { data } = await db.supabase
@@ -87,8 +170,9 @@ class CalendarService {
                     baseSlots = customHours.available_slots;
                 }
             } catch (err) {
-                logger.warn('CALENDAR', `Falha ao buscar horas costumizadas: ${err.message}`);
+                logger.warn('CALENDAR', `Falha ao buscar horas customizadas: ${err.message}`);
             }
+
 
             return baseSlots.filter(time => !occupied.includes(time));
         } catch (err) {

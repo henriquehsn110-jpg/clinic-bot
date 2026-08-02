@@ -1250,7 +1250,7 @@ class ConversationController {
             const dateMatch = dateNorm.match(DATE_SELECTION_REGEX) || dateNorm.match(/\b(\d{4}-\d{2}-\d{2})\b/);
             if (dateMatch) {
                 const selectedDate = dateMatch[1];
-                const slots = await calendarService.getAvailableSlots(selectedDate, clinicId);
+                const slots = await calendarService.getAvailableSlots(selectedDate, clinicId, draft.doctor_id, draft.type);
                 if (slots.length === 0) {
                     processedText = `${processedText}\n[SISTEMA: Nenhum horário disponível para ${selectedDate}. Informe ao paciente que o dia está cheio e solicite outra data.]`;
                 } else {
@@ -1564,7 +1564,7 @@ class ConversationController {
                 }
 
                 if (dateStr) {
-                    availableSlots = await calendarService.getAvailableSlots(dateStr, clinicId, draft.doctor_id);
+                    availableSlots = await calendarService.getAvailableSlots(dateStr, clinicId, draft.doctor_id, draft.type);
                 } else {
                     logger.warn('SCHEDULING_DATA', `showTimeSlots=true mas nenhuma data extraída da mensagem/histórico [${phone}]`);
                     availableSlots = [];
@@ -1625,7 +1625,7 @@ class ConversationController {
 
                         // Consulta disponibilidade de horários para todos os candidatos em paralelo para otimizar o tempo de resposta do lote
                         const availabilities = await Promise.all(
-                            candidateDates.map(d => calendarService.getAvailableSlots(d.formattedDate, clinicId).catch(err => { logger.error('CALENDAR_SLOTS_ERR', err.message); return []; }))
+                            candidateDates.map(d => calendarService.getAvailableSlots(d.formattedDate, clinicId, draft.doctor_id, draft.type).catch(err => { logger.error('CALENDAR_SLOTS_ERR', err.message); return []; }))
                         );
 
                         // Seleciona até 6 dias (deixando 1 slot para a paginação, pois o teto da Meta é 10 e aqui exibimos 7 opções total)
