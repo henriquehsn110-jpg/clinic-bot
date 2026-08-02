@@ -1,7 +1,7 @@
 # 📍 STATE.md — Estado de Execução & Fila de Tarefas (ClinicaBot SaaS Pro)
 
-> **Última Atualização:** 26/07/2026 14:08 (Fuso BRT)  
-> **Status Geral do Sistema:** 🟢 **v11.0 — 100% Auditado, Testado e Produção-Ready**
+> **Última Atualização:** 02/08/2026 20:20 (Fuso BRT)  
+> **Status Geral do Sistema:** 🟢 **v1.0.1 — 100% Auditado, Testado e Produção-Ready (Deploy Docker Render)**
 
 ---
 
@@ -42,6 +42,8 @@ Finalizar o Deploy na Nuvem (Render / Railway) para colocar o sistema 24/7 onlin
 - [x] **[TASK-VERIFIED-12]** Auditoria preventiva de código (`.eslintrc.json` configurado) + Correção de 4 variáveis não declaradas + Correção da busca de horários na agenda (`clinicId` em `getAvailableSlots`). Suíte de Testes QA (22 testes overnight + 100 reqs stress + RLS + HMAC) 100% APROVADA.
 - [x] **[TASK-VERIFIED-13]** Implementação e validação E2E real das 3 Camadas de Alta Disponibilidade 24h & Contingência (Watchdog, Buffer Fila Segura e Bot Guardião com envio ao vivo comprovado no WhatsApp via Meta API — `test_e2e_three_layers_contingency.js` 100% PASS).
 - [x] **[TASK-VERIFIED-14]** Configuração do gerenciador de processos PM2 (`ecosystem.config.js`) e atualização de `render.yaml` com `npx pm2-runtime start ecosystem.config.js` para hospedagem 24/7 sem quedas no Render.
+- [x] **[TASK-VERIFIED-15]** Implementação de Pausa de Almoço do Médico (4 dropdowns: Entrada, Saída Almoço, Retorno Almoço, Saída) + Grade de Duração por Procedimento (15/30/45/60/90/120 min) + Gerador dinâmico de slots `generateSlotsForRange()` no `calendarService.js` que filtra colisões com pausa de almoço + Correção do `Dockerfile` e `render.yaml` (`npm install --omit=dev`) para deploy Docker no Render. Testes: `test_usability_procedure_slots.js` (42/42 PASS) + `test_lunch_and_procedure_duration.js` (100% PASS).
+- [x] **[TASK-VERIFIED-16]** Injeção Dinâmica de Valor da Avaliação (`{{CLINIC_EVAL_PRICE}}`) e Endereço (`{{CLINIC_ADDRESS}}`) no System Prompt da IA Ana — `aiService.js` + `databaseService.js` (`parseClinicSettings` plain string). Teste: `test_whatsapp_settings_recognition.js` (100% PASS).
 
 ---
 
