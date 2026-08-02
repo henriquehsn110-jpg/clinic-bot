@@ -410,31 +410,58 @@
 
                         <div class="settings-card">
                             <div class="settings-card-title"><i class="fa-solid fa-clock"></i> 5. Horários de Atendimento & Regras de Cancelamento</div>
-                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch;">
-                                <div class="form-group" style="flex: 1; min-width: 120px; display: flex; flex-direction: column;">
-                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Abertura *</label>
-                                    <input type="time" id="cfg-time-start" value="08:00" style="margin-top: auto;" required>
+                            
+                            <!-- TICAR OS DIAS DA SEMANA DA CLÍNICA -->
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>Dias de Atendimento da Clínica (Clique para ticar) *</span>
+                                    <span style="font-size: 11px; color: var(--text-muted);">Marque os dias de funcionamento</span>
+                                </label>
+                                <div class="weekday-picker" id="cfg-weekday-picker">
+                                    <button type="button" class="weekday-btn active" data-day="Seg" onclick="toggleClinicDay(this)">Seg</button>
+                                    <button type="button" class="weekday-btn active" data-day="Ter" onclick="toggleClinicDay(this)">Ter</button>
+                                    <button type="button" class="weekday-btn active" data-day="Qua" onclick="toggleClinicDay(this)">Qua</button>
+                                    <button type="button" class="weekday-btn active" data-day="Qui" onclick="toggleClinicDay(this)">Qui</button>
+                                    <button type="button" class="weekday-btn active" data-day="Sex" onclick="toggleClinicDay(this)">Sex</button>
+                                    <button type="button" class="weekday-btn" data-day="Sáb" onclick="toggleClinicDay(this)">Sáb</button>
+                                    <button type="button" class="weekday-btn" data-day="Dom" onclick="toggleClinicDay(this)">Dom</button>
                                 </div>
-                                <div class="form-group" style="flex: 1; min-width: 120px; display: flex; flex-direction: column;">
-                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Fechamento *</label>
-                                    <input type="time" id="cfg-time-end" value="18:00" style="margin-top: auto;" required>
+                            </div>
+
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                                <div class="form-group" style="flex: 1; min-width: 120px;">
+                                    <label>Abertura *</label>
+                                    <select id="cfg-time-start" onchange="updateClinicWorkHoursFormatted()">
+                                        <option value="07:00">07:00</option>
+                                        <option value="08:00" selected>08:00</option>
+                                        <option value="09:00">09:00</option>
+                                        <option value="10:00">10:00</option>
+                                    </select>
                                 </div>
-                                <div class="form-group" style="flex: 1.2; min-width: 180px; display: flex; flex-direction: column;">
-                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Antecedência Cancelamento *</label>
-                                    <select id="cfg-min-cancellation" style="margin-top: auto;">
+                                <div class="form-group" style="flex: 1; min-width: 120px;">
+                                    <label>Fechamento *</label>
+                                    <select id="cfg-time-end" onchange="updateClinicWorkHoursFormatted()">
+                                        <option value="17:00">17:00</option>
+                                        <option value="18:00" selected>18:00</option>
+                                        <option value="19:00">19:00</option>
+                                        <option value="20:00">20:00</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1.2; min-width: 180px;">
+                                    <label>Antecedência Cancelamento *</label>
+                                    <select id="cfg-min-cancellation">
                                         <option value="2">2 Horas antes</option>
                                         <option value="4" selected>4 Horas antes (Recomendado)</option>
                                         <option value="12">12 Horas antes</option>
                                         <option value="24">24 Horas antes</option>
                                     </select>
                                 </div>
-                                <div class="form-group" style="flex: 1.5; min-width: 200px; display: flex; flex-direction: column;">
-                                    <label style="min-height: 34px; display: flex; align-items: flex-end; margin-bottom: 8px;">Dias de Atendimento *</label>
-                                    <select id="cfg-work-days" style="margin-top: auto;">
-                                        <option value="Segunda a Sexta-feira, das 08:00 às 18:00" selected>Segunda a Sexta (08h às 18h)</option>
-                                        <option value="Segunda a Sábado, das 08:00 às 17:00">Segunda a Sábado (08h às 17h)</option>
-                                        <option value="08:00 às 18:00 (Seg a Sex)">Segunda a Sexta (Horário Padrão)</option>
-                                    </select>
+                                <div class="form-group" style="flex: 2; min-width: 240px;">
+                                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span>Horário Formatado para a IA *</span>
+                                        <span style="font-size: 11px; color: var(--accent-cyan);">✓ Auto-Gerado</span>
+                                    </label>
+                                    <input type="text" id="cfg-work-days" placeholder="Ex: Segunda a Sexta-feira, das 08:00 às 18:00" readonly style="background: rgba(0, 242, 254, 0.05); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe; font-weight: 600;" required>
                                 </div>
                             </div>
                         </div>
@@ -1492,15 +1519,7 @@
             
             if (workDaysInput) {
                 const targetWorkHours = s.workHours || 'Segunda a Sexta-feira, das 08:00 às 18:00';
-                workDaysInput.value = targetWorkHours;
-                if (workDaysInput.selectedIndex === -1 || !workDaysInput.value) {
-                    const lower = String(targetWorkHours).toLowerCase();
-                    if (lower.includes('sábado') || lower.includes('sab')) {
-                        workDaysInput.value = 'Segunda a Sábado, das 08:00 às 17:00';
-                    } else {
-                        workDaysInput.selectedIndex = 0; // Força seleção do primeiro item se valor não coincidir exato
-                    }
-                }
+                loadClinicScheduleToPicker(targetWorkHours);
             }
 
             if (minCancelInput) {
@@ -1703,6 +1722,80 @@
             }
             
             updateDoctorDaysFormatted();
+        }
+
+        function toggleClinicDay(btn) {
+            btn.classList.toggle('active');
+            updateClinicWorkHoursFormatted();
+        }
+
+        function updateClinicWorkHoursFormatted() {
+            const activeBtns = Array.from(document.querySelectorAll('#cfg-weekday-picker .weekday-btn.active'));
+            const selectedDays = activeBtns.map(b => b.dataset.day);
+            
+            const startTime = document.getElementById('cfg-time-start')?.value || '08:00';
+            const endTime = document.getElementById('cfg-time-end')?.value || '18:00';
+            
+            const workDaysInput = document.getElementById('cfg-work-days');
+            if (!workDaysInput) return;
+            
+            if (selectedDays.length === 0) {
+                workDaysInput.value = '';
+            } else {
+                let daysStr = selectedDays.join(', ');
+                if (selectedDays.length === 5 && selectedDays.join(',') === 'Seg,Ter,Qua,Qui,Sex') {
+                    daysStr = 'Segunda a Sexta-feira';
+                } else if (selectedDays.length === 6 && selectedDays.join(',') === 'Seg,Ter,Qua,Qui,Sex,Sáb') {
+                    daysStr = 'Segunda a Sábado';
+                }
+                workDaysInput.value = `${daysStr}, das ${startTime} às ${endTime}`;
+            }
+            updateLivePreview();
+        }
+
+        function loadClinicScheduleToPicker(workHoursStr) {
+            const allBtns = document.querySelectorAll('#cfg-weekday-picker .weekday-btn');
+            allBtns.forEach(btn => btn.classList.remove('active'));
+            
+            if (!workHoursStr) {
+                updateClinicWorkHoursFormatted();
+                return;
+            }
+            
+            const lower = workHoursStr.toLowerCase();
+            const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+            
+            if (lower.includes('segunda a sexta') || lower.includes('seg a sex')) {
+                ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'].forEach(d => {
+                    const matchBtn = Array.from(allBtns).find(b => b.dataset.day === d);
+                    if (matchBtn) matchBtn.classList.add('active');
+                });
+            } else if (lower.includes('segunda a sábado') || lower.includes('seg a sáb') || lower.includes('seg a sab')) {
+                ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].forEach(d => {
+                    const matchBtn = Array.from(allBtns).find(b => b.dataset.day === d);
+                    if (matchBtn) matchBtn.classList.add('active');
+                });
+            } else {
+                days.forEach(d => {
+                    if (workHoursStr.includes(d)) {
+                        const matchBtn = Array.from(allBtns).find(b => b.dataset.day === d);
+                        if (matchBtn) matchBtn.classList.add('active');
+                    }
+                });
+            }
+            
+            const timeMatch = workHoursStr.match(/(\d{1,2}:\d{2}|\d{1,2}h)\s*às\s*(\d{1,2}:\d{2}|\d{1,2}h)/i) || workHoursStr.match(/(\d{1,2})\s*às\s*(\d{1,2})/i);
+            if (timeMatch) {
+                let start = timeMatch[1].includes(':') ? timeMatch[1] : String(timeMatch[1].replace(/\D/g, '')).padStart(2, '0') + ':00';
+                let end = timeMatch[2].includes(':') ? timeMatch[2] : String(timeMatch[2].replace(/\D/g, '')).padStart(2, '0') + ':00';
+                
+                const startSelect = document.getElementById('cfg-time-start');
+                const endSelect = document.getElementById('cfg-time-end');
+                if (startSelect && Array.from(startSelect.options).some(o => o.value === start)) startSelect.value = start;
+                if (endSelect && Array.from(endSelect.options).some(o => o.value === end)) endSelect.value = end;
+            }
+            
+            updateClinicWorkHoursFormatted();
         }
 
         function openModal(id) {
