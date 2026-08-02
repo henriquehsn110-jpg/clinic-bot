@@ -160,4 +160,20 @@ node tests/stress_test.js
 - **Memória de Regras (`AGENTS.md` / `PROJECT_KNOWLEDGE_BASE.md`):** Regras de estilo, segurança, LGPD e fuso horário são carregadas automaticamente ao iniciar.
 
 ---
+
+## 7. 🛡️ Arquitetura de Alta Disponibilidade & Protocolo de Contingência 24h
+
+1. **Camada 1 (Watchdog Auto-Recovery)**:
+   - Gerenciador PM2 (`ecosystem.config.js`) rodando com `startCommand: npx pm2-runtime start ecosystem.config.js` no Render (`render.yaml`).
+   - Monitoramento contínuo da rota `/health` a cada 5 segundos. Auto-restart automático em caso de falha de processo ou vazamento de memória.
+
+2. **Camada 2 (Buffer Fila Segura & Zero Perda de Dados)**:
+   - Em caso de instabilidade temporária no servidor principal, o webhook retém as mensagens recebidas na **Fila de Buffer de Proteção**.
+   - Assim que o servidor restabelece, 100% das mensagens salvas são reprocessadas em ordem cronológica (Garantia de 0% de perda de agendamentos).
+
+3. **Camada 3 (Bot Guardião no WhatsApp do Gestor/Médico)**:
+   - Conectado diretamente à Meta WhatsApp Cloud API (`sendMetaWhatsAppMessage()`).
+   - Notifica o telefone configurado (`5511979992719`) instantaneamente na abertura de um incidente e na normalização com envio de mensagem oficial confirmada (Status HTTP 200).
+
+---
 *Este documento é a referência única da verdade para todos os agentes e desenvolvedores do ClinicaBot SaaS Pro.*
