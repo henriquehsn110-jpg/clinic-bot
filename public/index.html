@@ -874,7 +874,7 @@
             <ul class="nav-links" id="nav-links">
                 <li><a href="#ecossistema" data-action="nav-link">O Sistema</a></li>
                 <li><a href="#como-funciona" data-action="nav-link">Como Funciona</a></li>
-                <li><a href="#calculadora" data-action="nav-link">Calculadora de ROI</a></li>
+                <li><a href="#calculadora" data-action="nav-link">Calculadora de Retorno</a></li>
                 <li><a href="#planos" data-action="nav-link">Planos</a></li>
                 <li><a href="#faq" data-action="nav-link">FAQ</a></li>
             </ul>
@@ -905,7 +905,7 @@
                             👉 TESTAR SIMULADOR NO SMARTPHONE
                         </button>
                         <a href="#calculadora" class="btn btn-outline" id="btn-hero-roi">
-                            📊 CALCULAR PREJUÍZO DA CLÍNICA
+                            📊 CALCULAR RETORNO DA CLÍNICA
                         </a>
                     </div>
 
@@ -1098,7 +1098,7 @@
     <section class="section-padding" id="calculadora">
         <div class="container">
             <div class="section-header">
-                <h2>Calculadora de ROI da Clínica</h2>
+                <h2>Calculadora de Retorno Financeiro</h2>
                 <p>Simule quanto sua clínica está deixando de faturar e quanto recuperará todos os meses.</p>
             </div>
 
@@ -1133,7 +1133,7 @@
 
                     <div class="result-box roi">
                         <span class="title">🚀 Retorno sobre o Investimento</span>
-                        <span class="number" id="res-roi">23.6x ROI</span>
+                        <span class="number" id="res-roi">23.6x de Retorno</span>
                     </div>
                 </div>
             </div>
@@ -1302,7 +1302,7 @@
                     <ul>
                         <li><a href="#ecossistema">O Sistema</a></li>
                         <li><a href="#como-funciona">Como Funciona</a></li>
-                        <li><a href="#calculadora">Calculadora de ROI</a></li>
+                        <li><a href="#calculadora">Calculadora de Retorno</a></li>
                         <li><a href="#planos">Planos & Preços</a></li>
                         <li><a href="#faq">Perguntas Frequentes</a></li>
                     </ul>
@@ -1460,7 +1460,7 @@
 
             document.getElementById('res-prejuizo').innerText = 'R$ ' + prejuizo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             document.getElementById('res-recuperado').innerText = 'R$ ' + recuperado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            document.getElementById('res-roi').innerText = roiMultiplier + 'x ROI';
+            document.getElementById('res-roi').innerText = roiMultiplier + 'x de Retorno';
         }
 
         function toggleFaq(headerElement) {
