@@ -5,7 +5,7 @@ services:
     runtime: node
     region: oregon  # Região mais próxima do Brasil com plano gratuito
     plan: free
-    buildCommand: npm ci --omit=dev
+    buildCommand: npm install --omit=dev
     startCommand: npx pm2-runtime start ecosystem.config.js
     envVars:
       - key: NODE_ENV
