@@ -595,7 +595,8 @@ class ConversationController {
                 logger.info('RESCHEDULE_BOOKING', `Paciente [${phone}] iniciou reagendamento de consulta.`);
                 draft.date = null;
                 draft.time = null;
-                await db.sessions.setDraft(phone, { date: null, time: null }, clinicId);
+                draft.pending_cancel_selection = false;
+                await db.sessions.setDraft(phone, { date: null, time: null, pending_cancel_selection: false }, clinicId);
 
                 const procText = "Com certeza! Vamos agendar seu novo horário. Escolha abaixo qual especialidade ou procedimento você gostaria de agendar:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
@@ -624,6 +625,9 @@ class ConversationController {
             }
 
             if (sanitizedText.toLowerCase() === 'remarcar/cancelar') {
+                draft.pending_cancel_selection = false;
+                await db.sessions.setDraft(phone, { pending_cancel_selection: false }, clinicId);
+
                 const rcText = "Sem problemas! Você prefere remarcar para uma nova data ou cancelar seu agendamento atual?";
                 const rcButtons = ["Remarcar Consulta", "Cancelar Consulta", "Manter Consulta"];
                 
@@ -649,7 +653,13 @@ class ConversationController {
             }
 
             const lowerText = sanitizedText.toLowerCase();
-            const isCancelCommand = /^(cancelar consulta|cancelar|sim, cancelar|quero cancelar|opção 1|opção 2|opção 3|opcao 1|opcao 2|opcao 3)$/i.test(lowerText) || draft.pending_cancel_selection;
+            const isProcSelection = PROCEDURES_LIST.some(p => lowerText.includes(p.toLowerCase()));
+            if (isProcSelection && draft.pending_cancel_selection) {
+                draft.pending_cancel_selection = false;
+                await db.sessions.setDraft(phone, { pending_cancel_selection: false }, clinicId);
+            }
+
+            const isCancelCommand = /^(cancelar consulta|cancelar|sim, cancelar|quero cancelar|opção 1|opção 2|opção 3|opcao 1|opcao 2|opcao 3)$/i.test(lowerText) || (draft.pending_cancel_selection && !isProcSelection);
 
             if (isCancelCommand) {
                 logger.info('CANCEL_BOOKING', `Paciente [${phone}] solicitou cancelamento da consulta.`);
@@ -1449,7 +1459,6 @@ class ConversationController {
 
             // ── MÁQUINA DE ESTADOS 100% DETERMINÍSTICA DO BACKEND ───────────────────
             // Garante 100% de estabilidade navegacional no WhatsApp sem depender do output probabilístico da IA
-            const isProcSelection = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
             if (!aiResponse.transferToHuman) {
                 // Verifica se o paciente possui nome válido (não é apenas o número de telefone)
                 const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
