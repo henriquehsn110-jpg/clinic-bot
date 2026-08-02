@@ -790,7 +790,7 @@ function parseClinicSettings(cData) {
     let settings = {};
     if (!cData) return settings;
 
-    // 1. Tenta extrair de work_hours (suporta JSON string ou JS Object retornado pelo Supabase)
+    // 1. Tenta extrair de work_hours (suporta JSON string, JS Object ou texto plano retornado pelo Supabase)
     if (cData.work_hours) {
         if (typeof cData.work_hours === 'object' && cData.work_hours !== null) {
             settings = { ...cData.work_hours };
@@ -798,6 +798,8 @@ function parseClinicSettings(cData) {
             const trimmed = cData.work_hours.trim();
             if (trimmed.startsWith('{')) {
                 try { settings = JSON.parse(trimmed); } catch (e) {}
+            } else if (trimmed.length > 0) {
+                settings.workHours = trimmed;
             }
         }
     }
@@ -805,7 +807,9 @@ function parseClinicSettings(cData) {
     // 2. Mescla/Sobrescreve com colunas de nível superior da tabela clinics
     if (cData.name) settings.name = cData.name;
     if (cData.address) settings.address = cData.address;
-    if (cData.eval_price) settings.evalPrice = String(cData.eval_price);
+    if (cData.eval_price !== undefined && cData.eval_price !== null && cData.eval_price !== '') {
+        settings.evalPrice = String(cData.eval_price);
+    }
 
     // 3. Garante fallbacks padrões para todos os campos essenciais se estiverem ausentes
     if (!settings.personaName) settings.personaName = 'Ana';
