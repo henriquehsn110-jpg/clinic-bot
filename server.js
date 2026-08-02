@@ -64,6 +64,12 @@ app.get(['/dashboard', '/dashboard/', '/dashboard.html', '/painel'], (req, res) 
     res.sendFile(path.join(__dirname, 'public/dashboard.html'));
 });
 
+// Rota Oficial da Apresentação Comercial 360° (Vendas B2B)
+app.get(['/apresentacao', '/apresentacao/', '/apresentacao_comercial_360.html', '/apresentacao_comercial_360', '/apresentacao-360'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(__dirname, 'public/apresentacao_comercial_360.html'));
+});
+
 // Encurtador de Link do Google Calendar Privado e Seguro (LGPD)
 app.get('/c/:shortId', async (req, res) => {
     try {

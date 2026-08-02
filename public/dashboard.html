@@ -603,9 +603,57 @@
                         </select>
                     </div>
                 </div>
+                <!-- DIAS DE ATENDIMENTO (TICAR OS DIAS DA SEMANA) -->
                 <div class="form-group">
-                    <label>Dias & Horários de Atendimento *</label>
-                    <input type="text" id="doc-days" placeholder="Ex: Seg, Qua, Sex (08h às 18h)" required>
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Dias de Atendimento (Clique para ticar) *</span>
+                        <span style="font-size: 11px; color: var(--text-muted);">Marque os dias de presença</span>
+                    </label>
+                    <div class="weekday-picker" id="doc-weekday-picker">
+                        <button type="button" class="weekday-btn active" data-day="Seg" onclick="toggleDoctorDay(this)">Seg</button>
+                        <button type="button" class="weekday-btn" data-day="Ter" onclick="toggleDoctorDay(this)">Ter</button>
+                        <button type="button" class="weekday-btn active" data-day="Qua" onclick="toggleDoctorDay(this)">Qua</button>
+                        <button type="button" class="weekday-btn" data-day="Qui" onclick="toggleDoctorDay(this)">Qui</button>
+                        <button type="button" class="weekday-btn active" data-day="Sex" onclick="toggleDoctorDay(this)">Sex</button>
+                        <button type="button" class="weekday-btn" data-day="Sáb" onclick="toggleDoctorDay(this)">Sáb</button>
+                        <button type="button" class="weekday-btn" data-day="Dom" onclick="toggleDoctorDay(this)">Dom</button>
+                    </div>
+                </div>
+
+                <!-- HORÁRIOS DE ATENDIMENTO PADRONIZADOS -->
+                <div style="display: flex; gap: 16px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Horário de Entrada *</label>
+                        <select id="doc-start-time" onchange="updateDoctorDaysFormatted()">
+                            <option value="07:00">07:00</option>
+                            <option value="08:00" selected>08:00</option>
+                            <option value="09:00">09:00</option>
+                            <option value="10:00">10:00</option>
+                            <option value="11:00">11:00</option>
+                            <option value="13:00">13:00</option>
+                            <option value="14:00">14:00</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Horário de Saída *</label>
+                        <select id="doc-end-time" onchange="updateDoctorDaysFormatted()">
+                            <option value="12:00">12:00</option>
+                            <option value="13:00">13:00</option>
+                            <option value="17:00">17:00</option>
+                            <option value="18:00" selected>18:00</option>
+                            <option value="19:00">19:00</option>
+                            <option value="20:00">20:00</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- PRÉ-VISUALIZAÇÃO DA ESCALA GERADA -->
+                <div class="form-group">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Escala Padronizada Gerada *</span>
+                        <span style="font-size: 11px; color: var(--accent-cyan); font-weight: 500;">✓ Formatação Automática</span>
+                    </label>
+                    <input type="text" id="doc-days" placeholder="Ex: Seg, Qua, Sex (08h às 18h)" readonly style="background: rgba(0, 242, 254, 0.05); border-color: rgba(0, 242, 254, 0.3); color: #00f2fe; font-weight: 600;" required>
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
                     <button type="button" class="btn" onclick="closeModal('modal-doctor')">Cancelar</button>
@@ -723,7 +771,7 @@
                         document.getElementById('doc-specialty').value = doc.specialty;
                         document.getElementById('doc-cro').value = doc.cro;
                         document.getElementById('doc-status').value = doc.status;
-                        document.getElementById('doc-days').value = doc.available_days;
+                        loadDoctorScheduleToPicker(doc.available_days);
                         openModal('modal-doctor');
                     }
                 });
@@ -1602,9 +1650,70 @@
             select.innerHTML = list.map(item => `<option value="${esc(item)}" ${item === currentVal ? 'selected' : ''}>${esc(item)}</option>`).join('');
         }
 
+        function toggleDoctorDay(btn) {
+            btn.classList.toggle('active');
+            updateDoctorDaysFormatted();
+        }
+
+        function updateDoctorDaysFormatted() {
+            const activeBtns = Array.from(document.querySelectorAll('#doc-weekday-picker .weekday-btn.active'));
+            const selectedDays = activeBtns.map(b => b.dataset.day);
+            
+            const startTime = document.getElementById('doc-start-time')?.value || '08:00';
+            const endTime = document.getElementById('doc-end-time')?.value || '18:00';
+            
+            const daysInput = document.getElementById('doc-days');
+            if (!daysInput) return;
+            
+            if (selectedDays.length === 0) {
+                daysInput.value = '';
+            } else {
+                const startFormatted = startTime.split(':')[0] + 'h';
+                const endFormatted = endTime.split(':')[0] + 'h';
+                daysInput.value = `${selectedDays.join(', ')} (${startFormatted} às ${endFormatted})`;
+            }
+        }
+
+        function loadDoctorScheduleToPicker(daysStr) {
+            const allBtns = document.querySelectorAll('#doc-weekday-picker .weekday-btn');
+            allBtns.forEach(btn => btn.classList.remove('active'));
+            
+            if (!daysStr) {
+                updateDoctorDaysFormatted();
+                return;
+            }
+            
+            const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+            days.forEach(d => {
+                if (daysStr.includes(d)) {
+                    const matchBtn = Array.from(allBtns).find(b => b.dataset.day === d);
+                    if (matchBtn) matchBtn.classList.add('active');
+                }
+            });
+            
+            const timeMatch = daysStr.match(/(\d{1,2})[h:]?\s*às\s*(\d{1,2})[h:]?/i);
+            if (timeMatch) {
+                const startHour = String(timeMatch[1]).padStart(2, '0') + ':00';
+                const endHour = String(timeMatch[2]).padStart(2, '0') + ':00';
+                
+                const startSelect = document.getElementById('doc-start-time');
+                const endSelect = document.getElementById('doc-end-time');
+                if (startSelect && Array.from(startSelect.options).some(o => o.value === startHour)) startSelect.value = startHour;
+                if (endSelect && Array.from(endSelect.options).some(o => o.value === endHour)) endSelect.value = endHour;
+            }
+            
+            updateDoctorDaysFormatted();
+        }
+
         function openModal(id) {
             if (id === 'modal-appointment') {
                 populateApptProcedures();
+            } else if (id === 'modal-doctor') {
+                const nameVal = document.getElementById('doc-name')?.value;
+                if (!nameVal) {
+                    // Se estiver criando novo médico, reseta para os dias padrão (Seg, Qua, Sex)
+                    loadDoctorScheduleToPicker('Seg, Qua, Sex (08h às 18h)');
+                }
             }
             document.getElementById(id).classList.add('active');
         }

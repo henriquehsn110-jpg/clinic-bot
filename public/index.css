@@ -347,6 +347,40 @@ select option:hover, select option:focus, select option:checked {
     color: #00f2fe !important;
 }
 
+/* Weekday Picker (Doctor Schedule UI) */
+.weekday-picker {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+.weekday-btn {
+    flex: 1;
+    min-width: 42px;
+    padding: 10px 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+}
+.weekday-btn:hover {
+    border-color: var(--primary);
+    color: #fff;
+    background: rgba(0, 242, 254, 0.05);
+}
+.weekday-btn.active {
+    background: rgba(0, 242, 254, 0.15) !important;
+    border-color: var(--primary) !important;
+    color: #00f2fe !important;
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+}
+
 /* Visual Calendar (Grid de 7 Colunas & Micro-Animações) */
 .calendar-header-bar {
     display: flex;
