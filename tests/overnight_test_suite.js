@@ -86,8 +86,8 @@ async function runTestSuite() {
     const innerHtmlLines = dashCode.split('\n').filter(l => l.includes('innerHTML') && l.includes('${'));
     let unescapedCount = 0;
     innerHtmlLines.forEach(line => {
-        // Ignora contadores numéricos ou loop counters como ${day}, ${dayNum}, ${apptsForDay.length}
-        const matches = line.match(/\${(?!\s*esc\(|\s*day|\s*dayNum|\s*apptsForDay\.length|\s*apptsForDay\.slice)[^}]+}/g);
+        // Ignora contadores numéricos ou loop counters como ${day}, ${dayNum}, ${apptsForDay.length} e seleções booleanas
+        const matches = line.match(/\${(?!\s*esc\(|\s*day|\s*dayNum|\s*apptsForDay\.length|\s*apptsForDay\.slice|\s*item === currentVal)[^}]+}/g);
         if (matches && matches.length > 0) {
             unescapedCount++;
             console.log(`    --> Linha suspeita sem esc(): ${line.trim()}`);
