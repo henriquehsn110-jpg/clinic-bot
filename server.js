@@ -1,4 +1,4 @@
-// Importa a inicialização do Sentry antes de qualquer outro módulo
+// CLINICABOT SAAS PRO — SERVIDOR EXPRESS (v1.0.1)
 const Sentry = require('./instrument');
 require('dotenv').config();
 const express = require('express');

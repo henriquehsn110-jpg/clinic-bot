@@ -1,6 +1,6 @@
 {
   "name": "clinic-bot-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ClinicaBot — Chatbot de agendamento odontológico via WhatsApp com IA (Gemini)",
   "main": "server.js",
   "scripts": {
