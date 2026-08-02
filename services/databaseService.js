@@ -388,7 +388,7 @@ const appointments = {
         if (!clinicId) throw new Error('clinicId é obrigatório em appointments.findByPatient');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('appointments').select('*').is('deleted_at', null)
+                .from('appointments').select('*, doctors(name)').is('deleted_at', null)
                 .eq('patient_id', patientId)
                 .eq('clinic_id', clinicId)
                 .order('appointment_date', { ascending: false });
@@ -451,7 +451,7 @@ const appointments = {
             const today = `${brtObj.getFullYear()}-${String(brtObj.getMonth() + 1).padStart(2, '0')}-${String(brtObj.getDate()).padStart(2, '0')}`;
 
             const { data, error } = await supabase
-                .from('appointments').select('*').is('deleted_at', null)
+                .from('appointments').select('*, doctors(name)').is('deleted_at', null)
                 .eq('patient_id', patientId)
                 .eq('clinic_id', clinicId)
                 .in('status', ['pending', 'confirmed'])

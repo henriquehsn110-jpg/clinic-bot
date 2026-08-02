@@ -195,7 +195,7 @@ class DashboardController {
 
             let clinicQuery = clinicIdToFetch ? db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, work_hours, address, eval_price').eq('id', clinicIdToFetch).maybeSingle() : Promise.resolve({ data: null });
 
-            let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)', { count: 'exact' }).is('deleted_at', null).order('appointment_date', { ascending: true }).range(offset, offset + limit - 1);
+            let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
             let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
             let sessionsQuery = db.supabase.from('sessions').select('*').is('deleted_at', null);
 

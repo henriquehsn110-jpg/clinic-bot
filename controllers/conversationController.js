@@ -771,7 +771,11 @@ class ConversationController {
 
                     const remainingAppts = upcomingAppts.filter((_, idx) => !selectedIndices.includes(idx));
                     if (remainingAppts.length > 0) {
-                        const remStr = remainingAppts.map((a, i) => `${i + 1}) ${a.type || 'Consulta'} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`).join('\n');
+                        const remStr = remainingAppts.map((a, i) => {
+                            const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
+                            const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                            return `${i + 1}) ${a.type || 'Consulta'} com ${docFormatted} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`;
+                        }).join('\n');
                         cancelText += `\n\n📋 *Suas outras consultas futuras continuam confirmadas:*\n${remStr}`;
                     } else {
                         cancelText += `\n\nSe no futuro você quiser agendar um novo horário, basta clicar no botão abaixo:`;
@@ -795,9 +799,11 @@ class ConversationController {
                 draft.pending_cancel_selection = true;
                 await db.sessions.setDraft(phone, draft, clinicId);
 
-                const listStr = upcomingAppts.map((a, i) => 
-                    `${i + 1}️⃣ *${a.type || 'Consulta'}* — dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`
-                ).join('\n\n');
+                const listStr = upcomingAppts.map((a, i) => {
+                    const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
+                    const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                    return `${i + 1}️⃣ *${a.type || 'Consulta'}* com ${docFormatted} — dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`;
+                }).join('\n\n');
 
                 const selectText = `Identificamos que você possui ${upcomingAppts.length} consultas futuras agendadas:\n\n${listStr}\n\nQual delas você gostaria de *cancelar*? Digite o número da opção (ex: 1) ou selecione abaixo:`;
                 
@@ -954,9 +960,11 @@ class ConversationController {
                         let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊\n\n📅 Adicionar ao Google Agenda:\n${calUrl}`;
                         
                         if (activeAppts.length > 1) {
-                            const otherStr = activeAppts.slice(1).map((a, i) => 
-                                `${i + 2}) ${a.type || 'Consulta'} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`
-                            ).join('\n');
+                            const otherStr = activeAppts.slice(1).map((a, i) => {
+                                const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
+                                const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                                return `${i + 2}) ${a.type || 'Consulta'} com ${docFormatted} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`;
+                            }).join('\n');
                             confirmText += `\n\n📋 *Você também possui mais ${activeAppts.length - 1} consulta(s) agendada(s):*\n${otherStr}`;
                         }
                         
@@ -1389,10 +1397,12 @@ class ConversationController {
                 const apptListStr = patientActiveAppts.map((a, i) => {
                     const dateFmt = a.appointment_date ? a.appointment_date.split('-').reverse().join('/') : 'A definir';
                     const timeFmt = a.appointment_time ? a.appointment_time.substring(0, 5) : 'A definir';
-                    return `Consulta ${i + 1}: ${a.type || 'Consulta'} no dia ${dateFmt} às ${timeFmt} (Status: ${a.status === 'confirmed' ? 'Confirmada' : 'Pendente'})`;
+                    const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
+                    const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                    return `Consulta ${i + 1}: ${a.type || 'Consulta'} com ${docFormatted} no dia ${dateFmt} às ${timeFmt} (Status: ${a.status === 'confirmed' ? 'Confirmada' : 'Pendente'})`;
                 }).join('; ');
                 
-                textForAI += `\n[SISTEMA INVISÍVEL: O paciente possui ${patientActiveAppts.length} consulta(s) ativa(s) agendada(s) no banco de dados: ${apptListStr}. Se o paciente perguntar sobre suas consultas, agendamentos ou o que ele tem marcado, informe obrigatoriamente TODAS as ${patientActiveAppts.length} consulta(s) ativas encontradas!].`;
+                textForAI += `\n[SISTEMA INVISÍVEL: O paciente possui ${patientActiveAppts.length} consulta(s) ativa(s) agendada(s) no banco de dados: ${apptListStr}. Se o paciente perguntar sobre suas consultas, agendamentos ou qual é o médico/doutor de cada consulta, informe obrigatoriamente o nome exato do médico citado em cada consulta e todos os detalhes contidos no histórico!].`;
             }
 
             const currentPatientName = draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone ? patient.name : null);
