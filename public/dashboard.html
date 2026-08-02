@@ -1589,7 +1589,25 @@
             document.getElementById('tab-settings').style.display = tabName === 'settings' ? 'block' : 'none';
         }
 
-        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function populateApptProcedures() {
+            const select = document.getElementById('appt-type');
+            if (!select) return;
+            const cfgVal = document.getElementById('cfg-procedures')?.value;
+            let list = ["Consulta Geral / Avaliação", "Limpeza Dental", "Tratamento de Canal", "Implante Dental", "Clareamento Dental", "Ortodontia / Aparelho"];
+            if (cfgVal && cfgVal.trim()) {
+                const custom = cfgVal.split(',').map(s => s.trim()).filter(Boolean);
+                if (custom.length > 0) list = custom;
+            }
+            const currentVal = select.value;
+            select.innerHTML = list.map(item => `<option value="${esc(item)}" ${item === currentVal ? 'selected' : ''}>${esc(item)}</option>`).join('');
+        }
+
+        function openModal(id) {
+            if (id === 'modal-appointment') {
+                populateApptProcedures();
+            }
+            document.getElementById(id).classList.add('active');
+        }
         function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
         function showToast(msg) {

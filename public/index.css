@@ -336,6 +336,17 @@ td button.btn-danger:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444;
     background: rgba(0,242,254,0.02);
 }
 
+select option {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    padding: 10px 14px;
+}
+
+select option:hover, select option:focus, select option:checked {
+    background-color: #1e293b !important;
+    color: #00f2fe !important;
+}
+
 /* Visual Calendar (Grid de 7 Colunas & Micro-Animações) */
 .calendar-header-bar {
     display: flex;
