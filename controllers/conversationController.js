@@ -297,7 +297,13 @@ function extractCleanName(text) {
 
 class ConversationController {
 
-    async handleIncomingMessage(phone, text, isSimulation = false, clinicId, phoneId) {
+    async handleIncomingMessage(phoneOrObj, textParam, isSimulationParam = false, clinicIdParam, phoneIdParam) {
+        let phone = typeof phoneOrObj === 'object' ? phoneOrObj.phone : phoneOrObj;
+        let text = typeof phoneOrObj === 'object' ? (phoneOrObj.messageText || phoneOrObj.text) : textParam;
+        let isSimulation = typeof phoneOrObj === 'object' ? (phoneOrObj.isSimulation ?? false) : isSimulationParam;
+        let clinicId = typeof phoneOrObj === 'object' ? phoneOrObj.clinicId : clinicIdParam;
+        let phoneId = typeof phoneOrObj === 'object' ? (phoneOrObj.phoneNumberId || phoneOrObj.phoneId) : phoneIdParam;
+
         if (!clinicId) {
             const defaultClinic = await db.clinics.findBySlug('clinica-modelo') || (await db.clinics.getAll())[0];
             if (defaultClinic) clinicId = defaultClinic.id;
@@ -418,6 +424,37 @@ class ConversationController {
                     transferToHuman: true
                 };
             }
+
+            // ── GUARDIÃO ANTI-LOOPING E DETECTOR DE FRUSTRAÇÃO (CAMADA 3 DE CONTINGÊNCIA) ──
+            const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada)\b/i;
+
+            const isFrustrated = frustrationRegex.test(sanitizedText);
+            const isStagnated = history.length >= 8 && (history.length % 4 === 0) && (!draft || (!draft.type && !draft.date));
+
+            if (isFrustrated || isStagnated) {
+                logger.warn('FRUSTRATION_GUARD', `Detector de Frustração/Stagnation ativado para [${phone}]. Motivo: ${isFrustrated ? 'Frustração do usuário' : 'Sessão estagnada (>8 msgs)'}. Transferindo imediatamente para transbordo humano.`);
+
+                const handoffText = "Peço desculpas pelo transtorno! Identifiquei que ocorreu um impasse no seu agendamento. Para garantir que nada fique errado, estou transferindo seu atendimento para a nossa equipe humana agora mesmo.";
+
+                await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente Guardião Anti-Looping: Impasse/Frustração detectada no chat', clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: handoffText,
+                    buttons: [`Falar com a IA (${personaName})`],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: true
+                };
+            }
+
             // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato genérico)
             const hasDirectIntent = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /agendar|remarcar|cancelar/i.test(sanitizedText);
             if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar') && !hasDirectIntent) {
@@ -827,7 +864,9 @@ class ConversationController {
                 };
             }
 
-            const isConfirming = sanitizedText.toLowerCase() === 'confirmar';
+            const isConfirmKeyword = /^(confirmar|confirmado|confirmo)$/i.test(sanitizedText.trim());
+            const isAffirmativeConfirmation = (draft && draft.date && draft.time && draft.type) && /^(sim|sim,|pode|pode agendar|pode ser|ok|certo|está certo|esta certo|correto)$/i.test(sanitizedText.trim());
+            const isConfirming = isConfirmKeyword || isAffirmativeConfirmation;
             if (isConfirming) {
                 const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
                 if (!hasPatientName) {

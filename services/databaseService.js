@@ -64,8 +64,8 @@ function decryptData(encryptedData) {
         decrypted += decipher.final('utf8');
         return decrypted;
     } catch (err) {
-        logger.warn('DECRYPTION', `Falha ao descriptografar dado com a chave atual. O registro pode ter sido cifrado com uma chave anterior.`);
-        return null;
+        logger.warn('DECRYPTION', `Falha ao descriptografar dado com a chave atual. Usando valor bruto/legado como fallback.`);
+        return encryptedData;
     }
 }
 
@@ -836,4 +836,4 @@ function parseClinicSettings(cData) {
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings };
+module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings, decryptData, encryptData };
