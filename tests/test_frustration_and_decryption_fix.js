@@ -2,8 +2,9 @@
  * TEST: Guardião Anti-Looping, Detector de Frustração e Fallback de Descriptografia
  * Valida que:
  *   1) DecryptData não retorna null quando a chave é diferente, usando o dado legado.
- *   2) Frustração do paciente ("Está errado", "Eu já informei") aciona transbordo humano imediatamente.
+ *   2) Frustração do paciente ("Está errado", "Eu já informei", "Não entendi") aciona transbordo humano imediatamente.
  *   3) "Sim" confirma agendamento quando o rascunho possui data, hora e procedimento.
+ *   4) Trava de 2 tentativas de CPF inválido redireciona para transbordo em vez de travar no looping.
  */
 require('dotenv').config();
 const conversationController = require('../controllers/conversationController');
@@ -35,7 +36,7 @@ async function runTest() {
         const decryptedInvalid = db.decryptData(invalidCipher);
         assert('DecryptData — Retorna fallback bruto ao invés de null em falha de chave', decryptedInvalid === invalidCipher);
 
-        // 2. Teste de Interceptação de Frustração ("Está errado", "Eu já informei")
+        // 2. Teste de Interceptação de Frustração ("Está errado", "Eu já informei", "Não entendi")
         const { data: clinic } = await db.supabase.from('clinics').select('id').eq('slug', 'clinica-modelo').maybeSingle();
         const clinicId = clinic ? clinic.id : 'e8f24abe-381d-499d-9596-252507b32194';
         const testPhone = '5511988887777';
@@ -55,16 +56,33 @@ async function runTest() {
         assert('Detector de Frustração — Mensagem "Está errado" aciona transbordo humano', resErrado.transferToHuman === true);
         assert('Detector de Frustração — Resposta informa transferência ao atendente', resErrado.text.includes('transferindo'));
 
-        const resJaInformei = await conversationController.handleIncomingMessage({
+        const resNaoEntendi = await conversationController.handleIncomingMessage({
             phone: testPhone,
-            messageText: 'Eu já informei antes',
+            messageText: 'Não entendi',
             phoneNumberId: '5511979992719',
             isSimulation: true
         });
 
-        assert('Detector de Frustração — Mensagem "Eu já informei" aciona transbordo humano', resJaInformei.transferToHuman === true);
+        assert('Detector de Frustração — Mensagem "Não entendi" aciona transbordo humano', resNaoEntendi.transferToHuman === true);
 
-        // 3. Teste de Confirmação com "Sim" quando rascunho está completo
+        // 3. Teste de Limite de 2 tentativas de CPF inválido
+        await db.sessions.set(testPhone, [
+            { role: 'user', parts: [{ text: 'Agendar' }] },
+            { role: 'model', parts: [{ text: 'O CPF informado é inválido. Por favor, informe seu CPF de 11 dígitos para prosseguirmos.\n[SISTEMA: CPF solicitado, aguardando CPF]' }] },
+            { role: 'user', parts: [{ text: '123' }] },
+            { role: 'model', parts: [{ text: 'O CPF informado é inválido. Por favor, informe seu CPF de 11 dígitos para prosseguirmos.\n[SISTEMA: CPF solicitado, aguardando CPF]' }] }
+        ], clinicId);
+
+        const resCpfLimit = await conversationController.handleIncomingMessage({
+            phone: testPhone,
+            messageText: '12345',
+            phoneNumberId: '5511979992719',
+            isSimulation: true
+        });
+
+        assert('Trava de CPF — 3ª tentativa inválida transfere para atendimento humano', resCpfLimit.transferToHuman === true);
+
+        // 4. Teste de Confirmação com "Sim" quando rascunho está completo
         await db.sessions.set(testPhone, [
             { role: 'user', parts: [{ text: 'Agendar Consulta' }] },
             { role: 'model', parts: [{ text: 'Escolha o procedimento' }] }

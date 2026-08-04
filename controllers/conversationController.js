@@ -426,7 +426,7 @@ class ConversationController {
             }
 
             // ── GUARDIÃO ANTI-LOOPING E DETECTOR DE FRUSTRAÇÃO (CAMADA 3 DE CONTINGÊNCIA) ──
-            const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada)\b/i;
+            const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada|não entendi|nao entendi|não entendo|nao entendo|não compreendi|nao compreendi)\b/i;
 
             const isFrustrated = frustrationRegex.test(sanitizedText);
             const isStagnated = history.length >= 8 && (history.length % 4 === 0) && (!draft || (!draft.type && !draft.date));
@@ -1302,11 +1302,51 @@ class ConversationController {
             // 2. Interceptação de CPF com separação de conceitos e segurança
             const rawCpf = extractAndNormalizeCpf(sanitizedText);
 
-            // Se o CPF foi solicitado anteriormente, mas o usuário digitou um valor inválido,
-            // barramos e pedimos novamente de forma determinística (evita que a LLM processe dados incorretos).
+            // Se o paciente JÁ possui CPF cadastrado e validado no banco, desativa a exigência determinística
+            if (patient && patient.cpf) {
+                wasCpfRequested = false;
+            }
+
             const isProcMatch = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
-            const isBypassKeyword = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText) || isProcMatch || dateMatch || timeMatch;
+            const isGreetingOrQuestion = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|não entendi|nao entendi|ajuda|suporte)$/i.test(sanitizedText) || sanitizedText.includes('?');
+            const isBypassKeyword = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText) || isProcMatch || dateMatch || timeMatch || isGreetingOrQuestion;
+
             if (wasCpfRequested && !rawCpf && !isBypassKeyword) {
+                // Conta quantas solicitações de CPF o modelo enviou no histórico recente
+                let invalidCount = 0;
+                for (let i = history.length - 1; i >= 0; i--) {
+                    if (history[i].role === 'model') {
+                        const text = history[i].parts?.[0]?.text || '';
+                        if (text.includes('CPF informado é inválido') || text.includes('[SISTEMA: CPF solicitado')) {
+                            invalidCount++;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                if (invalidCount >= 2) {
+                    logger.warn('CPF_RETRY_LIMIT', `Limite de 2 tentativas de CPF atingido para [${phone}]. Transferindo para atendimento humano.`);
+                    await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente CPF: Limite de tentativas de CPF inválido atingido', clinicId);
+
+                    const handoffText = "Para a sua comodidade e segurança, estou transferindo seu atendimento para a nossa equipe humana confirmar seus dados.";
+                    if (!isSimulation) {
+                        await whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: handoffText,
+                        buttons: [`Falar com a IA (${personaName})`],
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: true
+                    };
+                }
+
                 const errText = "O CPF informado é inválido. Por favor, informe seu CPF de 11 dígitos para prosseguirmos.";
                 
                 // Salva a tentativa inválida e repete o marcador de solicitação no histórico da sessão
