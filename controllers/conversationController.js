@@ -497,8 +497,9 @@ class ConversationController {
             }
 
             // 2. Atalho para botão "Agendar Consulta"
-
-            if (sanitizedText.toLowerCase() === 'agendar consulta' || sanitizedText.toLowerCase() === 'agendar') {
+            if (/^(agendar consulta|agendar|quero agendar|quero agendar consulta|quero agendar uma consulta)$/i.test(sanitizedText.trim())) {
+                draft.pending_cancel_selection = false;
+                await db.sessions.setDraft(phone, draft, clinicId);
                 const procText = "Ótimo! Escolha qual procedimento você gostaria de agendar:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
@@ -700,12 +701,16 @@ class ConversationController {
 
             const lowerText = sanitizedText.toLowerCase();
             const isProcSelection = PROCEDURES_LIST.some(p => lowerText.includes(p.toLowerCase()));
-            if (isProcSelection && draft.pending_cancel_selection) {
+            const isNewIntentOrGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|agendar|agendar consulta|quero agendar|quero agendar consulta|quero agendar uma consulta|menu|início|inicio|voltar)$/i.test(lowerText) || lowerText.includes('?') || isProcSelection;
+
+            if (draft.pending_cancel_selection && isNewIntentOrGreeting) {
+                logger.info('CANCEL_SELECTION_RESET', `Paciente [${phone}] mudou de assunto durante cancelamento ("${sanitizedText}"). Resetando pendência de cancelamento.`);
                 draft.pending_cancel_selection = false;
-                await db.sessions.setDraft(phone, { pending_cancel_selection: false }, clinicId);
+                await db.sessions.setDraft(phone, draft, clinicId);
             }
 
-            const isCancelCommand = /^(cancelar consulta|cancelar|sim, cancelar|quero cancelar|opção 1|opção 2|opção 3|opcao 1|opcao 2|opcao 3)$/i.test(lowerText) || (draft.pending_cancel_selection && !isProcSelection);
+            const isCancelCommand = /^(cancelar consulta|cancelar|sim, cancelar|quero cancelar)$/i.test(lowerText) || 
+                (draft.pending_cancel_selection && !isNewIntentOrGreeting && (/^\d+$/.test(lowerText.trim()) || /opção|opcao|todas|manter/i.test(lowerText)));
 
             if (isCancelCommand) {
                 logger.info('CANCEL_BOOKING', `Paciente [${phone}] solicitou cancelamento da consulta.`);
