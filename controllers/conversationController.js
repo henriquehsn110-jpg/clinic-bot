@@ -466,9 +466,10 @@ class ConversationController {
 
             // ── GUARDIÃO ANTI-LOOPING E DETECTOR DE FRUSTRAÇÃO (CAMADA 3 DE CONTINGÊNCIA) ──
             const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada|não entendi|nao entendi|não entendo|nao entendo|não compreendi|nao compreendi)\b/i;
+            const isExplicitAction = /^(agendar consulta|agendar|remarcar\/cancelar|remarcar|cancelar|outras dúvidas|outras duvidas|sim|não|nao|confirmar|tanto faz|doc_any|selecionei a data|selecionei o horário|bom dia|boa tarde|boa noite|olá|ola|oi)$/i.test(sanitizedText.trim()) || PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
 
             const isFrustrated = frustrationRegex.test(sanitizedText);
-            const isStagnated = history.length >= 8 && (history.length % 4 === 0) && (!draft || (!draft.type && !draft.date));
+            const isStagnated = !isExplicitAction && history.length >= 12 && (history.length % 4 === 0) && (!draft || (!draft.type && !draft.date));
 
             if (isFrustrated || isStagnated) {
                 logger.warn('FRUSTRATION_GUARD', `Detector de Frustração/Stagnation ativado para [${phone}]. Motivo: ${isFrustrated ? 'Frustração do usuário' : 'Sessão estagnada (>8 msgs)'}. Transferindo imediatamente para transbordo humano.`);
@@ -978,9 +979,9 @@ class ConversationController {
 
                         const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📅 Adicionar ao Google Agenda:\n${calUrl}\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
 
-                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
-                        history.push({ role: 'model', parts: [{ text: confirmText }] });
-                        await db.sessions.set(phone, history, clinicId);
+                        // Reseta o histórico de turnos para manter sessões futuras limpas sem acúmulo de msgs
+                        history = [];
+                        await db.sessions.set(phone, [], clinicId);
 
                         if (!isSimulation) {
                             await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
