@@ -19,6 +19,16 @@ const PROCEDURES_RICH = [
 
 const PROCEDURES_LIST = PROCEDURES_RICH.map(p => p.title);
 
+function buildAiReturnButtonLabel(personaName) {
+    if (!personaName) return "Falar com a IA";
+    const cleanName = personaName.trim();
+    const candidate = `Falar com ${cleanName}`;
+    if (candidate.length <= 20) return candidate;
+    const option2 = `Falar com IA (${cleanName})`;
+    if (option2.length <= 20) return option2;
+    return "Falar com a IA";
+}
+
 function formatDoctorNameForAppointment(appt) {
     let raw = appt.doctors?.name || appt.doctor_name;
     if (!raw) {
@@ -363,7 +373,7 @@ class ConversationController {
             );
 
             if (isHumanSupport) {
-                if (new RegExp(`\\b(voltar|robô|robo|ia|inteligência artificial|reiniciar|menu|cancelar|falar com a ia|falar com a ${personaName})\\b`, 'i').test(sanitizedText)) {
+                if (/voltar|robô|robo|\bia\b|inteligência|reiniciar|menu|cancelar|falar com/i.test(sanitizedText)) {
                     logger.info('HUMAN_HANDOFF_CANCELED', `Paciente [${phone}] solicitou retorno à IA. Histórico e rascunho resetados.`);
                     history = [];
                     draft = {};
@@ -371,7 +381,7 @@ class ConversationController {
                     await db.sessions.setDraft(phone, null, clinicId);
                 } else {
                     const responseText = `Sua mensagem foi encaminhada para a nossa recepção e em breve um atendente irá responder! 😊\n\nSe preferir voltar ao atendimento automático com a ${personaName}, basta clicar no botão abaixo:`;
-                    const btnLabel = `Falar com a IA (${personaName})`;
+                    const btnLabel = buildAiReturnButtonLabel(personaName);
                     if (!isSimulation) {
                         await whatsappService.sendButtonMessage(phone, responseText, [btnLabel], phoneId, clinicToken).catch(() => {});
                     }
@@ -404,7 +414,7 @@ class ConversationController {
 
                 return {
                     text: "Com certeza! Estou transferindo seu atendimento para a nossa recepção humano. Em breve um atendente irá responder você aqui!",
-                    buttons: [`Falar com a IA (${personaName})`],
+                    buttons: [buildAiReturnButtonLabel(personaName)],
                     showCalendar: false,
                     showTimeSlots: false,
                     showProceduresList: false,
@@ -428,7 +438,7 @@ class ConversationController {
 
                 return {
                     text: handoffMsg,
-                    buttons: [`Falar com a IA (${personaName})`],
+                    buttons: [buildAiReturnButtonLabel(personaName)],
                     showCalendar: false,
                     showTimeSlots: false,
                     showProceduresList: false,
@@ -458,7 +468,7 @@ class ConversationController {
 
                 return {
                     text: handoffText,
-                    buttons: [`Falar com a IA (${personaName})`],
+                    buttons: [buildAiReturnButtonLabel(personaName)],
                     showCalendar: false,
                     showTimeSlots: false,
                     showProceduresList: false,
@@ -1362,7 +1372,7 @@ class ConversationController {
 
                     return {
                         text: handoffText,
-                        buttons: [`Falar com a IA (${personaName})`],
+                        buttons: [buildAiReturnButtonLabel(personaName)],
                         showCalendar: false,
                         showTimeSlots: false,
                         showProceduresList: false,
@@ -1885,4 +1895,5 @@ class ConversationController {
 const controllerInstance = new ConversationController();
 controllerInstance.extractCleanName = extractCleanName;
 controllerInstance.formatDoctorNameForAppointment = formatDoctorNameForAppointment;
+controllerInstance.buildAiReturnButtonLabel = buildAiReturnButtonLabel;
 module.exports = controllerInstance;
