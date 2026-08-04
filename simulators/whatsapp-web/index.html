@@ -569,6 +569,7 @@
                 resp.availableDoctors.forEach(doc => {
                     html += `<button class="btn-action" onclick="sendText('${doc.name}')">${doc.name}</button>`;
                 });
+                html += `<button class="btn-action" onclick="sendText('Tanto faz')">Tanto faz (Qualquer disponível)</button>`;
                 html += '</div>';
             }
 

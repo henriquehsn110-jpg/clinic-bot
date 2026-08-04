@@ -1171,22 +1171,32 @@ class ConversationController {
 
                 if (availDocs && availDocs.length > 0) {
                     const cleanText = sanitizedText.replace(/^doc_/, '').trim().toLowerCase();
-                    const selectedDoc = availDocs.find(d => {
-                        const dName = d.name.toLowerCase();
-                        const dId = String(d.id).toLowerCase();
-                        if (dId === cleanText) return true;
-                        if (dName === cleanText) return true;
-                        if (cleanText.includes(dName) || dName.includes(cleanText)) return true;
-                        const parts = cleanText.split(/\s+/).filter(p => p.length > 2 && !['com', 'dra', 'dr.', 'dra.'].includes(p));
-                        return parts.some(p => dName.includes(p));
-                    });
+                    const isAnyDoctorChoice = /^any$/i.test(cleanText) || /tanto\s*faz|qualquer|sem\s*preferência|sem\s*preferencia|indiferente|doc_any/i.test(sanitizedText.trim());
 
-                    if (selectedDoc) {
-                        draft.doctor_id = selectedDoc.id;
-                        draft.doctor_name = selectedDoc.name;
+                    if (isAnyDoctorChoice) {
+                        draft.doctor_id = null;
+                        draft.doctor_name = "Profissional Disponível";
                         draft.needs_doctor = false;
-                        draft.available_doctors = null; 
+                        draft.available_doctors = null;
                         await db.sessions.setDraft(phone, draft, clinicId);
+                    } else {
+                        const selectedDoc = availDocs.find(d => {
+                            const dName = d.name.toLowerCase();
+                            const dId = String(d.id).toLowerCase();
+                            if (dId === cleanText) return true;
+                            if (dName === cleanText) return true;
+                            if (cleanText.includes(dName) || dName.includes(cleanText)) return true;
+                            const parts = cleanText.split(/\s+/).filter(p => p.length > 2 && !['com', 'dra', 'dr.', 'dra.'].includes(p));
+                            return parts.some(p => dName.includes(p));
+                        });
+
+                        if (selectedDoc) {
+                            draft.doctor_id = selectedDoc.id;
+                            draft.doctor_name = selectedDoc.name;
+                            draft.needs_doctor = false;
+                            draft.available_doctors = null; 
+                            await db.sessions.setDraft(phone, draft, clinicId);
+                        }
                     }
                 }
             }
@@ -1671,13 +1681,19 @@ class ConversationController {
                         await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken);
                     } else if (aiResponse.showDoctorList) {
                         if (draft.available_doctors && draft.available_doctors.length > 0) {
+                            const docRows = draft.available_doctors.map(d => ({
+                                id: `doc_${d.id}`,
+                                title: d.name,
+                                description: "Selecionar especialista"
+                            }));
+                            docRows.push({
+                                id: "doc_any",
+                                title: "Tanto faz / Qualquer um",
+                                description: "Próximo profissional disponível"
+                            });
                             const sections = [{
                                 title: "Profissionais",
-                                rows: draft.available_doctors.map(d => ({
-                                    id: `doc_${d.id}`,
-                                    title: d.name,
-                                    description: "Selecionar especialista"
-                                }))
+                                rows: docRows
                             }];
                             await whatsappService.sendListMessage(phone, responseText, "Ver Médicos", sections, "Especialistas", phoneId, clinicToken);
                         } else {
