@@ -9,7 +9,7 @@ const logger            = require('../services/logger');
 const DATE_SELECTION_REGEX = /Selecionei a data:\s*(\d{4}-\d{2}-\d{2})/i;
 
 const PROCEDURES_RICH = [
-    { id: 'proc_0', title: "Consulta geral", description: "Avaliação Geral (Dr. Carlos / Dra. Juliana)", doctor: "Dr. Carlos Eduardo / Dra. Juliana Mendes" },
+    { id: 'proc_0', title: "Consulta geral", description: "Avaliação Geral com Odontologista", doctor: "Dr. Carlos Eduardo" },
     { id: 'proc_1', title: "Limpeza", description: "Dra. Juliana Mendes (Odontopediatria & Profilaxia)", doctor: "Dra. Juliana Mendes" },
     { id: 'proc_2', title: "Clareamento Dental", description: "Dra. Juliana Mendes (Estética Dental)", doctor: "Dra. Juliana Mendes" },
     { id: 'proc_3', title: "Implante", description: "Dr. Roberto Alves (Implantes & Próteses)", doctor: "Dr. Roberto Alves" },
@@ -18,6 +18,20 @@ const PROCEDURES_RICH = [
 ];
 
 const PROCEDURES_LIST = PROCEDURES_RICH.map(p => p.title);
+
+function formatDoctorNameForAppointment(appt) {
+    let raw = appt.doctors?.name || appt.doctor_name;
+    if (!raw) {
+        const proc = PROCEDURES_RICH.find(p => p.title.toLowerCase() === (appt.type || '').toLowerCase());
+        raw = proc ? proc.doctor : 'Dr. Carlos Eduardo';
+    }
+    if (raw.includes('/')) {
+        raw = raw.split('/')[0].trim();
+    }
+    if (/^Dr\(?a?\)?\./i.test(raw)) return raw;
+    if (raw === 'Profissional da Clínica' || raw === 'Equipe Clínica Modelo') return raw;
+    return `Dr(a). ${raw}`;
+}
 
 // Função para validação matemática do dígito verificador do CPF
 function validateCpfChecksum(cpf) {
@@ -814,8 +828,7 @@ class ConversationController {
                     const remainingAppts = upcomingAppts.filter((_, idx) => !selectedIndices.includes(idx));
                     if (remainingAppts.length > 0) {
                         const remStr = remainingAppts.map((a, i) => {
-                            const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
-                            const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                            const docFormatted = formatDoctorNameForAppointment(a);
                             return `${i + 1}) ${a.type || 'Consulta'} com ${docFormatted} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`;
                         }).join('\n');
                         cancelText += `\n\n📋 *Suas outras consultas futuras continuam confirmadas:*\n${remStr}`;
@@ -842,8 +855,7 @@ class ConversationController {
                 await db.sessions.setDraft(phone, draft, clinicId);
 
                 const listStr = upcomingAppts.map((a, i) => {
-                    const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
-                    const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                    const docFormatted = formatDoctorNameForAppointment(a);
                     return `${i + 1}️⃣ *${a.type || 'Consulta'}* com ${docFormatted} — dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`;
                 }).join('\n\n');
 
@@ -1005,8 +1017,7 @@ class ConversationController {
                         
                         if (activeAppts.length > 1) {
                             const otherStr = activeAppts.slice(1).map((a, i) => {
-                                const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
-                                const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                                const docFormatted = formatDoctorNameForAppointment(a);
                                 return `${i + 2}) ${a.type || 'Consulta'} com ${docFormatted} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`;
                             }).join('\n');
                             confirmText += `\n\n📋 *Você também possui mais ${activeAppts.length - 1} consulta(s) agendada(s):*\n${otherStr}`;
@@ -1481,8 +1492,7 @@ class ConversationController {
                 const apptListStr = patientActiveAppts.map((a, i) => {
                     const dateFmt = a.appointment_date ? a.appointment_date.split('-').reverse().join('/') : 'A definir';
                     const timeFmt = a.appointment_time ? a.appointment_time.substring(0, 5) : 'A definir';
-                    const rawDocName = a.doctors?.name || a.doctor_name || (PROCEDURES_RICH.find(p => p.title.toLowerCase() === (a.type || '').toLowerCase())?.doctor) || 'Profissional da Clínica';
-                    const docFormatted = /^Dr\(?a?\)?\./i.test(rawDocName) ? rawDocName : `Dr(a). ${rawDocName}`;
+                    const docFormatted = formatDoctorNameForAppointment(a);
                     return `Consulta ${i + 1}: ${a.type || 'Consulta'} com ${docFormatted} no dia ${dateFmt} às ${timeFmt} (Status: ${a.status === 'confirmed' ? 'Confirmada' : 'Pendente'})`;
                 }).join('; ');
                 
@@ -1853,4 +1863,5 @@ class ConversationController {
 
 const controllerInstance = new ConversationController();
 controllerInstance.extractCleanName = extractCleanName;
+controllerInstance.formatDoctorNameForAppointment = formatDoctorNameForAppointment;
 module.exports = controllerInstance;
