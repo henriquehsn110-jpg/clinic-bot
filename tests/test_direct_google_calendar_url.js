@@ -1,12 +1,13 @@
 /**
- * TEST: Validação do Link Curto e Limpo do Google Agenda
- * Valida que o link enviado ao paciente no WhatsApp é ultra-curto (1 única linha limpa)
- * para não poluir o chat com 5 linhas de caracteres codificados (%20, %C3%B3).
+ * TEST: Geração de Link Direto e Compacto do Google Agenda
+ * Valida que o link enviado ao paciente é 100% DIRETO do Google Calendar (calendar.google.com),
+ * sem o domínio do Render, e sem caracteres codificados complexos (%20, %C3%B3).
  */
 require('dotenv').config();
+const conversationController = require('../controllers/conversationController');
 
 async function runTest() {
-    console.log('🧪 [TEST_CLEAN_CALENDAR_URL] Iniciando Teste de Link Limpo do Google Agenda...');
+    console.log('🧪 [TEST_COMPACT_DIRECT_CALENDAR] Iniciando Teste de Link Direto e Compacto do Google Agenda...');
 
     let passed = 0;
     let failed = 0;
@@ -21,13 +22,16 @@ async function runTest() {
         }
     }
 
-    const shortId = '612f56b5';
-    const appHost = 'https://clinic-bot-zksc.onrender.com';
-    const cleanUrl = `${appHost}/c/${shortId}`;
+    const compactUrl = conversationController.buildDirectGoogleCalendarUrl
+        ? conversationController.buildDirectGoogleCalendarUrl('Implante', '2026-08-05', '09:00')
+        : 'https://calendar.google.com/calendar/render?action=TEMPLATE';
 
-    assert('Link Limpo — URL curta de 1 linha (máx 50 caracteres)', cleanUrl.length <= 50, `Tamanho: ${cleanUrl.length} ('${cleanUrl}')`);
-    assert('Link Limpo — NUNCA exibe caracteres brutos codificados (%20, %C3%B3)', !cleanUrl.includes('%20') && !cleanUrl.includes('%C3%B3'), `URL: ${cleanUrl}`);
-    assert('Link Limpo — Formato limpo e seguro /c/:shortId', cleanUrl === 'https://clinic-bot-zksc.onrender.com/c/612f56b5');
+    assert('Link Direto Google — Aponta para https://calendar.google.com/calendar/render', compactUrl.startsWith('https://calendar.google.com/calendar/render'), `URL: ${compactUrl}`);
+    assert('Sem Render — NUNCA contêm o domínio do Render (onrender.com)', !compactUrl.includes('onrender.com'), `URL: ${compactUrl}`);
+    assert('Sem Rota /c/ — NUNCA utiliza a rota /c/', !compactUrl.includes('/c/'), `URL: ${compactUrl}`);
+    assert('Sem %20 — Espaços formatados como + limpo', !compactUrl.includes('%20'), `URL: ${compactUrl}`);
+    assert('Data e Hora — Formatadas corretamente (20260805T090000/20260805T100000)', compactUrl.includes('20260805T090000/20260805T100000'));
+    assert('Fuso Horário — Contém ctz=America/Sao_Paulo', compactUrl.includes('ctz=America/Sao_Paulo'));
 
     console.log('================================================================');
     console.log(`📊 RESULTADO DO TESTE: ${passed} PASS, ${failed} FAIL`);
