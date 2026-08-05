@@ -71,7 +71,7 @@ app.get(['/apresentacao', '/apresentacao/', '/apresentacao_comercial_360.html', 
 });
 
 // Encurtador de Link do Google Calendar Privado e Seguro (LGPD)
-app.get('/c/:shortId', async (req, res) => {
+app.get(['/c/:shortId', '/agenda/:shortId'], async (req, res) => {
     try {
         const shortId = req.params.shortId;
         if (!shortId || shortId.length < 6) return res.status(404).send("Link de agendamento inválido.");

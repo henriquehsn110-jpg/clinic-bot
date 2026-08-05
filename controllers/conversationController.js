@@ -975,7 +975,9 @@ class ConversationController {
                         await db.sessions.setDraft(phone, null, clinicId);
 
                         const dateFmt = apptDate.split('-').reverse().join('/');
-                        const calUrl = buildDirectGoogleCalendarUrl(apptType, apptDate, apptTime, clinicName, clinicSettings?.address);
+                        const shortId = newApptId ? newApptId.substring(0, 8) : '00000000';
+                        const appHost = process.env.RENDER_EXTERNAL_URL || 'https://clinic-bot-zksc.onrender.com';
+                        const calUrl = `${appHost}/c/${shortId}`;
 
                         const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📅 Adicionar ao Google Agenda:\n${calUrl}\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
 
@@ -1039,7 +1041,9 @@ class ConversationController {
                         const activeAppt = activeAppts[0];
                         const dateFmt = activeAppt.appointment_date.split('-').reverse().join('/');
                         const timeFmt = activeAppt.appointment_time.substring(0, 5);
-                        const calUrl = buildDirectGoogleCalendarUrl(activeAppt.type, activeAppt.appointment_date, activeAppt.appointment_time, clinicName, clinicSettings?.address);
+                        const shortId = activeAppt.id ? activeAppt.id.substring(0, 8) : '00000000';
+                        const appHost = process.env.RENDER_EXTERNAL_URL || 'https://clinic-bot-zksc.onrender.com';
+                        const calUrl = `${appHost}/c/${shortId}`;
                         
                         let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊\n\n📅 Adicionar ao Google Agenda:\n${calUrl}`;
                         
