@@ -974,18 +974,19 @@ class ConversationController {
                         const dateFmt = apptDate.split('-').reverse().join('/');
                         const calUrl = buildDirectGoogleCalendarUrl(apptType, apptDate, apptTime);
 
-                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📅 Adicionar ao Google Agenda:\n${calUrl}\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
+                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
 
                         // Reseta o histórico de turnos para manter sessões futuras limpas sem acúmulo de msgs
                         history = [];
                         await db.sessions.set(phone, [], clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken).catch(() => {});
                         }
 
                         return {
                             text: confirmText,
+                            calendarUrl: calUrl,
                             buttons: [],
                             showCalendar: false,
                             showTimeSlots: false,
@@ -1038,7 +1039,7 @@ class ConversationController {
                         const timeFmt = activeAppt.appointment_time.substring(0, 5);
                         const calUrl = buildDirectGoogleCalendarUrl(activeAppt.type, activeAppt.appointment_date, activeAppt.appointment_time);
                         
-                        let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊\n\n📅 Adicionar ao Google Agenda:\n${calUrl}`;
+                        let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊`;
                         
                         if (activeAppts.length > 1) {
                             const otherStr = activeAppts.slice(1).map((a, i) => {
@@ -1053,7 +1054,7 @@ class ConversationController {
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken).catch(() => {});
                         }
 
                         return {

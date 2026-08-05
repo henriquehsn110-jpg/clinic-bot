@@ -164,6 +164,46 @@ class WhatsAppService {
             }
         });
     }
+
+    /**
+     * Envia uma mensagem interativa com botão CTA (Call-to-Action) que abre uma URL externa.
+     * O texto do botão aparece como um link clicável elegante (ex: "📅 Adicionar à Agenda").
+     */
+    async sendCtaUrlMessage(to, bodyText, displayText, url, phoneId, token) {
+        const { url: apiUrl, headers } = this._buildRequest(phoneId, token);
+        const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
+        const safeDisplayText = displayText ? displayText.substring(0, 20) : 'Abrir Link';
+
+        return withRetry(async () => {
+            try {
+                await axios.post(apiUrl, {
+                    messaging_product: 'whatsapp',
+                    to,
+                    type: 'interactive',
+                    interactive: {
+                        type: 'cta_url',
+                        body: { text: safeBodyText },
+                        action: {
+                            name: 'cta_url',
+                            parameters: {
+                                display_text: safeDisplayText,
+                                url: url
+                            }
+                        }
+                    }
+                }, { headers, timeout: 10000 });
+            } catch (error) {
+                // Fallback: se CTA não for suportado, envia como texto simples com o link
+                const metaError = error.response?.data?.error;
+                if (metaError && (metaError.code === 100 || metaError.code === 131009)) {
+                    logger.warn('WHATSAPP_CTA_FALLBACK', `CTA URL não suportado para [${to}]. Enviando como texto com link.`);
+                    return this.sendTextMessage(to, `${safeBodyText}\n\n🔗 ${safeDisplayText}:\n${url}`, phoneId, token);
+                }
+                handleMetaError(to, 'cta_url', error);
+                throw error;
+            }
+        });
+    }
 }
 
 module.exports = new WhatsAppService();
