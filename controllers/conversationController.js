@@ -1223,13 +1223,23 @@ class ConversationController {
             }
 
             // ── COMPILAÇÃO INCREMENTAL DO RASCUNHO (DRAFT) DE AGENDAMENTO ───────
+            // ── GUARDA ANTI-FALSO-POSITIVO: pergunta informativa de preço não é seleção de procedimento ──
+            const isInformationalPriceQuestion = /\b(quanto custa|qual (o|é) o preço|qual (o|é) o valor|quanto (é|sai|fica)|preço de|valor de|quanto vale)\b/i.test(sanitizedText);
+
+            // Detecção de agendamento para terceiro/familiar
+            const familyKeywords = /\b(meu pai|minha mãe|meu filho|minha filha|meu marido|minha esposa|meu avô|minha avó|para o meu|para a minha|é para (ele|ela|meu|minha)|pro meu|pra minha)\b/i;
+            if (familyKeywords.test(sanitizedText)) {
+                draft.is_family_booking = true;
+                await db.sessions.setDraft(phone, draft, clinicId);
+            }
+
             // 1. Extração do Procedimento/Tratamento (N5 - Match Exato / Dinâmico da Clínica)
             const customProcedures = clinicSettings?.procedures
                 ? clinicSettings.procedures.split(',').map(p => p.trim()).filter(Boolean)
                 : [];
             const activeProceduresList = [...new Set([...PROCEDURES_LIST, ...customProcedures])];
 
-            const selectedProc = activeProceduresList.find(p => sanitizedText.toLowerCase() === p.toLowerCase() || (p.length > 3 && sanitizedText.toLowerCase().includes(p.toLowerCase())));
+            const selectedProc = !isInformationalPriceQuestion && activeProceduresList.find(p => sanitizedText.toLowerCase() === p.toLowerCase() || (p.length > 3 && sanitizedText.toLowerCase().includes(p.toLowerCase())));
             if (selectedProc) {
                 draft.type = selectedProc;
                 
@@ -1615,12 +1625,14 @@ class ConversationController {
                 textForAI += `\n[SISTEMA INVISÍVEL: O paciente possui ${patientActiveAppts.length} consulta(s) ativa(s) agendada(s) no banco de dados: ${apptListStr}. Se o paciente perguntar sobre suas consultas, agendamentos ou qual é o médico/doutor de cada consulta, informe obrigatoriamente o nome exato do médico citado em cada consulta e todos os detalhes contidos no histórico!].`;
             }
 
-            const currentPatientName = draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone ? patient.name : null);
+            const currentPatientName = draft.is_family_booking
+                ? (draft.dependentName || draft.name || null)
+                : (draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone ? patient.name : null));
 
             if (draft.type || draft.date || draft.time || currentPatientName) {
                 let draftInfoTag = `[SISTEMA INVISÍVEL: Dados do agendamento — Paciente: ${currentPatientName || 'a definir'}, Procedimento: ${draft.type || 'Consulta'}, Médico: ${doctorName}, Data: ${draft.date || 'a definir'}, Horário: ${draft.time || 'a definir'}. Na mensagem de confirmação, cite obrigatoriamente o nome do paciente ("${currentPatientName || 'a definir'}"), o procedimento ("${draft.type || 'Consulta'}") e o médico ("${doctorName}")].`;
                 if (draft.is_family_booking) {
-                    draftInfoTag += `\n[SISTEMA INVISÍVEL: Trata-se de um agendamento para familiar/dependente. Se for solicitar o CPF, mencione cordialmente que pode ser o CPF do paciente ou do responsável legal (caso seja menor de idade)].`;
+                    draftInfoTag += `\n[SISTEMA INVISÍVEL: Trata-se de um agendamento para familiar/dependente. O paciente do agendamento é "${currentPatientName || 'a definir'}", NÃO o titular do telefone. NUNCA cite o nome do titular do telefone (${patient?.name || ''}) como se fosse o familiar. Se for solicitar o CPF, mencione cordialmente que pode ser o CPF do dependente ou do responsável legal (caso seja menor de idade)].`;
                 }
                 textForAI = `${textForAI}\n${draftInfoTag}`;
             }
@@ -1659,6 +1671,8 @@ class ConversationController {
 
             // ── MÁQUINA DE ESTADOS 100% DETERMINÍSTICA DO BACKEND ───────────────────
             // Garante 100% de estabilidade navegacional no WhatsApp sem depender do output probabilístico da IA
+            const skipStateAdvanceForQuestion = isInformationalPriceQuestion && !dateMatch && !timeMatch;
+
             if (!aiResponse.transferToHuman) {
                 // Verifica se o paciente possui nome válido (não é apenas o número de telefone)
                 const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
@@ -1687,7 +1701,7 @@ class ConversationController {
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
-                } else if ((draft.type || isProcSelection || processedText.includes('Outras datas...')) && !draft.date) {
+                } else if (!skipStateAdvanceForQuestion && (draft.type || isProcSelection || processedText.includes('Outras datas...')) && !draft.date) {
                     // Passo 2: Procedimento escolhido -> Exibe calendário de datas
                     aiResponse.showCalendar = true;
                     aiResponse.showProceduresList = false;
@@ -1696,11 +1710,11 @@ class ConversationController {
                 }
 
                 // ── TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS (FIX DEFINITIVO) ──
-                // Se a IA ou a máquina de estados solicitou CPF ou Nome, NUNCA exiba calendário simultaneamente
+                // Se a IA ou a máquina de estados solicitou CPF ou Nome, ou se for pergunta de preço, NUNCA exiba calendário simultaneamente
                 const isAskingCpf = aiResponse.requireCpf || wasCpfRequested || /cpf/i.test(aiResponse.text);
                 const isAskingName = wasNameRequested || /nome completo/i.test(aiResponse.text);
 
-                if (isAskingCpf || isAskingName) {
+                if (isAskingCpf || isAskingName || isInformationalPriceQuestion) {
                     aiResponse.buttons = [];
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
