@@ -1,5 +1,6 @@
 /**
  * TESTE DE REGRESSÃO BUG 1: Pergunta de Preço não dispara calendário visual (showCalendar = false)
+ * e NUNCA popula draft.type no rascunho de agendamento.
  */
 require('dotenv').config();
 const assert = require('assert');
@@ -25,7 +26,10 @@ async function run() {
     assert.strictEqual(response.showCalendar, false, 'FALHA: Pergunta de preço não deveria abrir o calendário (showCalendar deve ser false)');
     assert.strictEqual(response.showProceduresList, false, 'FALHA: Pergunta de preço não deveria abrir a lista de procedimentos');
 
-    console.log('  ✅ PASS: Pergunta de preço responde em texto e NUNCA ativa componente visual de agendamento (showCalendar = false).');
+    const draftAfter = await db.sessions.getDraft(phone, clinicId);
+    assert.strictEqual(draftAfter && draftAfter.type ? draftAfter.type : null, null, 'FALHA: Pergunta de preço não deve popular draft.type no rascunho de agendamento');
+
+    console.log('  ✅ PASS: Pergunta de preço responde em texto, NUNCA ativa componente visual (showCalendar = false) e NUNCA escreve draft.type.');
     process.exit(0);
 }
 

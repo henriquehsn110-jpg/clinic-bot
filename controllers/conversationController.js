@@ -539,7 +539,8 @@ class ConversationController {
             }
 
             // 0d. Atualização automática de rascunho se um procedimento for mencionado explicitamente
-            const explicitProcMatch = PROCEDURES_LIST.find(p => {
+            const isInformationalPriceQuestion = /\b(quanto custa|qual (o|é) o preço|qual (o|é) o valor|quanto (é|sai|fica)|preço de|valor de|quanto vale)\b/i.test(sanitizedText);
+            const explicitProcMatch = !isInformationalPriceQuestion && PROCEDURES_LIST.find(p => {
                 const pLow = p.toLowerCase();
                 const sLow = sanitizedText.toLowerCase();
                 return sLow.includes(pLow) || pLow.includes(sLow) || (sLow.includes('clareamento') && pLow.includes('clareamento'));
@@ -1224,7 +1225,6 @@ class ConversationController {
 
             // ── COMPILAÇÃO INCREMENTAL DO RASCUNHO (DRAFT) DE AGENDAMENTO ───────
             // ── GUARDA ANTI-FALSO-POSITIVO: pergunta informativa de preço não é seleção de procedimento ──
-            const isInformationalPriceQuestion = /\b(quanto custa|qual (o|é) o preço|qual (o|é) o valor|quanto (é|sai|fica)|preço de|valor de|quanto vale)\b/i.test(sanitizedText);
 
             // Detecção de agendamento para terceiro/familiar
             const familyKeywords = /\b(meu pai|minha mãe|meu filho|minha filha|meu marido|minha esposa|meu avô|minha avó|para o meu|para a minha|é para (ele|ela|meu|minha)|pro meu|pra minha)\b/i;
@@ -1397,7 +1397,7 @@ class ConversationController {
             }
 
             // ── Interceptação determinística de Procedimento e Nome no texto ──────────
-            const matchedProcedureObj = PROCEDURES_RICH.find(p => sanitizedText.toLowerCase().includes(p.title.toLowerCase()));
+            const matchedProcedureObj = !isInformationalPriceQuestion && PROCEDURES_RICH.find(p => sanitizedText.toLowerCase().includes(p.title.toLowerCase()));
             if (matchedProcedureObj && !draft.type) {
                 draft.type = matchedProcedureObj.title;
                 await db.sessions.setDraft(phone, draft, clinicId);
