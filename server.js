@@ -361,9 +361,36 @@ const handleIncomingWebhook = async (req, res) => {
 app.post('/webhook', handleIncomingWebhook);
 app.post('/api/webhook', handleIncomingWebhook);
 
-// 6. Health Check & Observabilidade
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+// 6. Health Check & Observabilidade (UptimeRobot / Health Check Monitor)
+app.get('/health', async (req, res) => {
+    try {
+        // Suporte a simulação de falha para testes de disparo de alerta (Item 4 do Uptime Audit)
+        if (req.query.sim_error === 'true' || req.query.sim_error === '1') {
+            logger.error('HEALTH_CHECK_ALERT', 'ALERTA: Simulação de falha no endpoint /health acionada para teste de disparo de monitoramento!');
+            return res.status(500).json({ status: 'error', message: 'Simulated server failure for alert testing', timestamp: new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }) });
+        }
+
+        const db = require('./services/databaseService');
+        const startTime = Date.now();
+        const { error } = await db.supabase.from('clinics').select('id').limit(1);
+        const dbLatencyMs = Date.now() - startTime;
+
+        const dbStatus = error ? 'degraded' : 'connected';
+
+        res.status(200).json({
+            status: 'ok',
+            server: 'express',
+            uptimeSeconds: Math.floor(process.uptime()),
+            database: {
+                status: dbStatus,
+                latencyMs: dbLatencyMs
+            },
+            timestamp: new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })
+        });
+    } catch (err) {
+        logger.error('HEALTH_CHECK_ERROR', err.message);
+        res.status(500).json({ status: 'error', message: err.message, timestamp: new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }) });
+    }
 });
 
 // Rota de teste/debug para validar recepção de erros no painel do Sentry
