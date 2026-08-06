@@ -364,8 +364,8 @@ app.post('/api/webhook', handleIncomingWebhook);
 // 6. Health Check & Observabilidade (UptimeRobot / Health Check Monitor)
 app.get('/health', async (req, res) => {
     try {
-        // Suporte a simulação de falha para testes de disparo de alerta (Item 4 do Uptime Audit)
-        if (req.query.sim_error === 'true' || req.query.sim_error === '1') {
+        // Suporte a simulação de falha global (para pings do UptimeRobot sem query string) ou via query param
+        if (req.query.sim_error === 'true' || req.query.sim_error === '1' || process.env.SIMULATE_GLOBAL_HEALTH_ERROR === 'true') {
             logger.error('HEALTH_CHECK_ALERT', 'ALERTA: Simulação de falha no endpoint /health acionada para teste de disparo de monitoramento!');
             return res.status(500).json({ status: 'error', message: 'Simulated server failure for alert testing', timestamp: new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }) });
         }
