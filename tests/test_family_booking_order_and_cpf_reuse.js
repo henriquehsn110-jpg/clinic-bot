@@ -1,5 +1,5 @@
 /**
- * TESTE DE REGRESSÃO BUG 2 (CONTINUAÇÃO): Ordem do Gate de Nome + Reaproveitamento de CPF no Agendamento Familiar
+ * TESTE DE REGRESSÃO BUG 2 (CONTINUAÇÃO): Ordem do Gate de Nome + Reaproveitamento de CPF + Resposta Cordial a Saudações
  */
 require('dotenv').config();
 const assert = require('assert');
@@ -28,6 +28,18 @@ async function run() {
     assert.ok(/nome completo/i.test(r1.text) || /pessoa que será atendida/i.test(r1.text), 'FALHA [Ordem]: Deveria pedir o nome do dependente imediatamente');
 
     console.log('  ✅ PASS 1 [Ordem]: Gate de nome interceptou na 1ª mensagem sem abrir calendário prematuro.');
+
+    // Turno 1.5: Usuário envia uma saudação "Boa noite" antes de fornecer o nome
+    const r1_5 = await conversationController.handleIncomingMessage({
+        phone: phone,
+        messageText: 'Boa noite',
+        phoneNumberId: '5511979992719',
+        isSimulation: true
+    });
+
+    // A resposta NÃO deve ser o template estático repetido rigidamente, mas sim processada com contexto generativo
+    assert.strictEqual(r1_5.showCalendar, false, 'FALHA [Saudação]: Não deve abrir calendário em "Boa noite"');
+    console.log('  ✅ PASS 1.5 [Saudação]: Saudação "Boa noite" processada sem loop de repetição robótica.');
 
     // Turno 2: Usuário informa o nome do dependente
     const r2 = await conversationController.handleIncomingMessage({

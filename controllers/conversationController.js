@@ -1258,27 +1258,37 @@ class ConversationController {
                     draft.name = extractedClean;
                     await db.sessions.setDraft(phone, draft, clinicId);
                 } else {
-                    const askDependentNameText = "Entendido! Para prosseguirmos com o agendamento do seu familiar, qual é o nome completo da pessoa que será atendida?";
-                    history.push({ role: 'user', parts: [{ text: processedText }] });
-                    history.push({ role: 'model', parts: [{ text: `${askDependentNameText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
-                    if (history.length > 20) history = history.slice(-20);
-                    await db.sessions.set(phone, history, clinicId);
+                    const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
+                    const isGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem)$/i.test(sanitizedText);
+                    const isQuestion = sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText);
 
-                    if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, askDependentNameText, phoneId, clinicToken).catch(() => {});
+                    if (isGreeting) {
+                        processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente cumprimentou ("${sanitizedText}"). Responda cordialmente e, ao final, solicite gentilmente o nome completo da pessoa que será atendida no agendamento familiar.]`;
+                    } else if (isQuestion) {
+                        processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente fez uma dúvida/pergunta. Responda à dúvida com clareza e, ao final, solicite gentilmente o nome completo da pessoa que será atendida no agendamento familiar.]`;
+                    } else if (!isBypass) {
+                        const askDependentNameText = "Entendido! Para prosseguirmos com o agendamento do seu familiar, qual é o nome completo da pessoa que será atendida?";
+                        history.push({ role: 'user', parts: [{ text: processedText }] });
+                        history.push({ role: 'model', parts: [{ text: `${askDependentNameText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
+                        if (history.length > 20) history = history.slice(-20);
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, askDependentNameText, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text:            askDependentNameText,
+                            buttons:         [],
+                            showCalendar:    false,
+                            showTimeSlots:   false,
+                            showProceduresList: false,
+                            requireCpf:      false,
+                            procedures:      null,
+                            availableSlots:  null,
+                            transferToHuman: false
+                        };
                     }
-
-                    return {
-                        text:            askDependentNameText,
-                        buttons:         [],
-                        showCalendar:    false,
-                        showTimeSlots:   false,
-                        showProceduresList: false,
-                        requireCpf:      false,
-                        procedures:      null,
-                        availableSlots:  null,
-                        transferToHuman: false
-                    };
                 }
             }
 
