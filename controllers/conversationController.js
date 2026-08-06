@@ -1225,12 +1225,61 @@ class ConversationController {
 
             // ── COMPILAÇÃO INCREMENTAL DO RASCUNHO (DRAFT) DE AGENDAMENTO ───────
             // ── GUARDA ANTI-FALSO-POSITIVO: pergunta informativa de preço não é seleção de procedimento ──
+            const rawCpf = extractAndNormalizeCpf(sanitizedText);
 
             // Detecção de agendamento para terceiro/familiar
             const familyKeywords = /\b(meu pai|minha mãe|meu filho|minha filha|meu marido|minha esposa|meu avô|minha avó|para o meu|para a minha|é para (ele|ela|meu|minha)|pro meu|pra minha)\b/i;
             if (familyKeywords.test(sanitizedText)) {
                 draft.is_family_booking = true;
                 await db.sessions.setDraft(phone, draft, clinicId);
+            }
+
+            // ── EXTRAÇÃO ANTECIPADA DE CPF DO DEPENDENTE ──
+            if (draft.is_family_booking) {
+                const earlyCpf = rawCpf || extractAndNormalizeCpf(sanitizedText);
+                if (earlyCpf && !draft.dependentCpf) {
+                    draft.dependentCpf = earlyCpf;
+                    draft.cpf = earlyCpf;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+                }
+            }
+
+            // ── GATE ABSOLUTO: agendamento familiar exige nome do dependente ANTES de qualquer avanço ──
+            if (draft.is_family_booking && !draft.dependentName) {
+                const dependentNameMatch = sanitizedText.match(/(?:nome (?:dele|dela|é)|chama(?:-se)?|é o|é a)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i);
+                const extractedClean = extractCleanName(sanitizedText);
+
+                if (dependentNameMatch) {
+                    draft.dependentName = dependentNameMatch[1].trim();
+                    draft.name = draft.dependentName;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+                } else if (extractedClean && !familyKeywords.test(sanitizedText)) {
+                    draft.dependentName = extractedClean;
+                    draft.name = extractedClean;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+                } else {
+                    const askDependentNameText = "Entendido! Para prosseguirmos com o agendamento do seu familiar, qual é o nome completo da pessoa que será atendida?";
+                    history.push({ role: 'user', parts: [{ text: processedText }] });
+                    history.push({ role: 'model', parts: [{ text: `${askDependentNameText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
+                    if (history.length > 20) history = history.slice(-20);
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendTextMessage(phone, askDependentNameText, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text:            askDependentNameText,
+                        buttons:         [],
+                        showCalendar:    false,
+                        showTimeSlots:   false,
+                        showProceduresList: false,
+                        requireCpf:      false,
+                        procedures:      null,
+                        availableSlots:  null,
+                        transferToHuman: false
+                    };
+                }
             }
 
             // 1. Extração do Procedimento/Tratamento (N5 - Match Exato / Dinâmico da Clínica)
@@ -1437,7 +1486,6 @@ class ConversationController {
             }
 
             // 2. Interceptação de CPF com separação de conceitos e segurança
-            const rawCpf = extractAndNormalizeCpf(sanitizedText);
 
             // Se o paciente JÁ possui CPF cadastrado e validado no banco, desativa a exigência determinística
             if (patient && patient.cpf) {
@@ -1510,6 +1558,12 @@ class ConversationController {
             }
 
             if (rawCpf) {
+                draft.cpf = rawCpf;
+                if (draft.is_family_booking) {
+                    draft.dependentCpf = rawCpf;
+                }
+                await db.sessions.setDraft(phone, draft, clinicId);
+
                 try {
                     const foundPatient = await db.patients.findByCpf(rawCpf, clinicId);
 

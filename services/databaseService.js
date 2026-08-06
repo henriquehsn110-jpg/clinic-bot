@@ -622,8 +622,22 @@ const sessions = {
                 return;
             }
 
-            const { error } = await supabase.rpc('merge_session_draft_multitenant', { p_phone: phone, p_clinic_id: clinicId, p_draft: draftPatch });
-            if (error) throw new Error(`sessions.setDraft (merge): ${error.message}`);
+            const { data: existing } = await supabase
+                .from('sessions')
+                .select('id')
+                .eq('phone', phone)
+                .eq('clinic_id', clinicId)
+                .maybeSingle();
+
+            if (!existing) {
+                const { error: insErr } = await supabase
+                    .from('sessions')
+                    .insert({ phone, clinic_id: clinicId, history: [], draft: draftPatch, last_activity: new Date().toISOString() });
+                if (insErr) throw new Error(`sessions.setDraft (insert new): ${insErr.message}`);
+            } else {
+                const { error } = await supabase.rpc('merge_session_draft_multitenant', { p_phone: phone, p_clinic_id: clinicId, p_draft: draftPatch });
+                if (error) throw new Error(`sessions.setDraft (merge): ${error.message}`);
+            }
         });
     },
 
