@@ -538,8 +538,19 @@ class ConversationController {
                 }
             }
 
+            // 0d. Atualização automática de rascunho se um procedimento for mencionado explicitamente
+            const explicitProcMatch = PROCEDURES_LIST.find(p => {
+                const pLow = p.toLowerCase();
+                const sLow = sanitizedText.toLowerCase();
+                return sLow.includes(pLow) || pLow.includes(sLow) || (sLow.includes('clareamento') && pLow.includes('clareamento'));
+            });
+            if (explicitProcMatch && draft.type !== explicitProcMatch) {
+                draft.type = explicitProcMatch;
+                await db.sessions.setDraft(phone, draft, clinicId);
+            }
+
             // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato genérico)
-            const hasDirectIntent = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /agendar|remarcar|cancelar|consultas?|agendada/i.test(sanitizedText);
+            const hasDirectIntent = explicitProcMatch || /agendar|remarcar|cancelar|consultas?|agendada/i.test(sanitizedText);
             if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar') && !hasDirectIntent) {
                 const welcomeText = `Olá! Sou a ${personaName}, da ${clinicName} 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?`;
                 const welcomeButtons = ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"];
@@ -701,6 +712,29 @@ class ConversationController {
                     showProceduresList: true,
                     requireCpf: false,
                     procedures: PROCEDURES_LIST,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
+            }
+
+            // 4b. Atalho para seleção de médico "Tanto Faz" / "Qualquer Disponível"
+            if (/^(tanto faz|doc_any|qualquer um|qualquer médico|qualquer medico|sem preferência|sem preferencia)$/i.test(sanitizedText.trim())) {
+                draft.doctor_id = null;
+                draft.doctor_name = null;
+                await db.sessions.setDraft(phone, { ...draft, doctor_id: null, doctor_name: null }, clinicId);
+                const calText = "Perfeito! Selecione a data desejada no calendário abaixo:";
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: `${calText}\n[SISTEMA: calendário exibido, aguardando data, offset=0]` }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                return {
+                    text: calText,
+                    buttons: [],
+                    showCalendar: true,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
                     availableSlots: null,
                     transferToHuman: false
                 };
