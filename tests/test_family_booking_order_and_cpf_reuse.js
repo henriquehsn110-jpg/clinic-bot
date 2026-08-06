@@ -1,5 +1,5 @@
 /**
- * TESTE DE REGRESSÃO BUG 2 (CONTINUAÇÃO): Ordem do Gate de Nome + Reaproveitamento de CPF + Resposta Cordial a Saudações
+ * TESTE DE REGRESSÃO BUG 2 (CONTINUAÇÃO): Ordem do Gate de Nome + Reaproveitamento de CPF + Botões de Confirmação Final
  */
 require('dotenv').config();
 const assert = require('assert');
@@ -37,7 +37,6 @@ async function run() {
         isSimulation: true
     });
 
-    // A resposta NÃO deve ser o template estático repetido rigidamente, mas sim processada com contexto generativo
     assert.strictEqual(r1_5.showCalendar, false, 'FALHA [Saudação]: Não deve abrir calendário em "Boa noite"');
     console.log('  ✅ PASS 1.5 [Saudação]: Saudação "Boa noite" processada sem loop de repetição robótica.');
 
@@ -57,6 +56,27 @@ async function run() {
     assert.ok(draftFinal?.dependentCpf.includes('529.982.247-25'), 'FALHA [Draft]: dependentCpf deve ter preservado o CPF "529.982.247-25"');
 
     console.log('  ✅ PASS 2 [CPF Reuse]: Nome do dependente gravado e CPF da 1ª mensagem reaproveitado sem repetir a pergunta.');
+
+    // Turno 3: Agendamento de procedimento, data e horário completos
+    await db.sessions.setDraft(phone, {
+        is_family_booking: true,
+        dependentName: 'Paulo Araujo do Nascimento',
+        dependentCpf: '529.982.247-25',
+        type: 'Implante',
+        date: '2026-08-11',
+        time: '20:00'
+    }, clinicId);
+
+    const r3 = await conversationController.handleIncomingMessage({
+        phone: phone,
+        messageText: 'Está correto',
+        phoneNumberId: '5511979992719',
+        isSimulation: true
+    });
+
+    assert.ok(r3.buttons && r3.buttons.includes('Confirmar'), 'FALHA [Botões]: Mensagem final de confirmação DEVE incluir botões interativos ["Confirmar", "Agendar p/ Outro", "Alterar"]');
+    console.log('  ✅ PASS 3 [Botões Interativos]: Botões ["Confirmar", "Agendar p/ Outro", "Alterar"] gerados com sucesso na confirmação final.');
+
     process.exit(0);
 }
 

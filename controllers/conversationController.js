@@ -1738,16 +1738,18 @@ class ConversationController {
             const skipStateAdvanceForQuestion = isInformationalPriceQuestion && !dateMatch && !timeMatch;
 
             if (!aiResponse.transferToHuman) {
-                // Verifica se o paciente possui nome válido (não é apenas o número de telefone)
-                const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
-                if (draft.type && draft.date && draft.time && (patient?.cpf || draft.cpf || rawCpf) && hasPatientName) {
-                    // Passo 5: Todos os dados coletados (incluindo nome) -> Confirmação explícita
+                // Verifica se o paciente possui nome válido (não é apenas o número de telefone) e CPF cadastrado/no rascunho
+                const hasPatientName = !!(draft.name || draft.dependentName || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
+                const hasCpf = !!(patient?.cpf || draft?.cpf || draft?.dependentCpf || rawCpf);
+
+                if (draft.type && draft.date && draft.time && hasCpf && hasPatientName) {
+                    // Passo 5: Todos os dados coletados (incluindo nome e CPF) -> Confirmação explícita com Botões
                     aiResponse.buttons = ["Confirmar", "Agendar p/ Outro", "Alterar"];
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.requireCpf = false;
-                } else if (draft.type && draft.date && draft.time && !patient?.cpf && !rawCpf) {
+                } else if (draft.type && draft.date && draft.time && !hasCpf) {
                     // Passo 4: Falta CPF -> Solicita CPF
                     aiResponse.requireCpf = true;
                     aiResponse.showCalendar = false;
