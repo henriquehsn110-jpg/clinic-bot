@@ -462,8 +462,8 @@ class ConversationController {
             }
 
             // ── GUARDIÃO ANTI-LOOPING E DETECTOR DE FRUSTRAÇÃO (CAMADA 3 DE CONTINGÊNCIA) ──
-            const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada|não entendi|nao entendi|não entendo|nao entendo|não compreendi|nao compreendi)\b/i;
-            const isExplicitAction = /^(agendar consulta|agendar|remarcar\/cancelar|remarcar|cancelar|outras dúvidas|outras duvidas|sim|não|nao|confirmar|tanto faz|doc_any|selecionei a data|selecionei o horário|bom dia|boa tarde|boa noite|olá|ola|oi)$/i.test(sanitizedText.trim()) || PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
+            const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada)\b/i;
+            const isExplicitAction = /^(agendar consulta|agendar|remarcar\/cancelar|remarcar|cancelar|outras dúvidas|outras duvidas|sim|não|nao|confirmar|tanto faz|doc_any|selecionei a data|selecionei o horário|bom dia|boa tarde|boa noite|olá|ola|oi)$/i.test(sanitizedText.trim()) || PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /quais\s+consultas|consultas?\s+agendada|minhas?\s+consulta/i.test(sanitizedText);
 
             const isFrustrated = frustrationRegex.test(sanitizedText);
             const isStagnated = !isExplicitAction && history.length >= 12 && (history.length % 4 === 0) && (!draft || (!draft.type && !draft.date));
@@ -492,8 +492,54 @@ class ConversationController {
                 };
             }
 
+            // 0c. Interceptador Direto para Consulta de Agendamentos Ativos ("Quais consultas eu tenho agendadas?")
+            const queryApptsRegex = /quais\s+(são\s+as\s+)?(minhas\s+)?consultas|consultas?\s+agendada[ss]?|tenho\s+(alguma\s+)?consulta|minhas?\s+consulta[ss]?|meu\s+agendamento/i;
+            const isQueryingAppts = queryApptsRegex.test(sanitizedText);
+
+            if (isQueryingAppts && patient && patient.id) {
+                const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('FIND_BY_PATIENT_ERR', err.message); return []; });
+                const activeAppts = (appts || []).filter(a => (a.status === 'pending' || a.status === 'confirmed') && isUpcomingAppt(a.appointment_date, a.appointment_time));
+                
+                if (activeAppts.length > 0) {
+                    const activeAppt = activeAppts[0];
+                    const dateFmt = activeAppt.appointment_date.split('-').reverse().join('/');
+                    const timeFmt = activeAppt.appointment_time.substring(0, 5);
+                    const calUrl = buildDirectGoogleCalendarUrl(activeAppt.type, activeAppt.appointment_date, activeAppt.appointment_time);
+                    
+                    let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊`;
+                    
+                    if (activeAppts.length > 1) {
+                        const otherStr = activeAppts.slice(1).map((a, i) => {
+                            const docFormatted = formatDoctorNameForAppointment(a);
+                            return `${i + 2}) ${a.type || 'Consulta'} com ${docFormatted} no dia ${a.appointment_date.split('-').reverse().join('/')} às ${a.appointment_time.substring(0, 5)}`;
+                        }).join('\n');
+                        confirmText += `\n\n📋 *Você também possui mais ${activeAppts.length - 1} consulta(s) agendada(s):*\n${otherStr}`;
+                    }
+                    
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: confirmText }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: confirmText,
+                        buttons: [],
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: false
+                    };
+                }
+            }
+
             // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato genérico)
-            const hasDirectIntent = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /agendar|remarcar|cancelar/i.test(sanitizedText);
+            const hasDirectIntent = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /agendar|remarcar|cancelar|consultas?|agendada/i.test(sanitizedText);
             if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar') && !hasDirectIntent) {
                 const welcomeText = `Olá! Sou a ${personaName}, da ${clinicName} 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?`;
                 const welcomeButtons = ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"];
