@@ -75,31 +75,37 @@ class WhatsAppService {
         const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
         if (validButtons.length === 0) return this.sendTextMessage(to, safeBodyText, phoneId, token);
 
-        return withRetry(async () => {
-            try {
-                await axios.post(url, {
-                    messaging_product: 'whatsapp',
-                    to,
-                    type: 'interactive',
-                    interactive: {
-                        type: 'button',
-                        body: { text: safeBodyText },
-                        action: {
-                            buttons: validButtons.map((btn, i) => ({
-                                type: 'reply',
-                                reply: {
-                                    id:    `btn_${i}`,
-                                    title: btn.length > 20 ? btn.substring(0, 20) : btn
-                                }
-                            }))
+        try {
+            return await withRetry(async () => {
+                try {
+                    await axios.post(url, {
+                        messaging_product: 'whatsapp',
+                        to,
+                        type: 'interactive',
+                        interactive: {
+                            type: 'button',
+                            body: { text: safeBodyText },
+                            action: {
+                                buttons: validButtons.map((btn, i) => ({
+                                    type: 'reply',
+                                    reply: {
+                                        id:    `btn_${i}`,
+                                        title: btn.length > 20 ? btn.substring(0, 20) : btn
+                                    }
+                                }))
+                            }
                         }
-                    }
-                }, { headers, timeout: 10000 });
-            } catch (error) {
-                handleMetaError(to, 'botões', error);
-                throw error;
-            }
-        });
+                    }, { headers, timeout: 10000 });
+                } catch (error) {
+                    handleMetaError(to, 'botões', error);
+                    throw error;
+                }
+            });
+        } catch (fallbackErr) {
+            logger.warn('WHATSAPP_FALLBACK', `Falha no envio de botões para ${to}. Enviando texto formatado como fallback.`);
+            const formattedFallback = `${safeBodyText}\n\n` + validButtons.map((b, i) => `${i + 1}. ${b}`).join('\n');
+            return this.sendTextMessage(to, formattedFallback, phoneId, token).catch(() => {});
+        }
     }
 
     async sendListMessage(to, bodyText, buttonLabel, sections, headerText = "Clínica Modelo", phoneId, token) {
@@ -118,27 +124,41 @@ class WhatsAppService {
             })
         }));
 
-        return withRetry(async () => {
-            try {
-                await axios.post(url, {
-                    messaging_product: 'whatsapp',
-                    to,
-                    type: 'interactive',
-                    interactive: {
-                        type: 'list',
-                        header: { type: 'text', text: headerText.substring(0, 60) },
-                        body:   { text: bodyText.substring(0, 1024) },
-                        action: {
-                            button: buttonLabel.substring(0, 20),
-                            sections: safeSections
+        try {
+            return await withRetry(async () => {
+                try {
+                    await axios.post(url, {
+                        messaging_product: 'whatsapp',
+                        to,
+                        type: 'interactive',
+                        interactive: {
+                            type: 'list',
+                            header: { type: 'text', text: headerText.substring(0, 60) },
+                            body:   { text: bodyText.substring(0, 1024) },
+                            action: {
+                                button: buttonLabel.substring(0, 20),
+                                sections: safeSections
+                            }
                         }
-                    }
-                }, { headers, timeout: 10000 });
-            } catch (error) {
-                handleMetaError(to, 'lista', error);
-                throw error;
-            }
-        });
+                    }, { headers, timeout: 10000 });
+                } catch (error) {
+                    handleMetaError(to, 'lista', error);
+                    throw error;
+                }
+            });
+        } catch (fallbackErr) {
+            logger.warn('WHATSAPP_FALLBACK', `Falha no envio de lista para ${to}. Enviando texto formatado como fallback.`);
+            let listFallback = bodyText ? bodyText.substring(0, 1024) : '';
+            let optNum = 1;
+            safeSections.forEach(sec => {
+                if (sec.title) listFallback += `\n\n📌 *${sec.title}*:`;
+                sec.rows.forEach(r => {
+                    listFallback += `\n${optNum}. ${r.title}${r.description ? ` (${r.description})` : ''}`;
+                    optNum++;
+                });
+            });
+            return this.sendTextMessage(to, listFallback, phoneId, token).catch(() => {});
+        }
     }
 
     async sendTemplateMessage(to, templateName, languageCode = 'pt_BR', components = [], phoneId, token) {
