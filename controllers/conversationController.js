@@ -412,7 +412,7 @@ class ConversationController {
 
             // ── P3: CACHE LOCAL DE BOAS-VINDAS & ATALHOS (0 TOKENS GEMINI) ───────
             // 0. Atalho Direto para Transbordo Humano (Handoff Explícito)
-            const isExplicitHumanRequest = /\b(falar\s+com\s+(um\s+)?(atendente|humano|recepção|secretária|pessoa|alguém)|atendimento\s+humano|preciso\s+falar\s+com\s+alguém)\b/i.test(sanitizedText);
+            const isExplicitHumanRequest = /\b(falar\s+com\s+(um|uma\s+)?(atendente|humano|humana|recepção|secretária|pessoa|alguém)|atendimento\s+humano|preciso\s+falar\s+com\s+(alguém|atendente))\b/i.test(sanitizedText);
             if (isExplicitHumanRequest) {
                 logger.info('HUMAN_HANDOFF_REQUESTED', `Paciente [${phone}] solicitou atendimento humano.`);
                 const handoffText = "Com certeza! Estou transferindo seu atendimento para a nossa recepção humano. Em breve um atendente irá responder você aqui pelo WhatsApp! 😊\n\n[SISTEMA: conversa transferida para atendente humano]";
