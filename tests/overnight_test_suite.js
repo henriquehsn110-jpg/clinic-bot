@@ -260,6 +260,7 @@ async function runTestSuite() {
 
     // C3. Mascaramento LGPD e Remoção do CPF Bruto no Endpoint /data
     try {
+        await ensureServerRunning();
         const loginRes = await axios.post(`${BASE_URL}/api/dashboard/auth/login`, {
             email: 'admin@clinicamodelo.com.br',
             password: '123456',

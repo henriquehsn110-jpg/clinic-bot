@@ -76,11 +76,11 @@ async function runReminderE2ETest() {
     assert.ok(statsRun2.skipped >= 1, 'Segunda execução deve ignorar lembretes já processados');
     console.log('   ✅ PASS: Idempotência confirmada! Zero lembretes duplicados.');
 
-    // 6. Simular Resposta do Paciente no WhatsApp ("CONFIRMAR")
-    console.log(`\n🔹 [Passo 4/4] Simulando resposta do paciente no WhatsApp: "CONFIRMAR"...`);
+    // 6. Simular Resposta do Paciente no WhatsApp (Clique no botão "Confirmar Presença")
+    console.log(`\n🔹 [Passo 4/4] Simulando clique no botão do WhatsApp: "Confirmar Presença"...`);
     const confirmRes = await conversationController.handleIncomingMessage({
         phone: testPhone,
-        messageText: 'CONFIRMAR',
+        messageText: 'Confirmar Presença',
         phoneNumberId: '5511979992719',
         isSimulation: true
     });

@@ -101,7 +101,8 @@ class ReminderService {
                         continue;
                     }
 
-                    const reminderMsg = `Olá, ${patientName}! 😊 Passando para lembrar da sua consulta de *${procType}* agendada para hoje às *${time}* na clínica.\n\nPor favor, responda *CONFIRMAR* se puder comparecer ou digite *REMARCAR* caso precise alterar seu horário.`;
+                    const reminderMsg = `Olá, ${patientName}! 😊 Passando para lembrar da sua consulta de *${procType}* agendada para hoje às *${time}* na clínica.\n\nPor favor, selecione uma das opções abaixo para confirmar sua presença ou alterar o atendimento:`;
+                    const reminderButtons = ["Confirmar Presença", "Remarcar Consulta", "Cancelar Consulta"];
 
                     try {
                         if (!isSimulation) {
@@ -110,7 +111,7 @@ class ReminderService {
                                 const templateName = process.env.WHATSAPP_REMINDER_TEMPLATE || 'lembrete_consulta_clinica';
                                 await whatsappService.sendTemplateMessage(phone, templateName, 'pt_BR', [patientName, procType, time], clinic.phone_number_id, clinicToken);
                             } else {
-                                await whatsappService.sendTextMessage(phone, reminderMsg, clinic.phone_number_id, clinicToken);
+                                await whatsappService.sendButtonMessage(phone, reminderMsg, reminderButtons, clinic.phone_number_id, clinicToken);
                             }
                         }
 
