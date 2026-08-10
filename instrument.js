@@ -4,8 +4,12 @@ const Sentry = require("@sentry/node");
 function redactPii(str) {
     if (typeof str !== 'string') return str;
     return str
+        // 1. Redação de CPF (Com ou sem formatação: 123.456.789-00 ou 12345678900)
         .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[CPF_REDACTED]')
-        .replace(/\b55\d{10,11}\b/g, '[PHONE_REDACTED]');
+        // 2. Redação de Telefones (Formatados com +55, (XX), espaços e traços: +55 (11) 98765-4321, 5511987654321, etc.)
+        .replace(/\b(\+?55\s?)?(\(?\d{2}\)?\s?)?\d{4,5}[-\s]?\d{4}\b/g, '[PHONE_REDACTED]')
+        // 3. Redação de Nomes de Pacientes em campos de texto/logs (ex: Paciente: Maria Silva, Nome: Paulo Araujo)
+        .replace(/(paciente|nome|patient|dependentname)\s*[:=]\s*([A-Za-zÀ-ÖØ-öø-ÿ]+(\s+[A-Za-zÀ-ÖØ-öø-ÿ]+)+)/gi, '$1: [NAME_REDACTED]');
 }
 
 function sanitizeObject(obj) {
