@@ -538,6 +538,44 @@ class ConversationController {
                 }
             }
 
+            // 0e. Interceptador Direto para Resposta a Lembretes ("CONFIRMAR", "CONFIRMO", "CONFIRMAR PRESENÇA")
+            const isReminderConfirmIntent = /^\s*(confirmar|confirmo|confirmado|confirmada|sim,\s*confirmar|confirmar\s+presença|confirmar\s+presenca|estou\s+confirmando)\s*$/i.test(sanitizedText.trim());
+
+            if (isReminderConfirmIntent && patient && patient.id && (!draft || !draft.type || !draft.date || !draft.time)) {
+                const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('REMINDER_CONFIRM_FIND_ERR', err.message); return []; });
+                const pendingAppts = (appts || []).filter(a => a.status === 'pending');
+
+                if (pendingAppts.length > 0) {
+                    const targetAppt = pendingAppts[0];
+                    await db.appointments.updateStatus(targetAppt.id, 'confirmed', clinicId);
+                    logger.info('REMINDER_CONFIRMED_VIA_CHAT', `Consulta ${targetAppt.id} do paciente [${phone}] confirmada com sucesso via WhatsApp.`);
+
+                    const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
+                    const timeFmt = targetAppt.appointment_time ? targetAppt.appointment_time.substring(0, 5) : '';
+                    const confirmText = `Sua presença na consulta de *${targetAppt.type || 'avaliação'}* no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: confirmText }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: confirmText,
+                        buttons: [],
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: false
+                    };
+                }
+            }
+
             // 0d. Atualização automática de rascunho se um procedimento for mencionado explicitamente
             const isInformationalPriceQuestion = /\b(quanto custa|qual (o|é) o preço|qual (o|é) o valor|quanto (é|sai|fica)|preço de|valor de|quanto vale)\b/i.test(sanitizedText);
             const explicitProcMatch = !isInformationalPriceQuestion && PROCEDURES_LIST.find(p => {

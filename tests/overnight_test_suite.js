@@ -34,7 +34,7 @@ async function ensureServerRunning() {
     try {
         const { execSync } = require('child_process');
         if (process.platform === 'win32') {
-            execSync('cmd /c "for /f "tokens=5" %a in (\'netstat -aon ^| findstr :3000 ^| findstr LISTENING\') do taskkill /f /pid %a"', { stdio: 'ignore' });
+            execSync('powershell -Command "Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
         } else {
             execSync('fuser -k 3000/tcp || true', { stdio: 'ignore' });
         }
