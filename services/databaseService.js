@@ -29,19 +29,21 @@ const crypto = require('crypto');
 const cpfKey = process.env.CPF_ENCRYPTION_KEY;
 const isProduction = process.env.NODE_ENV === 'production';
 
-if (isProduction && !cpfKey) {
-    logger.error('SECURITY_CRITICAL', 'CPF_ENCRYPTION_KEY não definida em produção! Desligando processo para evitar gravação de dados não seguros.');
+if (!cpfKey) {
+    logger.error('SECURITY_CRITICAL', 'CPF_ENCRYPTION_KEY não definida! A chave é obrigatória para criptografia AES-256-GCM. Defina um hexadecimal de 64 caracteres em CPF_ENCRYPTION_KEY.');
+    if (isProduction) {
+        process.exit(1);
+    } else {
+        throw new Error('SECURITY_CRITICAL: CPF_ENCRYPTION_KEY ausente. Defina a variável de ambiente CPF_ENCRYPTION_KEY com 64 caracteres hexadecimais.');
+    }
+}
+
+if (!/^[0-9a-fA-F]{64}$/.test(cpfKey)) {
+    logger.error('SECURITY_CRITICAL', 'CPF_ENCRYPTION_KEY possui formato inválido. Deve ser um hexadecimal de 64 caracteres (32 bytes).');
     process.exit(1);
 }
 
-if (cpfKey && !/^[0-9a-fA-F]{64}$/.test(cpfKey)) {
-    logger.error('SECURITY_CRITICAL', 'CPF_ENCRYPTION_KEY possui formato inválido. Deve ser um hexadecimal de 64 caracteres.');
-    process.exit(1);
-}
-
-const ENCRYPTION_SECRET = cpfKey 
-    ? Buffer.from(cpfKey, 'hex') 
-    : Buffer.from('0123456789012345678901234567890123456789012345678901234567890123', 'hex'); // Fallback APENAS para dev
+const ENCRYPTION_SECRET = Buffer.from(cpfKey, 'hex');
 
 function encryptData(text) {
     const iv = crypto.randomBytes(16);

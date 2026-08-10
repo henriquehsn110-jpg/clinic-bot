@@ -1,44 +1,39 @@
 /**
  * TESTE AO VIVO DE HIGIENIZAÇÃO LGPD NO SENTRY
- * Testa redação com e SEM RÓTULO EXPLÍCITO (ex: "Erro ao processar agendamento de Maria Silva de Souza")
+ * Testa redação com NOMES ISOLADOS/ÚNICOS ("Paciente Paulo não encontrado" e "erro para Ana ao confirmar consulta")
  */
 const Sentry = require('../instrument');
 
-async function testSentryLiveScrubbing() {
+async function testSentryLiveSingleFirstName() {
     console.log('================================================================');
-    console.log('🛡️ TESTE AO VIVO DE SANITIZAÇÃO DE PII / LGPD NO SENTRY (COM E SEM RÓTULO)');
+    console.log('🛡️ TESTE DE REDAÇÃO DE NOME ÚNICO/ISOLADO NO SENTRY (CLAUDE COBRANÇA)');
     console.log('================================================================\n');
-
-    // TESTE 1: Erro em Linguagem Natural SEM RÓTULO EXPLÍCITO
-    const unlabelledErrorMsg = "Erro ao processar agendamento de Maria Silva de Souza com CPF 123.456.789-00 e telefone +55 (11) 98765-4321";
-    console.log('📥 [Caso A — Sem Rótulo Explícito] Mensagem Bruta:');
-    console.log(`   "${unlabelledErrorMsg}"\n`);
-
-    const mockEventA = {
-        message: unlabelledErrorMsg,
-        exception: { values: [{ value: unlabelledErrorMsg }] },
-        breadcrumbs: [{ message: "Tentativa de confirmação para Maria Silva de Souza" }]
-    };
 
     const client = Sentry.getClient();
     const beforeSend = client ? client.getOptions().beforeSend : null;
 
-    if (beforeSend) {
-        const processedEventA = beforeSend(mockEventA);
-        console.log('📤 OBJETO SANITIZADO PELO SENTRY (CASO SEM RÓTULO):');
-        console.log(JSON.stringify(processedEventA, null, 2));
+    // CASO 1 COBRADO PELO CLAUDE: "Paciente Paulo não encontrado"
+    const msg1 = "Paciente Paulo não encontrado no banco de dados da clínica";
+    const mockEvent1 = { message: msg1, exception: { values: [{ value: msg1 }] } };
+    const res1 = beforeSend(mockEvent1);
 
-        const jsonStrA = JSON.stringify(processedEventA);
-        console.log('\n--- VERIFICAÇÃO DE VAZAMENTO DE PII (CASO SEM RÓTULO) ---');
-        console.log(`   CPF (123.456.789-00) Presente?           ${jsonStrA.includes('123.456.789-00') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([CPF_REDACTED])'}`);
-        console.log(`   Telefone (+55 (11) 98765-4321) Presente? ${jsonStrA.includes('98765-4321') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([PHONE_REDACTED])'}`);
-        console.log(`   Nome (Maria Silva de Souza) Presente?   ${jsonStrA.includes('Maria Silva de Souza') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([NAME_REDACTED])'}`);
-    } else {
-        console.error('❌ Não foi possível obter a função beforeSend do Sentry.');
-    }
+    console.log('🔹 [Caso 1 — Nome Único após Rótulo "Paciente Paulo"]');
+    console.log(`   Entrada:  "${msg1}"`);
+    console.log(`   Saída:    "${res1.message}"`);
+    console.log(`   Resultado:${res1.message.includes('Paulo') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([NAME_REDACTED])'}\n`);
+
+    // CASO 2 COBRADO PELO CLAUDE: "erro para Ana ao confirmar consulta"
+    const msg2 = "erro para Ana ao confirmar consulta agendada para hoje";
+    const mockEvent2 = { message: msg2, exception: { values: [{ value: msg2 }] } };
+    const res2 = beforeSend(mockEvent2);
+
+    console.log('🔹 [Caso 2 — Nome Único após Preposição "para Ana"]');
+    console.log(`   Entrada:  "${msg2}"`);
+    console.log(`   Saída:    "${res2.message}"`);
+    console.log(`   Resultado:${res2.message.includes('Ana') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([NAME_REDACTED])'}\n`);
 }
 
-testSentryLiveScrubbing().then(() => process.exit(0)).catch(err => {
+testSentryLiveSingleFirstName().then(() => process.exit(0)).catch(err => {
     console.error('❌ Erro no teste do Sentry:', err);
     process.exit(1);
 });

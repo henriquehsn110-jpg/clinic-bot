@@ -8,10 +8,15 @@ function redactPii(str) {
         .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[CPF_REDACTED]')
         // 2. Redação de Telefones (Formatados com +55, (XX), espaços e traços: +55 (11) 98765-4321, 5511987654321, etc.)
         .replace(/\b(\+?55\s?)?(\(?\d{2}\)?\s?)?\d{4,5}[-\s]?\d{4}\b/g, '[PHONE_REDACTED]')
-        // 3. Redação de Nomes de Pacientes com Rótulo (ex: Paciente: Maria Silva, Nome: Paulo Araujo)
-        .replace(/(paciente|nome|patient|dependentname)\s*[:=]\s*([A-Za-zÀ-ÖØ-öø-ÿ]+(\s+[A-Za-zÀ-ÖØ-öø-ÿ]+)+)/gi, '$1: [NAME_REDACTED]')
-        // 4. Redação de Nomes Próprios em Linguagem Natural SEM RÓTULO (ex: "agendamento de Maria Silva de Souza", "para Paulo Araujo")
-        .replace(/\b(de|da|do|para|com|paciente|cliente)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de|da|do|dos|das|e)\s+[A-ZÀ-Ú][a-zà-ú]+|\s+[A-ZÀ-Ú][a-zà-ú]+)+)/g, '$1 [NAME_REDACTED]');
+        // 3. Redação de Nomes de Pacientes com Rótulo (ex: Paciente: Paulo, Nome: Ana, Paciente Paulo não encontrado)
+        .replace(/(paciente|nome|patient|dependentname)\s*[:=]?\s*([A-ZÀ-Ú][a-zà-ú]+(\s+[A-Za-zÀ-ÖØ-öø-ÿ]+)*)/gi, '$1: [NAME_REDACTED]')
+        // 4. Redação de Nomes Próprios em Linguagem Natural SEM RÓTULO (ex: "erro para Ana ao confirmar", "agendamento de Paulo")
+        .replace(/\b(de|da|do|para|com|paciente|cliente)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de|da|do|dos|das|e)\s+[A-ZÀ-Ú][a-zà-ú]+|\s+[A-ZÀ-Ú][a-zà-ú]+)*)/g, (match, prep, name) => {
+            const nonNameWords = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo', 'Hoje', 'Amanhã', 'WhatsApp', 'Supabase', 'Meta', 'Express'];
+            const firstWord = name.trim().split(/\s+/)[0];
+            if (nonNameWords.includes(firstWord)) return match;
+            return `${prep} [NAME_REDACTED]`;
+        });
 }
 
 function sanitizeObject(obj) {
