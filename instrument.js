@@ -1,12 +1,10 @@
 require('dotenv').config();
 const Sentry = require("@sentry/node");
 
-// Exceções de palavras de sistema e personas que NÃO devem ser redigidas
-const SYSTEM_EXCEPTIONS = [
-    'Ana', 'Camila', 'Bruna', 'ClinicaBot', 'Clínica', 'Clinica', 'Recepção', 'Recepcao', 
-    'Atendente', 'Limpeza', 'Avaliação', 'Avaliacao', 'Consulta', 'Ortodontia', 'Pediatria', 
+// Apenas termos técnicos/calendário que NÃO são nomes próprios de pessoas
+const NON_PERSON_KEYWORDS = [
     'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo', 'Hoje', 'Amanhã', 
-    'WhatsApp', 'Supabase', 'Meta', 'Express'
+    'WhatsApp', 'Supabase', 'Meta', 'Express', 'ClinicaBot'
 ];
 
 function redactPii(str) {
@@ -16,16 +14,16 @@ function redactPii(str) {
         .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[CPF_REDACTED]')
         // 2. Redação de Telefones (Formatados com +55, (XX), espaços e traços: +55 (11) 98765-4321, 5511987654321, etc.)
         .replace(/\b(\+?55\s?)?(\(?\d{2}\)?\s?)?\d{4,5}[-\s]?\d{4}\b/g, '[PHONE_REDACTED]')
-        // 3. Redação de Nomes de Pacientes com Rótulo (ex: Paciente: Paulo, Nome: Maria Silva)
+        // 3. Redação Incondicional de Nomes de Pacientes com Rótulo (ex: Paciente: Ana, Paciente Camila confirmou)
         .replace(/(paciente|nome|patient|dependentname)\s*[:=]?\s*([A-ZÀ-Ú][a-zà-ú]+(\s+[A-Za-zÀ-ÖØ-öø-ÿ]+)*)/gi, (match, label, name) => {
             const firstWord = name.trim().split(/\s+/)[0];
-            if (SYSTEM_EXCEPTIONS.includes(firstWord)) return match;
+            if (NON_PERSON_KEYWORDS.includes(firstWord)) return match;
             return `${label}: [NAME_REDACTED]`;
         })
-        // 4. Redação de Nomes Próprios em Linguagem Natural SEM RÓTULO (ex: "erro para Paulo", "agendamento de Maria")
-        .replace(/\b(de|da|do|para|com|paciente|cliente)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de|da|do|dos|das|e)\s+[A-ZÀ-Ú][a-zà-ú]+|\s+[A-ZÀ-Ú][a-zà-ú]+)*)/g, (match, prep, name) => {
+        // 4. Redação de Nomes Próprios em Linguagem Natural SEM RÓTULO (ex: "erro para Ana", "agendamento de Camila")
+        .replace(/\b(de|da|do|para|com)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de|da|do|dos|das|e)\s+[A-ZÀ-Ú][a-zà-ú]+|\s+[A-ZÀ-Ú][a-zà-ú]+)*)/g, (match, prep, name) => {
             const firstWord = name.trim().split(/\s+/)[0];
-            if (SYSTEM_EXCEPTIONS.includes(firstWord)) return match;
+            if (NON_PERSON_KEYWORDS.includes(firstWord)) return match;
             return `${prep} [NAME_REDACTED]`;
         });
 }

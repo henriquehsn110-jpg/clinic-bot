@@ -1,33 +1,35 @@
 /**
  * TESTE AO VIVO DE HIGIENIZAÇÃO LGPD NO SENTRY
- * Testa preservação de persona ("Ana") vs redação de paciente ("Paulo")
+ * Valida que pacientes chamados Ana ou Camila têm seus nomes devidamente redigidos!
  */
 const Sentry = require('../instrument');
 
-async function testSentryLivePersonaExceptions() {
+async function testSentryLivePatientAnaCamilaRedaction() {
     console.log('================================================================');
-    console.log('🛡️ TESTE DE PRESERVAÇÃO DA PERSONA ANA vs REDAÇÃO DE PACIENTE');
+    console.log('🛡️ TESTE DE REDAÇÃO INCONDICIONAL DE PACIENTES (ANA E CAMILA)');
     console.log('================================================================\n');
 
     const client = Sentry.getClient();
     const beforeSend = client ? client.getOptions().beforeSend : null;
 
-    // CASO 1: Paciente Paulo (DEVE SER REDIGIDO)
-    const msg1 = "Paciente Paulo não encontrado no banco";
+    // TESTE 1 SOLICITADO PELO CLAUDE: "Paciente Ana não encontrada"
+    const msg1 = "Paciente Ana não encontrada no banco de dados da clínica";
     const res1 = beforeSend({ message: msg1 });
-    console.log(`🔹 Entrada: "${msg1}"`);
+    console.log(`🔹 [Caso 1 — Paciente Ana]`);
+    console.log(`   Entrada: "${msg1}"`);
     console.log(`   Saída:   "${res1.message}"`);
-    console.log(`   Status:  ${res1.message.includes('Paulo') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([NAME_REDACTED])'}\n`);
+    console.log(`   Status:  ${res1.message.includes('Ana') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([NAME_REDACTED])'}\n`);
 
-    // CASO 2: Persona Ana (NÃO DEVE SER REDIGIDA - PRESERVA DEBUG)
-    const msg2 = "erro para Ana ao confirmar consulta de Limpeza Dental";
+    // TESTE 2 SOLICITADO PELO CLAUDE: "Paciente Camila confirmou presença"
+    const msg2 = "Paciente Camila confirmou presença na consulta de amanhã";
     const res2 = beforeSend({ message: msg2 });
-    console.log(`🔹 Entrada: "${msg2}"`);
+    console.log(`🔹 [Caso 2 — Paciente Camila]`);
+    console.log(`   Entrada: "${msg2}"`);
     console.log(`   Saída:   "${res2.message}"`);
-    console.log(`   Status:  ${res2.message.includes('Ana') ? '🟢 PRESERVADO (PERSONA CORRETA)' : '🔴 REDIGIDO ENGANOSAMENTE'}\n`);
+    console.log(`   Status:  ${res2.message.includes('Camila') ? '🔴 VAZOU' : '🟢 BLOQUEADO ([NAME_REDACTED])'}\n`);
 }
 
-testSentryLivePersonaExceptions().then(() => process.exit(0)).catch(err => {
+testSentryLivePatientAnaCamilaRedaction().then(() => process.exit(0)).catch(err => {
     console.error('❌ Erro no teste do Sentry:', err);
     process.exit(1);
 });
