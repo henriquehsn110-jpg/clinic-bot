@@ -850,4 +850,4 @@ function parseClinicSettings(cData) {
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings, decryptData, encryptData };
+module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings, decryptData, encryptData, hashForSearch };
