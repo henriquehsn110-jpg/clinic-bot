@@ -1,0 +1,67 @@
+name: ClinicaBot SaaS Pro — CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: 🧪 Automated Test Battery & Security Preflight
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./clinic-bot-backend
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 18.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: 'npm'
+          cache-dependency-path: './clinic-bot-backend/package-lock.json'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🛡️ Run HMAC Webhook Security Test
+        run: node tests/test_hmac_webhook_injection.js
+        env:
+          NODE_ENV: test
+          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+      - name: 🔒 Run Multi-Tenant RLS Isolation Test
+        run: node tests/test_tenant_rls_isolation.js
+        env:
+          NODE_ENV: test
+          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+      - name: 🧪 Run Overnight QA Test Suite (24 Tests)
+        run: node tests/overnight_test_suite.js
+        env:
+          NODE_ENV: test
+          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+      - name: 🤖 Run Real 9-Block WhatsApp Conversational Flow Simulation
+        run: node tests/test_all_9_blocks.js
+        env:
+          NODE_ENV: test
+          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+  deploy-production:
+    name: 🚀 Production Deploy Notification
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: ✅ Report Successful CI Pipeline
+        run: echo "CI/CD Pipeline aprovada com 100% dos testes. O ambiente de produção no Render executará a compilação de forma segura."
