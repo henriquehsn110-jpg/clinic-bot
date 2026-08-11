@@ -1,7 +1,7 @@
 # 🔑 GUIA MESTRE DE ACESSOS, LINKS E PLATAFORMAS — CLINICABOT SAAS PRO
 
-> **Documento Oficial de Referência Operacional para o Gestor e Família/Equipe**  
-> *Este guia reúne todas as contas nas plataformas de nuvem, e-mails de acesso, URLs dos painéis, logins de demonstração, regras de onboarding e comandos do terminal.*
+> **Documento Oficial de Referência Operacional & Resolução de Problemas**  
+> *Este guia reúne todas as contas nas plataformas de nuvem, e-mails de acesso, URLs dos painéis, logins de demonstração, regras de onboarding, migração de planos e o Manual Passo a Passo de Resolução de Problemas para Iniciantes.*
 
 ---
 
@@ -77,7 +77,7 @@ Para demonstrar o painel da recepção para um cliente ou testar as abas do sist
 
 ---
 
-## 💻 4. GUIA RÁPIDO DO TERMINAL (COMANDOS PRÁTICOS)
+## 💻 4. GUIA RÁPIDO DO TERMINAL & GESTÃO DE PLANOS
 
 Sempre abra o terminal do **Antigravity IDE** ou **PowerShell** e navegue para a pasta do backend primeiro:
 
@@ -87,29 +87,60 @@ cd clinic-bot-backend
 
 ### 🔹 A. Cadastrar uma Nova Clínica Cliente (Onboarding)
 ```powershell
-node scripts/onboard_tenant.js --name "Nome da Clínica" --slug "nome-da-clinica" --phone-id "PHONE_ID_META" --token "TOKEN_META"
+node scripts/onboard_tenant.js --name "Nome da Clínica" --slug "nome-da-clinica" --plan "growth" --phone-id "PHONE_ID_META" --token "TOKEN_META"
+```
+*(Opções de plano: `starter`, `growth` ou `enterprise`)*
+
+---
+
+### 🔹 B. Migrar ou Atualizar Plano de um Cliente (Upgrade / Downgrade)
+Sempre que uma clínica solicitar upgrade de plano (ex: de **Starter** para **Growth** ou **Enterprise**), rode o comando único:
+
+```powershell
+node scripts/onboard_tenant.js --update-plan --slug "SLUG_DA_CLINICA" --plan "NOVO_PLANO"
 ```
 
-### 🔹 B. Testar se o Servidor na Nuvem está Online
+---
+
+### 🔹 C. Testar se o Servidor na Nuvem está Online (Health Check)
 ```powershell
 node -e "require('axios').get('https://clinic-bot-zksc.onrender.com/health').then(r => console.log(r.data))"
 ```
 
-### 🔹 C. Publicar Atualizações no Servidor (Deploy no Render)
+---
+
+### 🔹 D. Publicar Atualizações no Servidor (Deploy no Render)
 ```powershell
 git add .
 git commit -m "feat: atualizações do sistema"
 git push origin main
 ```
 
-### 🔹 D. Rodar Suíte Completa de QA (38 Testes Automatizados)
+---
+
+### 🔹 E. Rodar Suíte Completa de QA (38 Testes Automatizados)
 ```powershell
 npm test
 ```
 
 ---
 
-## 📋 5. RESUMO DE CONTATOS E E-MAILS DE SUPORTE
+## 🆘 5. GUIA DE RESOLUÇÃO DE PROBLEMAS PARA INICIANTES (TROUBLESHOOTING SIMPLIFICADO)
+
+Se surgir qualquer dúvida ou contratempo no dia a dia, siga esta tabela de solução imediata:
+
+| O que aconteceu? | Causa Provável | Como Resolver em 1 Minuto |
+| :--- | :--- | :--- |
+| **1. Deu erro `Cannot find module` ao rodar o comando no terminal.** | O terminal está fora da pasta do backend (ex: em `ClinicaBot` ou `System32`). | Digite `cd clinic-bot-backend` no terminal e aperte Enter. Depois tente o comando novamente. |
+| **2. O robô parou de responder no WhatsApp da clínica.** | O Token da Meta WhatsApp expirou ou o servidor dormiu. | 1. Clique no link de [Health Check](https://clinic-bot-zksc.onrender.com/health) para verificar se o servidor responde.<br>2. Se o servidor responder `ok`, acesse o [Meta Developers](https://developers.facebook.com) e renove o Token do WhatsApp. |
+| **3. A secretária não consegue entrar no Dashboard.** | E-mail ou slug digitado com erro de digitação. | Acesse a URL oficial `https://clinic-bot-zksc.onrender.com/dashboard` e verifique se o slug da clínica foi digitado em minúsculas (ex: `clinica-modelo`). |
+| **4. Deu erro `Slug já existe` ao cadastrar nova clínica.** | Você tentou usar um slug que já foi cadastrado anteriormente. | Escolha outro slug único adicionando um sufixo (ex: em vez de `odonto-prime`, use `odonto-prime-sp`). |
+| **5. O botão interativo de WhatsApp falhou no celular do paciente.** | Instabilidade temporária nos servidores da Meta. | O ClinicaBot tem fallback automático! Se os botões falharem, o sistema converte sozinho a mensagem para texto numerado (ex: `1. Confirmar`). Não precisa fazer nada. |
+| **6. Quero ver o que aconteceu no atendimento sem ver CPFs dos pacientes.** | Mascaramento de dados em conformidade com a LGPD. | Acesse a aba Transbordo Humano no Dashboard ou o portal do [Sentry](https://sentry.io), onde todos os dados confidenciais aparecem como `[CPF_REDACTED]`. |
+
+---
+
+## 📋 6. RESUMO DE CONTATOS E E-MAILS DE SUPORTE
 - **E-mail Principal do Gestor:** `henrique.hsn.110@gmail.com`
 - **Ambiente de Desenvolvimento:** Antigravity IDE 2.0 (Windows)
 - **Fuso Horário Oficial:** `America/Sao_Paulo` (Horário de Brasília)
