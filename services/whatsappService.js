@@ -53,6 +53,7 @@ class WhatsAppService {
     }
 
     async sendTextMessage(to, text, phoneId, token) {
+        logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Texto): "${text}"`);
         const { url, headers } = this._buildRequest(phoneId, token);
         return withRetry(async () => {
             try {
@@ -70,6 +71,7 @@ class WhatsAppService {
     }
 
     async sendButtonMessage(to, bodyText, buttons, phoneId, token) {
+        logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Botões): "${bodyText}" | Botões: [${(buttons || []).join(', ')}]`);
         const { url, headers } = this._buildRequest(phoneId, token);
         const validButtons = (buttons || []).slice(0, 3);
         const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
@@ -109,6 +111,7 @@ class WhatsAppService {
     }
 
     async sendListMessage(to, bodyText, buttonLabel, sections, headerText = "Clínica Modelo", phoneId, token) {
+        logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Lista Interativa): "${bodyText}" | Botão: "${buttonLabel}"`);
         const { url, headers } = this._buildRequest(phoneId, token);
         const safeSections = sections.map(section => ({
             title: section.title ? section.title.substring(0, 24) : "",
