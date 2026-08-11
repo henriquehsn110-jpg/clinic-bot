@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plano Estratégico Comercial & Marketing B2B — ClinicaBot SaaS Pro</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-obsidian: #050B18;
+            --bg-card: #0F172A;
+            --accent-cyan: #00F2FE;
+            --accent-blue: #38BDF8;
+            --accent-purple: #C084FC;
+            --wa-green: #25D366;
+            --text-title: #FFFFFF;
+            --text-body: #CBD5E1;
+            --text-muted: #94A3B8;
+            --border-glass: rgba(255, 255, 255, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-obsidian); color: var(--text-body); line-height: 1.65; padding: 30px 20px; }
+        .container { max-width: 1100px; margin: 0 auto; }
+
+        .header-doc {
+            text-align: center;
+            padding: 44px 30px;
+            background: radial-gradient(circle at top, rgba(0,242,254,0.15) 0%, transparent 70%);
+            border-bottom: 1px solid var(--border-glass);
+            margin-bottom: 35px;
+        }
+
+        .badge-tag {
+            display: inline-block;
+            background: rgba(0, 242, 254, 0.12);
+            color: var(--accent-cyan);
+            font-weight: 700;
+            font-size: 0.8rem;
+            padding: 6px 16px;
+            border-radius: 50px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(0, 242, 254, 0.3);
+        }
+
+        h1 { font-family: 'Outfit', sans-serif; font-size: 2.6rem; font-weight: 800; color: #FFF; margin-bottom: 12px; }
+        .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 800px; margin: 0 auto 24px auto; }
+
+        .section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            padding: 36px;
+            margin-bottom: 35px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.85rem; font-weight: 800; color: #FFF; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-glass); padding-bottom: 12px; }
+        h2 i { color: var(--accent-cyan); }
+        h3 { font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 700; color: #FFF; margin: 24px 0 12px 0; }
+
+        p, li { font-size: 1.02rem; color: var(--text-body); margin-bottom: 12px; }
+        ul, ol { margin-left: 20px; margin-bottom: 16px; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+        .info-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .info-box.cyan { border-left: 4px solid var(--accent-cyan); background: rgba(0, 242, 254, 0.03); }
+        .info-box.green { border-left: 4px solid var(--wa-green); background: rgba(37, 211, 102, 0.03); }
+        .info-box.purple { border-left: 4px solid var(--accent-purple); background: rgba(192, 132, 252, 0.03); }
+
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.92rem; }
+        th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-glass); }
+        th { background: rgba(255, 255, 255, 0.05); color: var(--accent-cyan); font-family: 'Outfit', sans-serif; font-weight: 700; text-transform: uppercase; font-size: 0.8rem; }
+
+        .print-btn {
+            background: linear-gradient(135deg, var(--wa-green), #1EBE5D);
+            color: #000;
+            font-weight: 700;
+            font-size: 1rem;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 50px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.35);
+            transition: all 0.3s;
+        }
+
+        .print-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+        @media print {
+            body { background: #FFF !important; color: #000 !important; padding: 0 !important; }
+            .section-card { background: #FFF !important; color: #000 !important; border: 1px solid #DDD !important; box-shadow: none !important; page-break-inside: avoid; margin-bottom: 20px !important; }
+            h1, h2, h3 { color: #000 !important; }
+            p, td, th, li { color: #222 !important; }
+            .print-btn { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="header-doc">
+        <span class="badge-tag">Plano Estratégico Comercial & GTM Master</span>
+        <h1>ClinicaBot SaaS Pro</h1>
+        <p class="subtitle">Dossiê Executivo de Vendas B2B, Precificação Cumulativa, Alta Disponibilidade em 3 Camadas e Homologação de Mercado.</p>
+        <button class="print-btn" onclick="window.print()"><i class="fa-solid fa-file-pdf"></i> Salvar este Plano em PDF (1 Clique)</button>
+    </div>
+
+    <!-- SEÇÃO 1: Fundamentação -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-book-bookmark"></i> 1. Fundamentação Teórica & Frameworks</h2>
+        
+        <div class="grid-2">
+            <div class="info-box cyan">
+                <h3>📈 Metodologia Vendas B2B Outbound</h3>
+                <p>• <strong>Receita Previsível (Aaron Ross)</strong>: Cadência multicanal focada em agendar Demonstração Guiada ao vivo.<br>
+                • <strong>The Challenger Sale</strong>: Ancoragem prévia do custo oculto da cadeira vazia (no-show de 20% a 35%).</p>
+            </div>
+            <div class="info-box green">
+                <h3>⚖️ Conformidade Jurídica & LGPD</h3>
+                <p>• <strong>LGPD (Art. 13)</strong>: Criptografia bancária AES-256-GCM e <code>cpfMasked</code>.<br>
+                • <strong>Resolução CFM 2.314/2022</strong> & <strong>CFO 224/2020</strong>: Conformidade total em agendamento médico/odontológico.</p>
+            </div>
+        </div>
+
+        <div class="info-box purple" style="margin-top: 16px;">
+            <h3>🛡️ Arquitetura de Alta Disponibilidade 24h em 3 Camadas</h3>
+            <p>1. <strong>Watchdog PM2 Auto-Recovery</strong>: Health checks a cada 5s na rota <code>/health</code> com autorrecuperação em < 2s.<br>
+            2. <strong>Buffer Fila Segura</strong>: Retenção de mensagens no Supabase para 0% de perda em oscilações.<br>
+            3. <strong>Bot Guardião Meta API</strong>: Notificações de emergência direto no WhatsApp do gestor (HTTP 200 OK).</p>
+        </div>
+    </div>
+
+    <!-- SEÇÃO 2: Tabela de Artefatos -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-folder-open"></i> 2. Artefatos Prontos do Projeto</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Artefato / Recurso</th>
+                    <th>Caminho no Repositório</th>
+                    <th>Finalidade & Função</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Dossiê ICP de Prospecção</strong></td>
+                    <td><code>docs/sales/DOSSIE_PROSPECCAO_ICP_CLINICABOT.md</code></td>
+                    <td>18 clínicas reais mapeadas em Guarulhos, Arujá, Tatuapé e Santana com Hooks verbatim.</td>
+                </tr>
+                <tr>
+                    <td><strong>Battlecard Competitivo 360°</strong></td>
+                    <td><code>docs/sales/MATRIZ_COMPETITIVA_CLINICABOT.md</code></td>
+                    <td>Guia anti-concorrência neutralizando Cloudia, Doctoralia, Feegow e Simples Dental.</td>
+                </tr>
+                <tr>
+                    <td><strong>Landing Page de Conversão</strong></td>
+                    <td><code>index.html</code></td>
+                    <td>Página de vendas oficial com Calculadora de ROI, Simulador WhatsApp e Dossiê LGPD.</td>
+                </tr>
+                <tr>
+                    <td><strong>Apresentação Comercial 360°</strong></td>
+                    <td><code>clinic-bot-backend/public/apresentacao_comercial_360.html</code></td>
+                    <td>Slide deck interativo 16:9 full-screen para reuniões comerciais e projetores.</td>
+                </tr>
+                <tr>
+                    <td><strong>Painel da Recepção ao Vivo</strong></td>
+                    <td><code>clinic-bot-backend/public/dashboard.html</code></td>
+                    <td>Dashboard em tempo real para a secretária acompanhar agendamentos em fuso BRT.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SEÇÃO 3: Passo a Passo GTM -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-rocket"></i> 3. O Passo a Passo da Estratégia Comercial (GTM)</h2>
+        
+        <h3>ETAPA 1: Prospecção Fria Multicanal</h3>
+        <p>WhatsApp Warm-Up ➔ Instagram DM Engagement ➔ Ligação SDR ➔ Live Demo no Simulador.</p>
+
+        <h3>ETAPA 2: A Demonstração Guiada em 3 Passos</h3>
+        <p>1. <strong>Calculadora de ROI Interativa</strong>: <i>"Com apenas 2 consultas recuperadas no mês inteiro, a clínica já cobre 100% da assinatura do software."</i><br>
+        2. <strong>Simulador da IA "Ana" em Tela Dividida</strong>: Demonstração da jornada do paciente no WhatsApp vs Painel da Recepção em tempo real.<br>
+        3. <strong>Dossiê LGPD & Segurança</strong>: Apresentação do laudo de criptografia AES-256-GCM e mascaramento de CPF.</p>
+
+        <h3>ETAPA 3: Precificação Cumulativa Ancorada</h3>
+        <div class="grid-3">
+            <div class="info-box">
+                <h3>Plano Starter</h3>
+                <p><strong>R$ 197 /mês</strong> (+ R$ 297 Ativação)</p>
+                <p>1 Agenda médica | Atendimento ininterrupto | Lembretes 24h e 2h BRT | CPF Mascarado (LGPD)</p>
+            </div>
+            <div class="info-box cyan">
+                <h3>Plano Pro (Mais Vendido)</h3>
+                <p><strong>R$ 397 /mês</strong> (+ R$ 397 Ativação)</p>
+                <p><strong>TUDO DO STARTER PLUS:</strong> Até 5 Médicos | Remarcação autônoma | Templates editáveis | Mensagens em lote | Cancelamento por força maior</p>
+            </div>
+            <div class="info-box purple">
+                <h3>Plano Enterprise</h3>
+                <p><strong>R$ 697 /mês</strong> (+ R$ 497 Ativação)</p>
+                <p><strong>TUDO DO PRO PLUS:</strong> Agendas e unidades ilimitadas | CRM & Retorno 6 meses | Consultor de Sucesso Dedicado</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEÇÃO 4: Matriz de Objeções -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-shield-cat"></i> 4. Matriz de Tratamento de Objeções</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Objeção do Cliente</th>
+                    <th>Argumento Matador de Fechamento</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>"Já uso um robô no WhatsApp (Cloudia)."</strong></td>
+                    <td><i>"A Cloudia usa menus engessados de 1 a 5. Nossa IA Gemini entende linguagem natural e áudio por voz como uma pessoa de verdade desde o plano Starter!"</i></td>
+                </tr>
+                <tr>
+                    <td><strong>"Nosso ERP (Feegow/Doctoralia) cobra por médico."</strong></td>
+                    <td><i>"Na Feegow você paga R$ 249 por médico/mês. No ClinicaBot a precificação é por clínica com médicos ilimitados (economia de R$ 800+/mês)."</i></td>
+                </tr>
+                <tr>
+                    <td><strong>"Meu paciente prefere falar com secretária."</strong></td>
+                    <td><i>"A Ana não substitui sua secretária, é o escudo dela! Ela responde dúvidas domingo às 22h e entrega a agenda limpa na segunda de manhã."</i></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+</body>
+</html>
