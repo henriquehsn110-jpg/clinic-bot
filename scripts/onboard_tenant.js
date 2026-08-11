@@ -41,7 +41,6 @@ async function onboardTenant(opts) {
         .insert({
             name,
             slug,
-            plan:            selectedPlan,
             phone_number_id: phoneNumberId || null,
             whatsapp_token:  whatsappToken || null,
             address:         address || null,

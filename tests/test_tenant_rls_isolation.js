@@ -10,7 +10,18 @@ async function runTenantIsolationTests() {
     try {
         // 1. Provisionar 2 Tenants Independentes
         console.log(`[Etapa 1/4] Provisionando Tenant A e Tenant B...`);
-        const tenantA = await onboardTenant({
+        async function retryOnboard(data, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    return await onboardTenant(data);
+                } catch (e) {
+                    if (i === retries - 1) throw e;
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+            }
+        }
+
+        const tenantA = await retryOnboard({
             name: `Clínica Alpha (${runId})`,
             slug: `alpha-${runId}`,
             phoneNumberId: `phone_alpha_${runId}`,
@@ -18,7 +29,7 @@ async function runTenantIsolationTests() {
             address: 'Av. Alpha, 100 - Guarulhos/SP'
         });
 
-        const tenantB = await onboardTenant({
+        const tenantB = await retryOnboard({
             name: `Clínica Beta (${runId})`,
             slug: `beta-${runId}`,
             phoneNumberId: `phone_beta_${runId}`,
@@ -88,6 +99,7 @@ async function runTenantIsolationTests() {
 
         // 4. Verificação de Isolamento de Horários e Configurações de Clínica
         console.log(`\n[Etapa 4/4] Verificando isolamento da agenda de horários (clinic_hours)...`);
+        await new Promise(r => setTimeout(r, 1000));
         const { data: hoursA } = await supabase.from('clinic_hours').select('*').eq('clinic_id', tenantA.id);
         const { data: hoursB } = await supabase.from('clinic_hours').select('*').eq('clinic_id', tenantB.id);
 

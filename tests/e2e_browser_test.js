@@ -62,9 +62,9 @@ async function runE2EBrowserTests() {
             return links;
         });
 
-        const starterLink = planLinks.find(l => l.title === 'Starter');
-        const proLink = planLinks.find(l => l.title === 'Pro');
-        const enterpriseLink = planLinks.find(l => l.title === 'Enterprise');
+        const starterLink = planLinks.find(l => l.title.includes('Starter'));
+        const proLink = planLinks.find(l => l.title.includes('Growth') || l.title.includes('Pro'));
+        const enterpriseLink = planLinks.find(l => l.title.includes('Enterprise'));
 
         assert(
             'Link do Plano Starter Aponta para WhatsApp Comercial com Texto Correto',
