@@ -463,7 +463,7 @@ class ConversationController {
             }
 
             // 0a. Guardião Anti-Looping e Detector de Frustração (Camada 3 de Contingência - ANTES da Mensagem de Boas-Vindas)
-            const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada)\b/i;
+            const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|não é o que|nao e o que|não foi o que|nao foi o que|não era o que|não pedi|nao pedi|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada)\b/i;
             const isExplicitAction = /^(agendar consulta|agendar|remarcar\/cancelar|remarcar|cancelar|outras dúvidas|outras duvidas|sim|não|nao|confirmar|tanto faz|doc_any|selecionei a data|selecionei o horário|bom dia|boa tarde|boa noite|olá|ola|oi)$/i.test(sanitizedText.trim()) || PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /quais\s+consultas|consultas?\s+agendada|minhas?\s+consulta/i.test(sanitizedText);
 
             const isFrustrated = frustrationRegex.test(sanitizedText);
@@ -495,7 +495,7 @@ class ConversationController {
 
             // 0c. Interceptador Direto para Consulta de Agendamentos Ativos ("Quais consultas eu tenho agendadas?")
             const queryApptsRegex = /quais\s+(são\s+as\s+)?(minhas\s+)?consultas|consultas?\s+agendada[ss]?|tenho\s+(alguma\s+)?consulta|minhas?\s+consulta[ss]?|meu\s+agendamento/i;
-            const isQueryingAppts = queryApptsRegex.test(sanitizedText);
+            const isQueryingAppts = !/remarcar|cancelar|agendar|alterar/i.test(sanitizedText) && queryApptsRegex.test(sanitizedText);
 
             if (isQueryingAppts && patient && patient.id) {
                 const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('FIND_BY_PATIENT_ERR', err.message); return []; });
@@ -590,7 +590,7 @@ class ConversationController {
             }
 
             // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato genérico)
-            const hasDirectIntent = explicitProcMatch || /agendar|remarcar|cancelar|consultas?|agendada/i.test(sanitizedText);
+            const hasDirectIntent = explicitProcMatch || /agend|remarc|cancela|consult|limpza|limpeza/i.test(sanitizedText);
             if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar') && !hasDirectIntent) {
                 const welcomeText = `Olá! Sou a ${personaName}, da ${clinicName} 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?`;
                 const welcomeButtons = ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"];
@@ -781,7 +781,8 @@ class ConversationController {
             }
 
             // 5. Atalhos para reagendamento, remarcação e cancelamento
-            if (sanitizedText.toLowerCase() === 'reagendar consulta' || sanitizedText.toLowerCase() === 'reagendar' || sanitizedText.toLowerCase() === 'remarcar consulta' || sanitizedText.toLowerCase() === 'remarcar' || sanitizedText.toLowerCase() === 'agendar nova consulta') {
+            const isRescheduleIntent = (/remarcar|reagendar/i.test(sanitizedText) && !/remarcar\/cancelar/i.test(sanitizedText)) || sanitizedText.toLowerCase() === 'agendar nova consulta';
+            if (isRescheduleIntent) {
                 logger.info('RESCHEDULE_BOOKING', `Paciente [${phone}] iniciou reagendamento de consulta.`);
                 draft.date = null;
                 draft.time = null;
@@ -1817,7 +1818,8 @@ class ConversationController {
                 // ── TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS (FIX DEFINITIVO) ──
                 // Se a IA ou a máquina de estados solicitou CPF ou Nome, ou se for pergunta de preço, NUNCA exiba calendário simultaneamente
                 const isAskingCpf = aiResponse.requireCpf || wasCpfRequested || /cpf/i.test(aiResponse.text);
-                const isAskingName = wasNameRequested || /nome completo/i.test(aiResponse.text);
+                const hasProvidedName = !!(draft.name || draft.dependentName);
+                const isAskingName = (wasNameRequested && !hasProvidedName) || /nome completo/i.test(aiResponse.text);
 
                 if (isAskingCpf || isAskingName || isInformationalPriceQuestion) {
                     aiResponse.buttons = [];
