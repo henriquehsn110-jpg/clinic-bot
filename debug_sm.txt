@@ -1,0 +1,3 @@
+[DEBUG] text: Consulta geral, draft.type: Consulta geral, draft.needs_doctor: true, draft.doctor_id: undefined
+[DEBUG] text: Consulta geral, draft.type: Consulta geral, draft.needs_doctor: true, draft.doctor_id: undefined
+[DEBUG] text: Consulta geral, draft.type: Consulta geral, draft.needs_doctor: true, draft.doctor_id: undefined

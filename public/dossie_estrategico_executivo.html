@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dossiê Executivo de Prospecção & Estratégia B2B — ClinicaBot SaaS Pro</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-obsidian: #050B18;
+            --bg-card: #0F172A;
+            --bg-card-alt: #1E293B;
+            --accent-cyan: #00F2FE;
+            --accent-blue: #38BDF8;
+            --accent-purple: #C084FC;
+            --wa-green: #25D366;
+            --danger-red: #F87171;
+            --text-title: #FFFFFF;
+            --text-body: #CBD5E1;
+            --text-muted: #94A3B8;
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --shadow-glow: 0 0 40px rgba(0, 242, 254, 0.12);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        
+        body {
+            background: var(--bg-obsidian);
+            color: var(--text-body);
+            line-height: 1.6;
+            padding: 30px 20px;
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; }
+
+        /* Header Documento Executivo */
+        .header-doc {
+            text-align: center;
+            padding: 44px 30px;
+            background: radial-gradient(circle at top, rgba(0,242,254,0.15) 0%, transparent 70%);
+            border-bottom: 1px solid var(--border-glass);
+            margin-bottom: 35px;
+            position: relative;
+        }
+
+        .badge-tag {
+            display: inline-block;
+            background: rgba(0, 242, 254, 0.12);
+            color: var(--accent-cyan);
+            font-weight: 700;
+            font-size: 0.8rem;
+            padding: 6px 16px;
+            border-radius: 50px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(0, 242, 254, 0.3);
+        }
+
+        h1 { font-family: 'Outfit', sans-serif; font-size: 2.7rem; font-weight: 800; color: #FFF; margin-bottom: 12px; line-height: 1.2; }
+        .subtitle { font-size: 1.15rem; color: var(--text-muted); max-width: 800px; margin: 0 auto 24px auto; }
+
+        .meta-info {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+        }
+
+        /* Botão Imprimir / PDF */
+        .print-floating-btn {
+            background: linear-gradient(135deg, var(--wa-green), #1EBE5D);
+            color: #000;
+            font-weight: 700;
+            font-size: 1rem;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 50px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.35);
+            transition: all 0.3s;
+        }
+
+        .print-floating-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+        /* Cards & Seções */
+        .section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            padding: 36px;
+            margin-bottom: 35px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.85rem; font-weight: 800; color: #FFF; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border-glass); padding-bottom: 12px; }
+        h2 i { color: var(--accent-cyan); }
+        
+        h3 { font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 700; color: #FFF; margin: 24px 0 12px 0; }
+        h4 { font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); margin: 16px 0 8px 0; }
+
+        p, li { font-size: 1.02rem; color: var(--text-body); margin-bottom: 12px; }
+        ul, ol { margin-left: 20px; margin-bottom: 16px; }
+
+        /* Grids & Layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+        /* Caixas de Texto & Scripts */
+        .info-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .info-box.cyan { border-left: 4px solid var(--accent-cyan); background: rgba(0, 242, 254, 0.03); }
+        .info-box.green { border-left: 4px solid var(--wa-green); background: rgba(37, 211, 102, 0.03); }
+        .info-box.purple { border-left: 4px solid var(--accent-purple); background: rgba(192, 132, 252, 0.03); }
+        .info-box.danger { border-left: 4px solid var(--danger-red); background: rgba(248, 113, 113, 0.03); }
+
+        .script-box {
+            background: #0A1120;
+            border: 1px solid rgba(0, 242, 254, 0.25);
+            border-radius: 14px;
+            padding: 20px;
+            margin: 14px 0;
+            font-size: 0.95rem;
+            color: #F1F5F9;
+            line-height: 1.6;
+        }
+
+        .script-box.verbatim { border-color: var(--wa-green); background: #061A10; }
+
+        /* Tabelas Executivas */
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.92rem; }
+        th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-glass); }
+        th { background: rgba(255, 255, 255, 0.05); color: var(--accent-cyan); font-family: 'Outfit', sans-serif; font-weight: 700; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px; }
+        tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+        .tag-tier { display: inline-block; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: 50px; text-transform: uppercase; }
+        .tag-tier.t1 { background: rgba(37, 211, 102, 0.15); color: var(--wa-green); border: 1px solid var(--wa-green); }
+        .tag-tier.t2 { background: rgba(0, 242, 254, 0.15); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }
+        .tag-tier.t3 { background: rgba(192, 132, 252, 0.15); color: var(--accent-purple); border: 1px solid var(--accent-purple); }
+        .tag-tier.t4 { background: rgba(248, 113, 113, 0.15); color: var(--danger-red); border: 1px solid var(--danger-red); }
+
+        /* Suporte a Impressão PDF sem Cortes */
+        @media print {
+            body { background: #FFF !important; color: #000 !important; padding: 0 !important; }
+            .section-card { background: #FFF !important; color: #000 !important; border: 1px solid #DDD !important; box-shadow: none !important; page-break-inside: avoid; margin-bottom: 20px !important; }
+            h1, h2, h3, h4 { color: #000 !important; background: none !important; -webkit-text-fill-color: initial !important; }
+            p, td, th, li { color: #222 !important; }
+            .script-box { background: #F8FAFC !important; color: #000 !important; border: 1px solid #CCC !important; }
+            .print-floating-btn, .header-doc button { display: none !important; }
+        }
+
+        @media (max-width: 850px) {
+            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+            .section-card { padding: 22px; }
+            h1 { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Cabeçalho Principal -->
+    <div class="header-doc">
+        <span class="badge-tag">Dossiê Estratégico Executivo B2B — Versão Master Integral</span>
+        <h1>ClinicaBot SaaS Pro</h1>
+        <p class="subtitle">Mapeamento ICP Aprofundado (18 Clínicas Reais em Guarulhos, Arujá, Tatuapé e Santana), Playbook de Abordagem Outbound, Matriz de Objeções e Blueprint de Execução de Campo de 7 Dias.</p>
+        
+        <div class="meta-info">
+            <span><i class="fa-solid fa-location-dot"></i> Região: Guarulhos & SP Metropolitana</span>
+            <span><i class="fa-solid fa-clock"></i> Fuso: America/Sao_Paulo (BRT)</span>
+            <span><i class="fa-solid fa-shield-halved"></i> LGPD: Criptografia AES-256-GCM</span>
+        </div>
+
+        <button class="print-floating-btn" onclick="window.print()">
+            <i class="fa-solid fa-file-pdf"></i> Salvar este Dossiê Completo em PDF (1 Clique)
+        </button>
+    </div>
+
+    <!-- SEÇÃO 1: Core Tecnológico & Arquitetura -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-microchip"></i> 1. Core Tecnológico & Diferenciais de Arquitetura</h2>
+        <p>O <strong>ClinicaBot SaaS Pro</strong> é uma plataforma corporativa multi-tenant de Inteligência Conversacional desenvolvida especificamente para o setor de saúde no Brasil. Integrada nativamente à API oficial da Meta (WhatsApp Cloud API) e Supabase PostgreSQL com isolamento RLS, a solução elimina as faltas em consultas e o trabalho braçal da recepção.</p>
+
+        <div class="grid-3" style="margin-top: 20px;">
+            <div class="info-box cyan">
+                <h3>🤖 IA Conversacional "Ana"</h3>
+                <p>Gemini 2.0 Flash com validação determinística. Resposta empática em < 5s no WhatsApp, 24 horas por dia, 7 dias por semana.</p>
+            </div>
+            <div class="info-box green">
+                <h3>⏰ Fuso NATIVO BRT</h3>
+                <p>Operação estritamente em horário de Brasília (<code>America/Sao_Paulo</code>). Evita viradas prematuras de datas e envios inconvenientes.</p>
+            </div>
+            <div class="info-box purple">
+                <h3>🔒 Sigilo & Criptografia LGPD</h3>
+                <p>Criptografia militar AES-256-GCM em CPFs no banco e mascaramento visual <code>cpfMasked</code> (ex: <code>123.***.***-45</code>) no Dashboard.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEÇÃO 2: Tabela Sintética das 18 Clínicas -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-list-check"></i> 2. Mapeamento Aprofundado de Leads ICP (18 Clínicas Reais)</h2>
+        <p>As clínicas mapeadas no hub estratégico <strong>Guarulhos, Arujá, Tatuapé (Zona Leste SP) e Santana (Zona Norte SP)</strong> foram auditadas e categorizadas em 4 Tiers de priorização comercial:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nome da Clínica</th>
+                    <th>Região / Bairro</th>
+                    <th>Segmento Principal</th>
+                    <th>Ticket Médio Estimado</th>
+                    <th>Fluxo Est. (Pacientes/mês)</th>
+                    <th>Score Fit</th>
+                    <th>Tier</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>01</strong></td>
+                    <td>Instituto Oralis Odontologia & HOF</td>
+                    <td>Guarulhos (Jardim Maia)</td>
+                    <td>Odontologia Estética & HOF</td>
+                    <td>R$ 2.500 – R$ 15.000</td>
+                    <td>250 – 400</td>
+                    <td><strong>96</strong></td>
+                    <td><span class="tag-tier t1">Tier 1</span></td>
+                </tr>
+                <tr>
+                    <td><strong>02</strong></td>
+                    <td>Inst. Estética & Dermato Anália Franco</td>
+                    <td>Tatuapé (Anália Franco)</td>
+                    <td>Dermatologia & Estética</td>
+                    <td>R$ 1.500 – R$ 8.000</td>
+                    <td>350 – 500</td>
+                    <td><strong>96</strong></td>
+                    <td><span class="tag-tier t1">Tier 1</span></td>
+                </tr>
+                <tr>
+                    <td><strong>03</strong></td>
+                    <td>Hospital Olhos Yano / Clínica Yano</td>
+                    <td>Santana (Voluntários)</td>
+                    <td>Oftalmologia & Refrativa</td>
+                    <td>R$ 400 – R$ 6.000</td>
+                    <td>600 – 900</td>
+                    <td><strong>93</strong></td>
+                    <td><span class="tag-tier t1">Tier 1</span></td>
+                </tr>
+                <tr>
+                    <td><strong>04</strong></td>
+                    <td>Clinipampa Policlínica & Diagnósticos</td>
+                    <td>Guarulhos (Centro)</td>
+                    <td>Policlínica Popular Multi-esp.</td>
+                    <td>R$ 120 – R$ 450</td>
+                    <td>1.200 – 1.800</td>
+                    <td><strong>92</strong></td>
+                    <td><span class="tag-tier t1">Tier 1</span></td>
+                </tr>
+                <tr>
+                    <td><strong>05</strong></td>
+                    <td>Clínica Dra. Fernanda Chauvin Medical</td>
+                    <td>Arujá (Jd. Residencial Arujá)</td>
+                    <td>Dermatologia Médica & VIP</td>
+                    <td>R$ 1.200 – R$ 6.000</td>
+                    <td>200 – 300</td>
+                    <td><strong>90</strong></td>
+                    <td><span class="tag-tier t1">Tier 1</span></td>
+                </tr>
+                <tr>
+                    <td><strong>06</strong></td>
+                    <td>Oral Unic Odontologia Tatuapé</td>
+                    <td>Tatuapé (Rua Apucarana)</td>
+                    <td>Implantes & Protocolo Dental</td>
+                    <td>R$ 1.800 – R$ 12.000</td>
+                    <td>300 – 450</td>
+                    <td><strong>88</strong></td>
+                    <td><span class="tag-tier t2">Tier 2</span></td>
+                </tr>
+                <tr>
+                    <td><strong>07</strong></td>
+                    <td>Centro Médico Viver Bem Santana</td>
+                    <td>Santana (Conselheiro Saraiva)</td>
+                    <td>Policlínica & Exames</td>
+                    <td>R$ 150 – R$ 600</td>
+                    <td>700 – 1.000</td>
+                    <td><strong>86</strong></td>
+                    <td><span class="tag-tier t2">Tier 2</span></td>
+                </tr>
+                <tr>
+                    <td><strong>08</strong></td>
+                    <td>Clínica NeoOdonto & Harmonização</td>
+                    <td>Guarulhos (Vila Augusta)</td>
+                    <td>Odontologia Integrada & HOF</td>
+                    <td>R$ 800 – R$ 5.000</td>
+                    <td>220 – 350</td>
+                    <td><strong>84</strong></td>
+                    <td><span class="tag-tier t2">Tier 2</span></td>
+                </tr>
+                <tr>
+                    <td><strong>09</strong></td>
+                    <td>Clínica de Cirurgia Plástica Anália Franco</td>
+                    <td>Tatuapé (Serra de Bragança)</td>
+                    <td>Cirurgia Plástica & Pós-Op</td>
+                    <td>R$ 3.000 – R$ 25.000</td>
+                    <td>120 – 180</td>
+                    <td><strong>82</strong></td>
+                    <td><span class="tag-tier t2">Tier 2</span></td>
+                </tr>
+                <tr>
+                    <td><strong>10</strong></td>
+                    <td>Arujá Odonto Center & Ortodontia</td>
+                    <td>Arujá (Centro)</td>
+                    <td>Ortodontia & Odontopediatria</td>
+                    <td>R$ 250 – R$ 2.000</td>
+                    <td>250 – 400</td>
+                    <td><strong>78</strong></td>
+                    <td><span class="tag-tier t2">Tier 2</span></td>
+                </tr>
+                <tr>
+                    <td><strong>11</strong></td>
+                    <td>Consultório Oftalmológico Bosque Maia</td>
+                    <td>Guarulhos (Bosque Maia)</td>
+                    <td>Oftalmologia & Lentes</td>
+                    <td>R$ 300 – R$ 900</td>
+                    <td>150 – 220</td>
+                    <td><strong>73</strong></td>
+                    <td><span class="tag-tier t3">Tier 3</span></td>
+                </tr>
+                <tr>
+                    <td><strong>12</strong></td>
+                    <td>Clínica DermatoSantana</td>
+                    <td>Santana (Jardim São Paulo)</td>
+                    <td>Dermatologia & Tricologia</td>
+                    <td>R$ 400 – R$ 1.800</td>
+                    <td>140 – 200</td>
+                    <td><strong>71</strong></td>
+                    <td><span class="tag-tier t3">Tier 3</span></td>
+                </tr>
+                <tr>
+                    <td><strong>13</strong></td>
+                    <td>Clínica Sorriso Anália Franco</td>
+                    <td>Tatuapé (Azevedo Soares)</td>
+                    <td>Odontologia Geral</td>
+                    <td>R$ 200 – R$ 1.500</td>
+                    <td>180 – 260</td>
+                    <td><strong>68</strong></td>
+                    <td><span class="tag-tier t3">Tier 3</span></td>
+                </tr>
+                <tr>
+                    <td><strong>14</strong></td>
+                    <td>Espaço Saúde & Bem-Estar Arujá</td>
+                    <td>Arujá (Vila Flora)</td>
+                    <td>Fisioterapia & Pilates</td>
+                    <td>R$ 180 – R$ 600</td>
+                    <td>200 – 300</td>
+                    <td><strong>64</strong></td>
+                    <td><span class="tag-tier t3">Tier 3</span></td>
+                </tr>
+                <tr>
+                    <td><strong>15</strong></td>
+                    <td>Pediatria Guarulhos Monteiro Lobato</td>
+                    <td>Guarulhos (Macedo)</td>
+                    <td>Pediatria & Puericultura</td>
+                    <td>R$ 250 – R$ 500</td>
+                    <td>160 – 240</td>
+                    <td><strong>62</strong></td>
+                    <td><span class="tag-tier t3">Tier 3</span></td>
+                </tr>
+                <tr>
+                    <td><strong>16</strong></td>
+                    <td>Consultório Odonto Santana Centro</td>
+                    <td>Santana (Rua Darzan)</td>
+                    <td>Odontologia Popular</td>
+                    <td>R$ 100 – R$ 600</td>
+                    <td>80 – 120</td>
+                    <td><strong>55</strong></td>
+                    <td><span class="tag-tier t4">Tier 4</span></td>
+                </tr>
+                <tr>
+                    <td><strong>17</strong></td>
+                    <td>Podologia & Estética Pé Feliz</td>
+                    <td>Guarulhos (Parque Cecap)</td>
+                    <td>Podologia & Estética</td>
+                    <td>R$ 90 – R$ 250</td>
+                    <td>100 – 150</td>
+                    <td><strong>48</strong></td>
+                    <td><span class="tag-tier t4">Tier 4</span></td>
+                </tr>
+                <tr>
+                    <td><strong>18</strong></td>
+                    <td>Consultório Fisioterapia Arujá</td>
+                    <td>Arujá (Centro)</td>
+                    <td>Fisioterapia Reabilitativa</td>
+                    <td>R$ 120 – R$ 350</td>
+                    <td>60 – 90</td>
+                    <td><strong>42</strong></td>
+                    <td><span class="tag-tier t4">Tier 4</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SEÇÃO 3: Detalhamento dos Tiers & Hooks Customizados -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-bullseye"></i> 3. Detalhamento dos Tiers & Hooks Customizados</h2>
+
+        <h3>🏆 TIER 1: Prime High-Volume Targets (Score 90–100)</h3>
+        
+        <div class="info-box cyan">
+            <h4>1. Instituto Oralis Odontologia & HOF (Guarulhos - Jd. Maia) | Score 96</h4>
+            <p><strong>Hook Customizado:</strong> *"Identificamos que o Instituto Oralis investe forte em tráfego pago no Instagram para lentes de contato e HOF no Jardim Maia, mas pacientes de alto ticket desistem quando a recepção demora mais de 15 minutos para responder fora do horário comercial. O ClinicaBot SaaS Pro integra a IA 'Ana' no seu WhatsApp oficial em menos de 24h, pré-qualifica o perfil financeiro, coleta o CPF com criptografia LGPD AES-256 e realiza o agendamento instantâneo com confirmação em fuso BRT."*</p>
+        </div>
+
+        <div class="info-box cyan">
+            <h4>2. Instituto de Estética & Dermato Anália Franco (Tatuapé - Anália Franco) | Score 96</h4>
+            <p><strong>Hook Customizado:</strong> *"No Anália Franco, a concorrência por pacientes de harmonização e dermatologia a laser é acirrada. O ClinicaBot SaaS Pro resolve o maior gargalo da sua recepção: a distribuição interativa de procedimentos via listas do WhatsApp Cloud API e o lembrete automático diário com confirmação em 1 clique. Clínicas com seu perfil reduziram o no-show de 22% para menos de 5% no primeiro mês."*</p>
+        </div>
+
+        <div class="info-box cyan">
+            <h4>3. Hospital Olhos Yano / Clínica Oftalmológica Yano (Santana - Voluntários) | Score 93</h4>
+            <p><strong>Hook Customizado:</strong> *"Com centenas de contatos diários na Rua Voluntários da Pátria buscando exames de vista e cirurgias refrativas, a recepção da Yano enfrenta linhas congestionadas. O ClinicaBot automatiza a paginação de horários para mais de 10 médicos oftalmologistas e realiza o handoff automático para a equipe humana quando identifica dúvidas cirúrgicas complexas."*</p>
+        </div>
+
+        <div class="info-box cyan">
+            <h4>4. Clinipampa Policlínica & Diagnósticos (Guarulhos - Centro) | Score 92</h4>
+            <p><strong>Hook Customizado:</strong> *"O alto volume de consultas populares em Guarulhos gera filas gigantes no WhatsApp. A arquitetura multi-tenant do ClinicaBot suporta mais de 100 requisições simultâneas por segundo sem travar, oferecendo um menu interativo de especialidades e envio de lembretes automáticos no fuso oficial de São Paulo."*</p>
+        </div>
+
+        <div class="info-box cyan">
+            <h4>5. Clínica Dra. Fernanda Chauvin Medical Center (Arujá - Jd. Residencial) | Score 90</h4>
+            <p><strong>Hook Customizado:</strong> *"Pacientes de condomínios fechados em Arujá exigem atendimento imediato e discreto no WhatsApp às 22h ou nos finais de semana. A IA 'Ana' oferece um atendimento fluido em linguagem natural com tom institucional sofisticado, coletando dados sob estrita criptografia AES-256 e permitindo agendamentos VIP sem sobrecarregar sua equipe."*</p>
+        </div>
+
+        <h3>🥇 TIER 2: Mid-to-High Growth Targets (Score 75–89)</h3>
+        <ul>
+            <li><strong>6. Oral Unic Odontologia Tatuapé (Score 88):</strong> Triagem de leads de implantes dentários de alto ticket e qualificação rápida antes da avaliação presencial.</li>
+            <li><strong>7. Centro Médico Viver Bem Santana (Score 86):</strong> Disparo de confirmações diárias via WhatsApp no fuso BRT com botões nativos "Confirmar" ou "Remarcar", reocupando vagas canceladas.</li>
+            <li><strong>8. Clínica NeoOdonto & Harmonização (Guarulhos Vila Augusta - Score 84):</strong> Redução a zero do tempo gasto respondendo perguntas repetitivas de preço e localização.</li>
+            <li><strong>9. Clínica de Cirurgia Plástica Anália Franco (Score 82):</strong> Armazenamento de dados sigilosos criptografados via AES-256-GCM e handoff direto para o concierge humano.</li>
+            <li><strong>10. Arujá Odonto Center & Ortodontia (Score 78):</strong> Lembretes de manutenção ortodôntica mensal via agendador idempotente anti-duplicação.</li>
+        </ul>
+    </div>
+
+    <!-- SEÇÃO 4: Playbook de Abordagem por Nicho & Scripts Verbatim -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-comments"></i> 4. Playbook de Abordagem por Nicho & Scripts Verbatim</h2>
+
+        <h3>4.1 NICHO A: ODONTOLOGIA & HARMONIZAÇÃO OROFACIAL (HOF)</h3>
+        <p><strong>Dores:</strong> Perda de leads noturnos (40% entram após 19h); no-show alto em avaliações (30%+).</p>
+        <p><strong>Cálculo de ROI:</strong> Em 60 avaliações/mês com ticket R$ 3.000, reduzir faltas de 30% para 10% resgata 12 pacientes = <strong>+R$ 36.000,00/mês no faturamento</strong>.</p>
+        
+        <div class="script-box verbatim">
+            <strong>📱 Script WhatsApp Cold Message (Para o Dentista Proprietário):</strong><br>
+            "Olá, Dr. [Nome do Dentista]! Tudo bem? Quem fala aqui é o [Seu Nome], da ClinicaBot.<br><br>
+            Estava analisando o perfil da [Nome da Clínica] no Instagram e vi que vocês fazem um trabalho impecável em Harmonização Orofacial e Implantes. Parabéns!<br><br>
+            Uma dúvida rápida: quando um paciente interessado em HOF manda mensagem no WhatsApp de vocês às 21h de um domingo pedindo orçamento ou horário, quem responde ele na hora ou ele precisa esperar até segunda de manhã?<br><br>
+            Desenvolvemos uma Inteligência Artificial especializada em odontologia que atende esses pacientes em 5 segundos, tira dúvidas de procedimentos e já deixa a avaliação pré-agendada na sua agenda.<br><br>
+            Posso te enviar um vídeo de 40 segundos mostrando a IA agendando uma avaliação de Botox no WhatsApp em tempo real?"
+        </div>
+
+        <h3>4.2 NICHO B: POLICLÍNICAS POPULARES & MÉDICO-ODONTOLÓGICAS</h3>
+        <p><strong>Dores:</strong> Filas no WhatsApp das 08h às 11h; no-show de 30% a 45%; custo alto de atendentes.</p>
+        <p><strong>Cálculo de ROI:</strong> Economia de 2 atendentes de call center (R$ 6.000/mês) + recuperação de 400 consultas/mês a R$ 100 = <strong>+R$ 40.000,00/mês resgatados</strong>.</p>
+
+        <div class="script-box verbatim">
+            <strong>📱 Script WhatsApp Cold Message (Para o Administrador):</strong><br>
+            "Olá, [Nome do Administrador]! Tudo bem? Me chamo [Seu Nome], sou diretor na ClinicaBot.<br><br>
+            Fiz um teste rápido hoje às 09:15 no WhatsApp da [Nome da Policlínica] para simular a marcação de uma consulta de Cardiologia e notei que a resposta levou cerca de 38 minutos devido ao alto volume.<br><br>
+            Nós desenvolvemos um sistema de IA conversacional para policlínicas que atende 200 pacientes ao mesmo tempo em menos de 5 segundos, realiza o agendamento por especialidade e faz a confirmação diária automática.<br><br>
+            Você teria 10 minutos nesta terça para vermos os números de economia da sua unidade?"
+        </div>
+
+        <h3>4.3 NICHO C: DERMATOLOGIA & ESTÉTICA AVANÇADA VIP</h3>
+        <p><strong>Dores:</strong> Pacientes exigentes que abominam robôs engessados; "ghosting" em orçamentos VIP.</p>
+
+        <div class="script-box verbatim">
+            <strong>📱 Script WhatsApp Cold Message (Para a Dermatologista Proprietária):</strong><br>
+            "Dra. [Nome], boa tarde! Tudo bem? Meu nome é [Seu Nome], da ClinicaBot.<br><br>
+            Acompanho o trabalho impecável da [Nome da Clínica] em procedimentos dermatológicos e cosmiatria. É nítido o padrão de excelência de vocês!<br><br>
+            Sei que para a senhora a experiência do paciente e a humanização vêm em primeiro lugar. Por isso, muitas dermatologistas têm receio de usar chatbots robóticos antigos.<br><br>
+            Desenvolvemos a 'Ana', uma Inteligência Artificial no WhatsApp treinada com linguagem natural elegante e empática, criada especificamente para clínicas de Dermatologia de alto padrão. Ela acolhe pacientes às 23h, tira dúvidas sobre protocolos de pele e agenda a consulta com o mesmo tom de voz acolhedor da sua recepção.<br><br>
+            Posso te mandar o contato da Ana para a senhora mandar um 'Oi' no celular agora e testar a humanização dela na prática?"
+        </div>
+    </div>
+
+    <!-- SEÇÃO 5: Matriz de Resposta às 5 Maiores Objeções -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-shield-cat"></i> 5. Matriz das 5 Maiores Objeções do Mercado</h2>
+
+        <div class="info-box danger">
+            <h3>🔴 Objeção 1: "Já tenho secretária presencial que atende no balcão e no WhatsApp."</h3>
+            <p><strong>Estratégia & Resposta:</strong> *"Entendo perfeitamente, Dr. [Nome]! E que ótimo que você tem uma secretária dedicada no balcão. Mas você já reparou quantas vezes ela precisa interromper o paciente ao vivo para responder no WhatsApp 'qual o endereço?' O ClinicaBot não substitui sua secretária, é o Assistente Digital dela. A IA assume as perguntas repetitivas para ela focar em acolher e fechar orçamentos presenciais. Faz sentido liberar o tempo dela?"*</p>
+        </div>
+
+        <div class="info-box danger">
+            <h3>🔴 Objeção 2: "Já usamos software médico / CRM (Feegow, Simples Dental, iClinic, Doctoralia)."</h3>
+            <p><strong>Estratégia & Resposta:</strong> *"Excelente, Dr. [Nome]! O [Simples Dental/Feegow] é fabuloso para gestão interna e prontuário. A questão é que eles só enviam mensagens estáticas ('Digite 1 ou 2'). O ClinicaBot é a camada de IA que conversa no WhatsApp, tira dúvidas de procedimentos e faz o pré-agendamento. Nós não substituímos o seu sistema, tornamos o WhatsApp dele 10x mais inteligente!"*</p>
+        </div>
+
+        <div class="info-box danger">
+            <h3>🔴 Objeção 3: "Nossos pacientes preferem ligar por telefone / falar por voz."</h3>
+            <p><strong>Estratégia & Resposta:</strong> *"Compreendo, Dr. [Nome]. A ligação por voz tem seu valor. Mas pesquisas mostram que 85% dos pacientes preferem WhatsApp pela praticidade. Além disso, sua linha telefônica só atende 1 pessoa por vez. Se 3 ligarem juntas, 2 ouvem sinal de ocupado. O ClinicaBot atende todos os pacientes de mensagem simultaneamente sem perder chamadas. Vamos testar por 14 dias?"*</p>
+        </div>
+
+        <div class="info-box danger">
+            <h3>🔴 Objeção 4: "Tenho receio de que a automação por IA estrague o atendimento humanizado."</h3>
+            <p><strong>Estratégia & Resposta:</strong> *"Dr. [Nome], concordo 100%! Se fosse para colocar um daqueles bots horríveis de 'Digite 1 ou 2', eu diria para NÃO contratar! A 'Ana' é uma IA conversacional avançada: ententende gírias, erros de digitação e conversa com gentileza. Quer testar agora no seu celular? Te mando o link e você faz uma pergunta difícil para ver a resposta dela!"*</p>
+        </div>
+
+        <div class="info-box danger">
+            <h3>🔴 Objeção 5: "O valor de setup / mensalidade está alto para o momento da clínica."</h3>
+            <p><strong>Estratégia & Resposta:</strong> *"Entendo a gestão de caixa, [Nome]. Mas o investimento no ClinicaBot equivale a R$ 16,00 por dia. Se a 'Ana' evitar que APENAS 2 pacientes faltem no mês inteiro, a plataforma já se pagou 100%! Hoje você não está economizando; está deixando de faturar milhares de reais em faltas de pacientes."*</p>
+        </div>
+    </div>
+
+    <!-- SEÇÃO 6: Cadência Outbound & Blueprint de 7 Dias -->
+    <div class="section-card">
+        <h2><i class="fa-solid fa-calendar-days"></i> 6. Blueprint de Execução de Campo de 7 Dias</h2>
+
+        <div class="grid-2">
+            <div class="info-box highlight">
+                <h3>🎯 Metas Semanais do Consultor</h3>
+                <p>• <strong>Clínicas Mapeadas</strong>: 210 clínicas na semana.<br>
+                • <strong>Mensagens WA Enviadas</strong>: 175 contatos.<br>
+                • <strong>Visitas Presenciais (Walk-in Blitz)</strong>: 60 clínicas.<br>
+                • <strong>Demos ao Vivo no Simulador</strong>: 24 demonstrações.<br>
+                • <strong>Novos Contratos Fechados</strong>: <strong>7 Contratos Assinados na Semana</strong>.</p>
+            </div>
+
+            <div class="info-box cyan">
+                <h3>📅 Roteiro Prático Dia a Dia</h3>
+                <p>• <strong>DIA 1 (Segunda)</strong>: Mapeamento & Warm-Up WA em Guarulhos.<br>
+                • <strong>DIA 2 (Terça)</strong>: Blitz Presencial em Prédios Médicos de Guarulhos.<br>
+                • <strong>DIA 3 (Quarta)</strong>: Blitz Presencial no Tatuapé & Anália Franco.<br>
+                • <strong>DIA 4 (Quinta)</strong>: Demos Intensivas com Apresentação 360°.<br>
+                • <strong>DIA 5 (Sexta)</strong>: Blitz Presencial em Santana & Voluntários da Pátria.<br>
+                • <strong>DIA 6 (Sábado)</strong>: Fechamento Remoto & Assinaturas Digitais.<br>
+                • <strong>DIA 7 (Domingo)</strong>: Onboarding Técnico (`onboard_tenant.js`).</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

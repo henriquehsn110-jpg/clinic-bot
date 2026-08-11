@@ -462,7 +462,7 @@ class ConversationController {
                 };
             }
 
-            // ── GUARDIÃO ANTI-LOOPING E DETECTOR DE FRUSTRAÇÃO (CAMADA 3 DE CONTINGÊNCIA) ──
+            // 0a. Guardião Anti-Looping e Detector de Frustração (Camada 3 de Contingência - ANTES da Mensagem de Boas-Vindas)
             const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada)\b/i;
             const isExplicitAction = /^(agendar consulta|agendar|remarcar\/cancelar|remarcar|cancelar|outras dúvidas|outras duvidas|sim|não|nao|confirmar|tanto faz|doc_any|selecionei a data|selecionei o horário|bom dia|boa tarde|boa noite|olá|ola|oi)$/i.test(sanitizedText.trim()) || PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /quais\s+consultas|consultas?\s+agendada|minhas?\s+consulta/i.test(sanitizedText);
 
