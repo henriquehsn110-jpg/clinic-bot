@@ -120,6 +120,16 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 
+// Middleware de Segurança OWASP (Headers HTTP Corporativos)
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
+
 // CORS para proteção das APIs (suporta dev local, file:// e produção)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -136,6 +146,18 @@ app.use((req, res, next) => {
 
 // Registra as rotas da API do Dashboard com Autenticação e Criptografia
 app.use('/api/dashboard', dashboardRoutes);
+
+// Rota de Ingestão de Webhooks de Faturamento & Assinaturas SaaS (Stripe / Asaas)
+const billingService = require('./services/billingService');
+app.post(['/api/webhooks/stripe', '/api/webhooks/billing'], async (req, res) => {
+    try {
+        const result = await billingService.processWebhookEvent(req.body);
+        res.json({ success: true, result });
+    } catch (err) {
+        console.error('❌ Erro no webhook de billing:', err.message);
+        res.status(500).json({ error: 'Erro ao processar evento de faturamento.' });
+    }
+});
 
 // 2. Rotas do Simulador Local (Apenas em Desenvolvimento)
 if (process.env.NODE_ENV !== 'production') {
@@ -302,8 +324,17 @@ const processWebhookInbox = async () => {
                                         }
 
                                         if (text) {
+                                            // Enforcamento de Assinatura & Cotas SaaS (Billing Check)
+                                            const access = await billingService.checkClinicAccess(clinicId);
+                                            if (!access.allowed) {
+                                                console.warn(`⛔ [BILLING] Mensagem ignorada de [${phone}] para Clínica [${clinicId}]: Status ${access.reason}`);
+                                                await whatsappService.sendTextMessage(phone, "Prezado paciente, o atendimento automático desta clínica está temporariamente suspenso. Por favor, entre em contato diretamente com a recepção da clínica.", phoneNumberId).catch(() => {});
+                                                continue;
+                                            }
+
                                             console.log(`📩 [WEBHOOK] Mensagem de [${phone}]: "${text}" para Clínica [${clinicId}]`);
                                             await conversationController.handleIncomingMessage(phone, text, false, clinicId, phoneNumberId);
+                                            await billingService.incrementMonthlyBooking(clinicId);
                                         } else {
                                             console.log(`📩 [WEBHOOK] Mensagem com formato não suportado recebida de [${phone}]`);
                                             await whatsappService.sendTextMessage(phone, "Por enquanto, eu só consigo responder mensagens de texto e cliques em botões. Como posso te ajudar por texto?", phoneNumberId).catch(() => {});

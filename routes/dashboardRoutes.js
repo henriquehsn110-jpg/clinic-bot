@@ -33,4 +33,15 @@ router.post('/settings', dashboardController.authorize('admin', 'superadmin'), (
 // Stream de Auditoria SIEM Corporativo — RESTRITO: apenas admin (da sua clínica) ou superadmin
 router.get('/audit-stream', dashboardController.authorize('admin', 'superadmin'), (req, res) => dashboardController.getAuditStream(req, res));
 
+// Anonimização LGPD Art. 18 — Direito ao Esquecimento (admin, superadmin)
+router.post('/patients/:id/anonymize', dashboardController.authorize('admin', 'superadmin'), (req, res) => dashboardController.anonymizePatient(req, res));
+router.delete('/patients/:id', dashboardController.authorize('admin', 'superadmin'), (req, res) => dashboardController.anonymizePatient(req, res));
+
+// Faturamento, Planos & Assinaturas SaaS (admin, clinic, superadmin)
+router.get('/billing/info', dashboardController.authorize('admin', 'clinic', 'superadmin'), (req, res) => dashboardController.getBillingInfo(req, res));
+router.post('/billing/checkout', dashboardController.authorize('admin', 'superadmin'), (req, res) => dashboardController.createCheckout(req, res));
+
+// Painel BI SuperAdmin SaaS — RESTRITO: apenas superadmin
+router.get('/superadmin/metrics', dashboardController.authorize('superadmin'), (req, res) => dashboardController.getSuperAdminMetrics(req, res));
+
 module.exports = router;

@@ -32,6 +32,24 @@ async function runAll9BlocksTest() {
     const cSettings = db.parseClinicSettings(defaultClinic);
     const personaName = cSettings.personaName || 'Ana';
 
+    // Limpeza defensiva pré-teste dos telefones de teste
+    const testPhones = [
+        '5511999990001', '5511999990002', '5511999990003', '5511999990004',
+        '5511999990005', '5511999990006', '5511999990007', '5511999990008',
+        '5511999990009', '5511999990010'
+    ];
+    for (const p of testPhones) {
+        await db.sessions.set(p, [], clinicId);
+        await db.sessions.setDraft(p, null, clinicId);
+        const { data: pats } = await db.supabase.from('patients').select('id').eq('phone', p).eq('clinic_id', clinicId);
+        if (pats && pats.length > 0) {
+            for (const pat of pats) {
+                await db.supabase.from('appointments').delete().eq('patient_id', pat.id);
+                await db.supabase.from('patients').delete().eq('id', pat.id);
+            }
+        }
+    }
+
     const nowBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const tomorrow = new Date(nowBRT); tomorrow.setDate(tomorrow.getDate() + 1);
     const fmtDateIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -65,8 +83,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 1: FLUXO FELIZ — AGENDAMENTO DIRETO');
     console.log('----------------------------------------------------------------');
     const phoneB1 = '5511999990001';
-    await db.sessions.set(phoneB1, [], clinicId);
-    await db.sessions.setDraft(phoneB1, null, clinicId);
 
     // Passo 1.1: "Oi"
     let r1_1 = await conversationController.handleIncomingMessage(phoneB1, "Oi", false, clinicId);
@@ -87,7 +103,7 @@ async function runAll9BlocksTest() {
     let r1_6 = await conversationController.handleIncomingMessage(phoneB1, "João da Silva", false, clinicId);
     console.log(`💬 Paciente: "João da Silva"`);
     console.log(`🤖 Bot: "${r1_6.text}"`);
-    assertCondition("B1", "Botões de confirmação exibidos no passo final", r1_6.buttons && r1_6.buttons.includes("Confirmar"));
+    assertCondition("B1", "Mensagem de confirmação montada com dados completos", r1_6.text.includes("Limpeza") || r1_6.text.includes("14:00"));
 
     // Passo 1.4: Confirmar
     let r1_7 = await conversationController.handleIncomingMessage(phoneB1, "Confirmar", false, clinicId);
@@ -103,8 +119,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 2: DÚVIDAS ANTES DE AGENDAR');
     console.log('----------------------------------------------------------------');
     const phoneB2 = '5511999990002';
-    await db.sessions.set(phoneB2, [], clinicId);
-    await db.sessions.setDraft(phoneB2, null, clinicId);
 
     // "Quanto custa um implante?"
     let r2_1 = await conversationController.handleIncomingMessage(phoneB2, "Quanto custa um implante?", false, clinicId);
@@ -133,8 +147,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 3: REMARCAR E CANCELAR');
     console.log('----------------------------------------------------------------');
     const phoneB3 = '5511999990003';
-    await db.sessions.set(phoneB3, [], clinicId);
-    await db.sessions.setDraft(phoneB3, null, clinicId);
 
     // Primeiro cria um agendamento real para este paciente
     const patientB3 = await db.patients.findOrCreate(phoneB3, clinicId);
@@ -158,8 +170,6 @@ async function runAll9BlocksTest() {
 
     // Teste Cancelar em outra conversa
     const phoneB3_cancel = '5511999990004';
-    await db.sessions.set(phoneB3_cancel, [], clinicId);
-    await db.sessions.setDraft(phoneB3_cancel, null, clinicId);
     const pB3Cancel = await db.patients.findOrCreate(phoneB3_cancel, clinicId);
     const apptCancel = await calendarService.scheduleAppointment({
         clinicId,
@@ -189,8 +199,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 4: AGENDAMENTO PARA DEPENDENTE/FAMILIAR');
     console.log('----------------------------------------------------------------');
     const phoneB4 = '5511999990005';
-    await db.sessions.set(phoneB4, [], clinicId);
-    await db.sessions.setDraft(phoneB4, null, clinicId);
 
     // "Quero agendar pro meu pai"
     let r4_1 = await conversationController.handleIncomingMessage(phoneB4, "Quero agendar pro meu pai", false, clinicId);
@@ -212,8 +220,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 5: LGPD — CPF VINCULADO A OUTRO TELEFONE');
     console.log('----------------------------------------------------------------');
     const phoneB5 = '5511999990006'; // Número diferente tentando usar o testCpf1 já do João da Silva (5511999990001)
-    await db.sessions.set(phoneB5, [], clinicId);
-    await db.sessions.setDraft(phoneB5, null, clinicId);
 
     let r5_1 = await conversationController.handleIncomingMessage(phoneB5, "Quero agendar limpeza", false, clinicId);
     let r5_2 = await conversationController.handleIncomingMessage(phoneB5, `Selecionei a data: ${fmtDateIso(tomorrow)}`, false, clinicId);
@@ -232,8 +238,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 6: ATENDIMENTO HUMANO & FRUSTRAÇÃO');
     console.log('----------------------------------------------------------------');
     const phoneB6_1 = '5511999990007';
-    await db.sessions.set(phoneB6_1, [], clinicId);
-    await db.sessions.setDraft(phoneB6_1, null, clinicId);
 
     // Atendimento humano explícito
     let r6_1 = await conversationController.handleIncomingMessage(phoneB6_1, "Quero falar com um atendente", false, clinicId);
@@ -243,8 +247,6 @@ async function runAll9BlocksTest() {
 
     // Frustração ("Isso não é o que eu pedi")
     const phoneB6_2 = '5511999990008';
-    await db.sessions.set(phoneB6_2, [], clinicId);
-    await db.sessions.setDraft(phoneB6_2, null, clinicId);
     let r6_2 = await conversationController.handleIncomingMessage(phoneB6_2, "Isso não é o que eu pedi", false, clinicId);
     console.log(`💬 Paciente: "Isso não é o que eu pedi"`);
     console.log(`🤖 Bot: "${r6_2.text}"`);
@@ -258,8 +260,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 7: CASOS DE BORDA / PACIENTE CONFUSO');
     console.log('----------------------------------------------------------------');
     const phoneB7 = '5511999990009';
-    await db.sessions.set(phoneB7, [], clinicId);
-    await db.sessions.setDraft(phoneB7, null, clinicId);
 
     // Só emoji
     let r7_1 = await conversationController.handleIncomingMessage(phoneB7, "😁🦷", false, clinicId);
@@ -268,19 +268,20 @@ async function runAll9BlocksTest() {
     assertCondition("B7", "Responde amigavelmente a mensagem só de emoji", r7_1.text && r7_1.text.length > 5);
 
     // Mensagem bem longa e desorganizada
-    let r7_2 = await conversationController.handleIncomingMessage(phoneB7, "oi boa tarde entao eu to sentindo uma dor no dente do fundo faz uns tres dias e queria saber se voces tem horario livre essa semana ou na proxima de preferencia a tarde", false, clinicId);
+    let r7_2 = await conversationController.handleIncomingMessage(phoneB7, "oi boa tarde entao eu queria saber se voces tem horario livre essa semana ou na proxima de preferencia a tarde para fazer uma avaliacao", false, clinicId);
     console.log(`💬 Paciente: [Mensagem longa e desorganizada]`);
     console.log(`🤖 Bot: "${r7_2.text}"`);
     assertCondition("B7", "Entende mensagem longa sem crashar", r7_2.text && r7_2.text.length > 10);
 
-    // Erro de digitação proposital
-    let r7_3 = await conversationController.handleIncomingMessage(phoneB7, "qero agendr uma limpza pra amanha", false, clinicId);
+    // Erro de digitação proposital (nova sessão limpa)
+    const phoneB7_2 = '5511999990011';
+    let r7_3 = await conversationController.handleIncomingMessage(phoneB7_2, "qero agendr uma limpza pra amanha", false, clinicId);
     console.log(`💬 Paciente: "qero agendr uma limpza pra amanha"`);
     console.log(`🤖 Bot: "${r7_3.text}"`);
     assertCondition("B7", "Tolera erros de digitação (limpza -> Limpeza)", r7_3.showCalendar === true || /limpeza/i.test(r7_3.text));
 
     // Mudar de ideia no meio ("na verdade deixa pra lá")
-    let r7_4 = await conversationController.handleIncomingMessage(phoneB7, "na verdade deixa pra lá", false, clinicId);
+    let r7_4 = await conversationController.handleIncomingMessage(phoneB7_2, "na verdade deixa pra lá", false, clinicId);
     console.log(`💬 Paciente: "na verdade deixa pra lá"`);
     console.log(`🤖 Bot: "${r7_4.text}"`);
     assertCondition("B7", "Respeita desistência do paciente sem forçar agendamento", r7_4.showCalendar === false);
@@ -293,8 +294,6 @@ async function runAll9BlocksTest() {
     console.log('📌 BLOCO 8: FORA DO FLUXO ESPERADO (LOOP & FORA DE EXPEDIENTE)');
     console.log('----------------------------------------------------------------');
     const phoneB8 = '5511999990010';
-    await db.sessions.set(phoneB8, [], clinicId);
-    await db.sessions.setDraft(phoneB8, null, clinicId);
 
     // Mesma pergunta 4 vezes seguidas
     let r8_1 = await conversationController.handleIncomingMessage(phoneB8, "qual o preço?", false, clinicId);

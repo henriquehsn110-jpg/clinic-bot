@@ -561,6 +561,153 @@ class DashboardController {
             res.status(500).json({ error: 'Erro ao gerar stream SIEM.' });
         }
     }
+    // Endpoint de Anonimização Definitiva de Dados de Pacientes (LGPD Art. 18 — Direito ao Esquecimento)
+    async anonymizePatient(req, res) {
+        try {
+            const { id } = req.params;
+            const targetClinicId = req.resolvedClinicId;
+
+            if (!id) return res.status(400).json({ error: 'ID do paciente é obrigatório.' });
+
+            const { data: patient, error: fetchErr } = await db.supabase
+                .from('patients')
+                .select('*')
+                .eq('id', id)
+                .maybeSingle();
+
+            if (fetchErr || !patient) {
+                return res.status(404).json({ error: 'Paciente não encontrado.' });
+            }
+
+            if (!req.isSuperAdmin && targetClinicId && patient.clinic_id !== targetClinicId) {
+                logger.warn('LGPD_TENANT_VIOLATION', `Tentativa de anonimizar paciente de outra clínica. Tenant: ${targetClinicId}, Paciente: ${patient.clinic_id}`);
+                return res.status(403).json({ error: 'Acesso negado: este paciente pertence a outra clínica.' });
+            }
+
+            const phoneMasked = patient.phone ? `${patient.phone.substring(0, 4)}••••${patient.phone.substring(patient.phone.length - 4)}` : 'Desconhecido';
+
+            // Anonimiza no banco Supabase
+            const anonymizedAt = new Date().toISOString();
+            await db.supabase.from('patients').update({
+                name: 'Paciente Anonimizado (LGPD)',
+                phone: `anon_${Date.now()}`,
+                cpf: null,
+                cpf_hash: null,
+                deleted_at: anonymizedAt
+            }).eq('id', id);
+
+            // Gera hash SHA-256 de auditoria inalterável
+            const auditHash = crypto.createHash('sha256').update(`${id}:${patient.clinic_id}:${anonymizedAt}:${req.user?.email || 'admin'}`).digest('hex');
+
+            try {
+                await db.supabase.from('lgpd_deletion_logs').insert({
+                    clinic_id: patient.clinic_id,
+                    patient_id: id,
+                    patient_phone_masked: phoneMasked,
+                    requested_by: req.user?.email || 'dashboard_user',
+                    anonymized_at: anonymizedAt,
+                    audit_hash: auditHash
+                });
+            } catch (err) {
+                logger.warn('LGPD_LOG_INSERT_ERR', `Erro ao gravar log de exclusão LGPD: ${err.message}`);
+            }
+
+            logger.info('LGPD_ANONYMIZED', `Paciente ${id} (${phoneMasked}) anonimizado com sucesso conforme Art. 18 da LGPD.`);
+
+            res.json({
+                success: true,
+                message: 'Dados do paciente anonimizados e removidos com sucesso em conformidade com a LGPD.',
+                anonymizedAt,
+                auditHash
+            });
+
+        } catch (err) {
+            logger.error('LGPD_ANONYMIZE_ERR', `Erro ao anonimizar paciente: ${err.message}`, err.stack);
+            res.status(500).json({ error: 'Erro ao processar solicitação de esquecimento LGPD.' });
+        }
+    }
+
+    // Painel BI SuperAdmin SaaS (Métricas de Negócio: MRR, Churn, Clínicas Ativas, Uptime)
+    async getSuperAdminMetrics(req, res) {
+        try {
+            if (!req.isSuperAdmin) {
+                return res.status(403).json({ error: 'Acesso restrito ao SuperAdmin do SaaS.' });
+            }
+
+            const billingService = require('../services/billingService');
+            const plans = billingService.getPlans();
+
+            const { data: clinics } = await db.supabase.from('clinics').select('id, name, slug, plan_type, subscription_status, monthly_booking_count, created_at');
+            const { count: totalPatients } = await db.supabase.from('patients').select('*', { count: 'exact', head: true }).is('deleted_at', null);
+            const { count: totalAppts } = await db.supabase.from('appointments').select('*', { count: 'exact', head: true }).is('deleted_at', null);
+
+            const clinicsList = clinics || [];
+            const activeClinics = clinicsList.filter(c => c.subscription_status === 'active' || !c.subscription_status);
+            const suspendedClinics = clinicsList.filter(c => c.subscription_status === 'suspended' || c.subscription_status === 'past_due');
+
+            // Cálculo do MRR (Receita Mensal Recorrente)
+            const mrr = activeClinics.reduce((acc, c) => {
+                const planKey = c.plan_type || 'pro';
+                return acc + (plans[planKey]?.priceBrl || 399.00);
+            }, 0);
+
+            const totalClinicsCount = clinicsList.length || 1;
+            const churnRatePercent = ((suspendedClinics.length / totalClinicsCount) * 100).toFixed(1);
+
+            res.json({
+                saasMetrics: {
+                    mrr: `R$ ${mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    mrrNumeric: mrr,
+                    totalClinics: totalClinicsCount,
+                    activeClinicsCount: activeClinics.length,
+                    suspendedClinicsCount: suspendedClinics.length,
+                    churnRatePercent: `${churnRatePercent}%`,
+                    totalPatientsCount: totalPatients || 0,
+                    totalAppointmentsCount: totalAppts || 0
+                },
+                plans,
+                clinics: clinicsList
+            });
+
+        } catch (err) {
+            logger.error('SUPERADMIN_METRICS_ERR', `Erro ao gerar métricas do SuperAdmin: ${err.message}`);
+            res.status(500).json({ error: 'Erro ao gerar métricas do SaaS.' });
+        }
+    }
+
+    // Obter dados de faturamento e plano da clínica
+    async getBillingInfo(req, res) {
+        try {
+            const targetClinicId = req.resolvedClinicId;
+            const billingService = require('../services/billingService');
+            const access = await billingService.checkClinicAccess(targetClinicId);
+            const plans = billingService.getPlans();
+
+            res.json({
+                access,
+                plans
+            });
+        } catch (err) {
+            logger.error('BILLING_INFO_ERR', `Erro ao buscar dados de billing: ${err.message}`);
+            res.status(500).json({ error: 'Erro ao buscar dados de faturamento.' });
+        }
+    }
+
+    // Gerar link de checkout/mudança de plano
+    async createCheckout(req, res) {
+        try {
+            const targetClinicId = req.resolvedClinicId;
+            const { planType } = req.body || {};
+            const billingService = require('../services/billingService');
+            const checkout = await billingService.createCheckoutSession(targetClinicId, planType || 'pro');
+
+            res.json({ success: true, ...checkout });
+        } catch (err) {
+            logger.error('CHECKOUT_ERR', `Erro ao criar checkout: ${err.message}`);
+            res.status(500).json({ error: 'Erro ao gerar checkout.' });
+        }
+    }
 }
 
 module.exports = new DashboardController();
+
