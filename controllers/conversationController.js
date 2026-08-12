@@ -306,7 +306,7 @@ function extractCleanName(text) {
     if (/Selecionei|CPF|confirmar|cancelar|remarcar|agendar|opções|opcao|menu/i.test(clean)) return null;
 
     // Remove prefixos comuns de apresentação em português antes de checar a frase
-    clean = clean.replace(/^(meu\s+nome\s+é|meu\s+nome\s+e|sou\s+a|sou\s+o|me\s+chamo|chamo-me|pode\s+colocar|nome:\s*)\s*/i, '').trim();
+    clean = clean.replace(/^(?:eu\s+)?(?:sou\s+[ao]|meu\s+nome\s+[ée]|me\s+chamo|chamo-me|pode\s+colocar|nome:\s*)\s*/i, '').trim();
 
     // Dicionário Estrito de Palavras NÃO-NOME (Verbos, Pronomes, Advérbios, Adjetivos, Saudações e Gírias em PT-BR)
     const nonNameWordsRegex = /\b(oi|olá|ola|hey|hi|hello|boa|bom|noite|tarde|dia|tudo|bem|quero|quando|quanto|quais|qual|como|onde|porque|por que|porquê|saber|falar|falarei|conversar|atender|atendimento|dentista|médico|medico|doutor|doutora|dra|dr|consulta|valor|preço|preco|convênio|convenio|plano|horário|horario|vaga|vagas|endereço|endereco|local|dúvida|duvida|ajuda|informação|informacao|gostaria|preciso|tenho|queria|posso|pode|podia|deve|deveria|decide|decida|decidir|escolhe|escolha|escolher|veja|vê|olha|olhar|diz|dizer|fala|mostra|mostrar|acha|acho|pensa|penso|sabe|sei|faz|fazer|faço|coloca|bota|manda|envia|passa|pega|tira|deixa|fica|vai|ir|você|voce|vocês|voces|tu|ele|ela|nós|nos|mim|me|te|lhe|si|comigo|contigo|consigo|isso|isto|aquilo|esse|essa|este|esta|aquele|aquela|qualquer|quem|assim|então|entao|agora|depois|antes|sempre|nunca|jamais|já|ja|hoje|amanhã|amanha|ontem|aqui|ali|lá|la|cá|ca|muito|pouco|mais|menos|mal|ruim|melhor|pior|mole|duro|certo|errado|cara|véi|vei|mano|parça|parca|irmão|irmao|amigo|amiga|moço|moco|moça|moca|atendente|humano|secretária|secretaria|tanto|faz|beleza|valeu|obrigado|obrigada|tchau|sim|não|nao|ok)\b/i;
@@ -368,6 +368,9 @@ class ConversationController {
             // ── SANITIZAÇÃO DE SEGURANÇA ──────────────────────────────────────────
             // Impede injeção de prompt que tenta forçar comandos do sistema via colchetes
             const sanitizedText = text.replace(/\[\s*SISTEMA\s*:.*?\]/gi, '').trim();
+
+            const familyKeywords = /\b(meu pai|minha mãe|meu filho|minha filha|meu marido|minha esposa|meu avô|minha avó|para o meu|para a minha|é para (ele|ela|meu|minha)|pro meu|pra minha)\b/i;
+            const personalKeywords = /\b(pra mim|para mim|meu agendamento|pra mim mesmo|para mim mesmo|agendar pra mim|agendar para mim|pra mim agora|para mim agora)\b/i;
 
             let history = await db.sessions.get(phone, clinicId);
 
@@ -617,7 +620,10 @@ class ConversationController {
             }
 
             // 2. Atalho para botão "Agendar Consulta" (Agendamento Pessoal)
-            if (/^(agendar consulta|agendar|quero agendar|quero agendar consulta|quero agendar uma consulta)$/i.test(sanitizedText.trim())) {
+            const isPersonalBookingShortcut = /\b(agendar pra mim|agendar para mim|pra mim agora|para mim agora|meu agendamento|pra mim|para mim)\b/i.test(sanitizedText) ||
+                                             /^(agendar consulta|agendar|quero agendar|quero agendar consulta|quero agendar uma consulta)$/i.test(sanitizedText.trim());
+
+            if (isPersonalBookingShortcut && !familyKeywords.test(sanitizedText)) {
                 draft.is_family_booking = false;
                 draft.dependentName = null;
                 draft.dependentCpf = null;
@@ -1317,10 +1323,14 @@ class ConversationController {
             // ── GUARDA ANTI-FALSO-POSITIVO: pergunta informativa de preço não é seleção de procedimento ──
             const rawCpf = extractAndNormalizeCpf(sanitizedText);
 
-            // Detecção de agendamento para terceiro/familiar
-            const familyKeywords = /\b(meu pai|minha mãe|meu filho|minha filha|meu marido|minha esposa|meu avô|minha avó|para o meu|para a minha|é para (ele|ela|meu|minha)|pro meu|pra minha)\b/i;
+            // Detecção de agendamento para terceiro/familiar vs Pessoal
             if (familyKeywords.test(sanitizedText)) {
                 draft.is_family_booking = true;
+                await db.sessions.setDraft(phone, draft, clinicId);
+            } else if (personalKeywords.test(sanitizedText)) {
+                draft.is_family_booking = false;
+                draft.dependentName = null;
+                draft.dependentCpf = null;
                 await db.sessions.setDraft(phone, draft, clinicId);
             }
 
@@ -1336,10 +1346,10 @@ class ConversationController {
 
             // ── GATE ABSOLUTO: agendamento familiar exige nome do dependente ANTES de qualquer avanço ──
             if (draft.is_family_booking && !draft.dependentName) {
-                const dependentNameMatch = sanitizedText.match(/(?:nome (?:dele|dela|é)|chama(?:-se)?|é o|é a)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,3})/i);
+                const dependentNameMatch = sanitizedText.match(/(?:nome (?:dele|dela|é)|chama(?:-se)?|é o|é a|(?:mãe|pai|filho|filha|espos[oa]|marido|irm[ãa][o]?|av[ôó]|ti[oa]|prim[oa]|namorad[oa]|familiar)[,:]?\s+(?:de\s+nome\s+|chamad[oa]\s+)?)([A-ZÀ-Úa-zà-ú]{2,}(?:\s+[A-ZÀ-Úa-zà-ú]{2,}){0,4})/i);
                 const extractedClean = extractCleanName(sanitizedText);
 
-                if (dependentNameMatch) {
+                if (dependentNameMatch && !/\b(amanhã|hoje|ontem|agora|depois|já|sim|não|nao|quero|preciso|vaga|consulta|urgente|agendar|marcar|remarcar|cancelar|para|de|com)\b/i.test(dependentNameMatch[1])) {
                     draft.dependentName = dependentNameMatch[1].trim();
                     draft.name = draft.dependentName;
                     await db.sessions.setDraft(phone, draft, clinicId);
@@ -1350,7 +1360,7 @@ class ConversationController {
                     await db.sessions.setDraft(phone, draft, clinicId);
                     // Após capturar o nome, solicitar CPF do dependente IMEDIATAMENTE (fall-through para GATE 2)
                 } else {
-                    const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
+                    const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText) || personalKeywords.test(sanitizedText);
                     const isGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem)$/i.test(sanitizedText);
                     const isSelectionText = /^selecionei\b/i.test(sanitizedText.trim()) || !!normalizedDate || !!normalizedTime;
                     const isQuestion = !isSelectionText && (sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText));
@@ -1405,7 +1415,7 @@ class ConversationController {
                         if (selectedProc) draft.type = selectedProc;
                     }
                     await db.sessions.setDraft(phone, draft, clinicId);
-                    const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
+                    const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText) || personalKeywords.test(sanitizedText);
                     const isGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem)$/i.test(sanitizedText);
                     const isSelectionText = /^selecionei\b/i.test(sanitizedText.trim()) || !!normalizedDate || !!normalizedTime;
                     const isQuestion = !isSelectionText && (sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText));
