@@ -1037,6 +1037,8 @@ class ConversationController {
                     ? !!(draft.dependentCpf || (draft.cpf && draft.cpf !== patient?.cpf))
                     : !!(patient?.cpf || draft?.cpf);
 
+                logger.info('FSM_DEBUG_CONFIRMING', `[${phone}] is_family_booking: ${draft?.is_family_booking}, dependentCpf: ${draft?.dependentCpf}, draft.cpf: ${draft?.cpf}, patient.cpf: ${patient?.cpf} => hasCpf: ${hasCpf}`);
+
                 if (!hasPatientName) {
                     const askNameText = "Para finalizarmos a confirmação do seu agendamento, por favor me informe o seu nome completo:";
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
@@ -1822,6 +1824,8 @@ class ConversationController {
                 const hasCpf = draft.is_family_booking
                     ? !!(draft.dependentCpf || (draft.cpf && draft.cpf !== patient?.cpf) || (rawCpf && draft.is_family_booking))
                     : !!(patient?.cpf || draft?.cpf || rawCpf);
+
+                logger.info('FSM_DEBUG_STATE_MACHINE', `[${phone}] is_family_booking: ${draft?.is_family_booking}, dependentCpf: ${draft?.dependentCpf}, draft.cpf: ${draft?.cpf}, patient.cpf: ${patient?.cpf} => hasCpf: ${hasCpf}`);
 
                 if (draft.type && draft.date && draft.time && hasCpf && hasPatientName) {
                     // Passo 5: Todos os dados coletados (incluindo nome e CPF) -> Confirmação explícita com Botões
