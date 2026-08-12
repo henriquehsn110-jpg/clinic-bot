@@ -1334,7 +1334,8 @@ class ConversationController {
                 } else {
                     const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
                     const isGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem)$/i.test(sanitizedText);
-                    const isQuestion = sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText);
+                    const isSelectionText = /^selecionei\b/i.test(sanitizedText.trim()) || !!normalizedDate || !!normalizedTime;
+                    const isQuestion = !isSelectionText && (sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText));
 
                     if (isGreeting) {
                         processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente cumprimentou ("${sanitizedText}"). Responda cordialmente e, ao final, solicite gentilmente o nome completo da pessoa que será atendida no agendamento familiar.]`;
@@ -1358,6 +1359,61 @@ class ConversationController {
                             showTimeSlots:   false,
                             showProceduresList: false,
                             requireCpf:      false,
+                            procedures:      null,
+                            availableSlots:  null,
+                            transferToHuman: false
+                        };
+                    }
+                }
+            }
+
+            // ── GATE ABSOLUTO 2: agendamento familiar exige CPF do dependente ANTES de qualquer avanço ──
+            if (draft.is_family_booking && draft.dependentName && !draft.dependentCpf) {
+                const earlyCpf = extractAndNormalizeCpf(sanitizedText);
+                if (earlyCpf) {
+                    draft.dependentCpf = earlyCpf;
+                    draft.cpf = earlyCpf;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+                } else {
+                    // Preservation de dados selecionados pelo usuário (data, hora, procedimento)
+                    if (normalizedDate && !draft.date) draft.date = normalizedDate;
+                    if (normalizedTime && !draft.time) draft.time = normalizedTime;
+                    if (!draft.type) {
+                        const customProcedures = clinicSettings?.procedures
+                            ? clinicSettings.procedures.split(',').map(p => p.trim()).filter(Boolean)
+                            : [];
+                        const activeProceduresList = [...new Set([...PROCEDURES_LIST, ...customProcedures])];
+                        const selectedProc = !isInformationalPriceQuestion && activeProceduresList.find(p => sanitizedText.toLowerCase() === p.toLowerCase() || (p.length > 3 && sanitizedText.toLowerCase().includes(p.toLowerCase())));
+                        if (selectedProc) draft.type = selectedProc;
+                    }
+                    await db.sessions.setDraft(phone, draft, clinicId);
+                    const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
+                    const isGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem)$/i.test(sanitizedText);
+                    const isSelectionText = /^selecionei\b/i.test(sanitizedText.trim()) || !!normalizedDate || !!normalizedTime;
+                    const isQuestion = !isSelectionText && (sanitizedText.includes('?') || /\b(quando|quanto|como|onde|qual|quais|saber|falar|falarei|duvida|dúvida|ajuda|preço|valor|horário|trabalham|aberto|funcionam)\b/i.test(sanitizedText));
+
+                    if (isGreeting) {
+                        processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente cumprimentou. Responda cordialmente e, ao final, solicite gentilmente o CPF do dependente para continuar o agendamento.]`;
+                    } else if (isQuestion) {
+                        processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente fez uma pergunta. Responda com clareza e solicite gentilmente o CPF do dependente para continuar o agendamento.]`;
+                    } else if (!isBypass) {
+                        const askDependentCpfText = "Perfeito! O agendamento ficará no nome de " + draft.dependentName + ". Agora, por favor, me informe o CPF do dependente (ou do responsável legal):";
+                        history.push({ role: 'user', parts: [{ text: processedText }] });
+                        history.push({ role: 'model', parts: [{ text: `${askDependentCpfText}\n[SISTEMA: CPF solicitado, aguardando CPF]` }] });
+                        if (history.length > 20) history = history.slice(-20);
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, askDependentCpfText, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text:            askDependentCpfText,
+                            buttons:         [],
+                            showCalendar:    false,
+                            showTimeSlots:   false,
+                            showProceduresList: false,
+                            requireCpf:      true,
                             procedures:      null,
                             availableSlots:  null,
                             transferToHuman: false
@@ -1864,7 +1920,7 @@ class ConversationController {
                 // Se a IA ou a máquina de estados solicitou CPF ou Nome (e o dado ainda NÃO foi fornecido), ou se for pergunta de preço, NUNCA exiba calendário simultaneamente
                 const isAskingCpf = (aiResponse.requireCpf || (wasCpfRequested && !rawCpf && !hasCpf)) && !hasCpf;
                 const hasProvidedName = !!(draft.name || draft.dependentName);
-                const isAskingName = (wasNameRequested && !hasProvidedName) || /nome completo/i.test(aiResponse.text);
+                const isAskingName = !hasProvidedName && (wasNameRequested || /nome completo/i.test(aiResponse.text));
 
                 if (isAskingCpf || isAskingName || isInformationalPriceQuestion) {
                     aiResponse.buttons = [];
@@ -1875,7 +1931,12 @@ class ConversationController {
                 }
 
                 // Garante Exclusividade Mútua Estrita: Apenas 1 componente visual por resposta
-                if (aiResponse.showCalendar) {
+                if (aiResponse.requireCpf) {
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showProceduresList = false;
+                    aiResponse.showDoctorList = false;
+                } else if (aiResponse.showCalendar) {
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.requireCpf = false;
@@ -1884,11 +1945,6 @@ class ConversationController {
                     aiResponse.showCalendar = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.requireCpf = false;
-                    aiResponse.showDoctorList = false;
-                } else if (aiResponse.requireCpf) {
-                    aiResponse.showCalendar = false;
-                    aiResponse.showTimeSlots = false;
-                    aiResponse.showProceduresList = false;
                     aiResponse.showDoctorList = false;
                 } else if (aiResponse.showDoctorList) {
                     aiResponse.showCalendar = false;

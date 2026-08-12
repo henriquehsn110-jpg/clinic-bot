@@ -173,8 +173,8 @@ showCalendar: true novamente
 Várias pessoas da mesma família podem usar o mesmo celular para agendar.
 Se o paciente informar ou indicar que o agendamento é para outra pessoa (filho, esposa, mãe, parente, dependente):
 1. Pergunte: "Qual é o nome completo da pessoa que será atendida?"
-2. Após obter o nome do dependente, informe: "Perfeito! O agendamento ficará registrado no nome de [NOME_DO_DEPENDENTE]."
-3. Solicite o CPF (do titular ou do dependente se possuir) para concluir.
+2. Após obter o nome do dependente, EXIJA imediatamente o CPF do dependente (ou responsável) antes de prosseguir com qualquer outra etapa (como datas ou procedimentos): "Perfeito! O agendamento ficará no nome de [NOME]. Agora, por favor, me informe o CPF do dependente (ou responsável):"
+3. Defina: "requireCpf": true
 
 Se for agendamento para o próprio titular do WhatsApp:
 Texto: "Para prosseguir, por favor informe o seu CPF."

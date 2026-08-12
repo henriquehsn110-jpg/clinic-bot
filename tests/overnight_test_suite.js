@@ -45,10 +45,11 @@ async function ensureServerRunning() {
     const { spawn } = require('child_process');
     serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
         cwd: path.join(__dirname, '..'),
-        stdio: 'ignore'
+        stdio: 'ignore',
+        shell: true
     });
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 500));
         try {
             await axios.get(`${BASE_URL}/health`, { timeout: 1000 });
