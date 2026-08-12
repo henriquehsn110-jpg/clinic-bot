@@ -654,6 +654,14 @@ class ConversationController {
                 draft.dependentName = null;
                 draft.dependentCpf = null;
                 draft.cpf = null;
+                // RESET COMPLETO: limpar dados do agendamento anterior para evitar bypass do CPF gate
+                draft.type = null;
+                draft.date = null;
+                draft.time = null;
+                draft.doctor_id = null;
+                draft.doctor_name = null;
+                draft.needs_doctor = null;
+                draft.available_doctors = null;
                 await db.sessions.setDraft(phone, draft, clinicId);
 
                 const familyText = "Com certeza! Para agendar para um familiar ou dependente, por favor me informe o nome completo da pessoa que irá passar em consulta:";
@@ -1327,10 +1335,12 @@ class ConversationController {
                     draft.dependentName = dependentNameMatch[1].trim();
                     draft.name = draft.dependentName;
                     await db.sessions.setDraft(phone, draft, clinicId);
+                    // Após capturar o nome, solicitar CPF do dependente IMEDIATAMENTE (fall-through para GATE 2)
                 } else if (extractedClean && !familyKeywords.test(sanitizedText)) {
                     draft.dependentName = extractedClean;
                     draft.name = extractedClean;
                     await db.sessions.setDraft(phone, draft, clinicId);
+                    // Após capturar o nome, solicitar CPF do dependente IMEDIATAMENTE (fall-through para GATE 2)
                 } else {
                     const isBypass = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText);
                     const isGreeting = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem)$/i.test(sanitizedText);
