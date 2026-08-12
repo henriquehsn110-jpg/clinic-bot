@@ -102,6 +102,60 @@ async function testFamilyPersonalSwitchAndPrefixes() {
         }
         console.log("  ✅ PASS: Prefixo 'Eu sou o' removido e nome 'Henrique' extraído corretamente!");
 
+        // ── TESTE 4: Troca de intenção mid-flow com CPF parcial/inválido de 10 dígitos ──
+        console.log("\n[TESTE 4] Mid-flow reset: 'Agendar p/ Outro' -> Nome -> CPF 10 dígitos (parcial) -> 'Quero agendar pra mim agora'...");
+        await db.sessions.delete(testPhone, clinicId).catch(() => {});
+        await db.sessions.setDraft(testPhone, null, clinicId).catch(() => {});
+
+        await conversationController.handleIncomingMessage({
+            phone: testPhone,
+            messageText: "Agendar p/ Outro",
+            isSimulation: true,
+            clinicId: clinicId
+        });
+
+        await conversationController.handleIncomingMessage({
+            phone: testPhone,
+            messageText: "Carlos da Silva",
+            isSimulation: true,
+            clinicId: clinicId
+        });
+
+        // Envia CPF inválido de 10 dígitos (Gate 2 deve rejeitar)
+        const resCpf10 = await conversationController.handleIncomingMessage({
+            phone: testPhone,
+            messageText: "1234567890",
+            isSimulation: true,
+            clinicId: clinicId
+        });
+        console.log(`  🤖 Resposta Bot (CPF 10 dígs): "${resCpf10.text.substring(0, 70)}..."`);
+
+        const draftCpf10 = await db.sessions.getDraft(testPhone, clinicId);
+        console.log(`  📊 Draft Check (Intermediário): is_family_booking=${draftCpf10.is_family_booking}, dependentName="${draftCpf10.dependentName}"`);
+
+        // Alterna a intenção mid-flow no Gate 2
+        const resSwitchMid = await conversationController.handleIncomingMessage({
+            phone: testPhone,
+            messageText: "Quero agendar pra mim agora",
+            isSimulation: true,
+            clinicId: clinicId
+        });
+        console.log(`  🤖 Resposta Bot (Mid-flow Switch): "${resSwitchMid.text.substring(0, 70)}..."`);
+
+        const draftMidWiped = await db.sessions.getDraft(testPhone, clinicId);
+        console.log(`  📊 Draft Check (Wiped): is_family_booking=${draftMidWiped.is_family_booking}, dependentName=${draftMidWiped.dependentName}, dependentCpf=${draftMidWiped.dependentCpf}`);
+
+        if (draftMidWiped.is_family_booking !== false) {
+            throw new Error("TESTE 4 FALHOU: is_family_booking deveria ser false após troca mid-flow.");
+        }
+        if (draftMidWiped.dependentName !== null) {
+            throw new Error("TESTE 4 FALHOU: dependentName deveria ser null após troca mid-flow.");
+        }
+        if (draftMidWiped.dependentCpf !== null) {
+            throw new Error("TESTE 4 FALHOU: dependentCpf deveria ser null após troca mid-flow.");
+        }
+        console.log("  ✅ PASS: Estado de dependente parcialmente preenchido com CPF inválido foi 100% resetado após troca de intenção mid-flow!");
+
         console.log("\n==================================================================");
         console.log("🎉 TODOS OS TESTES DE TROCA E EXTRAÇÃO DE NOMES FORAM APROVADOS!");
         console.log("==================================================================");
