@@ -103,6 +103,27 @@ async function runFsmChaosTest() {
 
         console.log("  🎯 SUCESSO ABSOLUTO: O bot EXIGIU o CPF do dependente (requireCpf=true) e BLOQUEOU a confirmação precoce!");
 
+        // ── ETAPA 5.5: Tentar Enviar 'Confirmar' Prematuramente ──
+        console.log("\n[ETAPA 5.5] Tentando enviar 'Confirmar' antes de informar o CPF do dependente...");
+        const res5_5 = await conversationController.handleIncomingMessage({
+            phone: testPhone,
+            messageText: "Confirmar",
+            isSimulation: true,
+            clinicId: clinicId
+        });
+
+        if (res5_5.calendarUrl || (res5_5.text && res5_5.text.includes("Agendamento confirmado"))) {
+            console.error("❌ FALHA GRAVE DA FSM: O bot CONFIRMOU a consulta ao receber 'Confirmar' SEM ter o CPF do dependente!");
+            process.exit(1);
+        }
+
+        if (!res5_5.requireCpf) {
+            console.error("❌ FALHA DA FSM: O bot deveria rejeitar a confirmação e solicitar o CPF do dependente.");
+            process.exit(1);
+        }
+
+        console.log("  🎯 SUCESSO: O envio de 'Confirmar' foi BLOQUEADO e o bot solicitou novamente o CPF do dependente!");
+
         // ── ETAPA 6: Enviar CPF Válido do Dependente ──
         console.log("\n[ETAPA 6] Enviando CPF válido do dependente: '529.982.247-25'...");
         const res6 = await conversationController.handleIncomingMessage({

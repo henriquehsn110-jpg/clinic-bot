@@ -651,7 +651,10 @@ class ConversationController {
                 logger.info('FAMILY_BOOKING', `Paciente [${phone}] iniciou agendamento para familiar/dependente.`);
                 draft.is_family_booking = true;
                 draft.name = null;
-                await db.sessions.setDraft(phone, { is_family_booking: true, name: null }, clinicId);
+                draft.dependentName = null;
+                draft.dependentCpf = null;
+                draft.cpf = null;
+                await db.sessions.setDraft(phone, draft, clinicId);
 
                 const familyText = "Com certeza! Para agendar para um familiar ou dependente, por favor me informe o nome completo da pessoa que irá passar em consulta:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
@@ -1029,7 +1032,11 @@ class ConversationController {
             const isAffirmativeConfirmation = (draft && draft.date && draft.time && draft.type) && /^(sim|sim,|pode|pode agendar|pode ser|ok|certo|está certo|esta certo|correto)$/i.test(sanitizedText.trim());
             const isConfirming = isConfirmKeyword || isAffirmativeConfirmation;
             if (isConfirming) {
-                const hasPatientName = !!(draft.name || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
+                const hasPatientName = !!(draft.name || draft.dependentName || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
+                const hasCpf = draft?.is_family_booking
+                    ? !!(draft.dependentCpf || (draft.cpf && draft.cpf !== patient?.cpf))
+                    : !!(patient?.cpf || draft?.cpf);
+
                 if (!hasPatientName) {
                     const askNameText = "Para finalizarmos a confirmação do seu agendamento, por favor me informe o seu nome completo:";
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
@@ -1047,6 +1054,31 @@ class ConversationController {
                         showTimeSlots: false,
                         showProceduresList: false,
                         requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: false
+                    };
+                }
+
+                if (!hasCpf) {
+                    const askCpfText = draft?.is_family_booking
+                        ? "Para finalizarmos a confirmação do agendamento do seu familiar, por favor me informe o CPF do dependente (ou do responsável legal):"
+                        : "Para finalizarmos a confirmação do seu agendamento, por favor me informe o seu CPF:";
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: `${askCpfText}\n[SISTEMA: CPF solicitado, aguardando CPF]` }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendTextMessage(phone, askCpfText, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: askCpfText,
+                        buttons: [],
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: true,
                         procedures: null,
                         availableSlots: null,
                         transferToHuman: false
