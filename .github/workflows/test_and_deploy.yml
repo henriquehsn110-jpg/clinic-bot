@@ -29,29 +29,41 @@ jobs:
         run: node tests/test_hmac_webhook_injection.js
         env:
           NODE_ENV: test
-          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: 🔒 Run Multi-Tenant RLS Isolation Test
         run: node tests/test_tenant_rls_isolation.js
         env:
           NODE_ENV: test
-          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: 🧪 Run Overnight QA Test Suite (24 Tests)
         run: node tests/overnight_test_suite.js
         env:
           NODE_ENV: test
-          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: 🤖 Run Real 9-Block WhatsApp Conversational Flow Simulation
         run: node tests/test_all_9_blocks.js
         env:
           NODE_ENV: test
-          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          CPF_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
   deploy-production:
     name: 🚀 Production Deploy Notification

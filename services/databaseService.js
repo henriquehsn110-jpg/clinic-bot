@@ -14,8 +14,8 @@ function cleanEnvVar(val) {
 }
 
 // ── Conexão ────────────────────────────────────────────────────────────────────
-const supabaseUrl = cleanEnvVar(process.env.SUPABASE_URL);
-const supabaseKey = cleanEnvVar(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY);
+const supabaseUrl = cleanEnvVar(process.env.SUPABASE_URL) || 'https://placeholder.supabase.co';
+const supabaseKey = cleanEnvVar(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDA0OTYwMDAsImV4cCI6MjAxNjA3MjAwMH0.placeholder';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
