@@ -34,7 +34,7 @@ async function ensureServerRunning() {
     try {
         const { execSync } = require('child_process');
         if (process.platform === 'win32') {
-            execSync('powershell -Command "Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
+            execSync('cmd.exe /c "npx --yes kill-port 3000"', { stdio: 'ignore' });
         } else {
             execSync('fuser -k 3000/tcp || true', { stdio: 'ignore' });
         }
@@ -301,6 +301,7 @@ async function runTestSuite() {
         { name: 'test_reminders.js (Cron de Lembretes BRT)', cmd: 'node tests/test_reminders.js' },
         { name: 'test_name_extraction.js (Sanitização do Nome do Paciente)', cmd: 'node tests/test_name_extraction.js' },
         { name: 'test_component_exclusivity.js (Trava Absoluta Anti-Alucinação de Componentes)', cmd: 'node tests/test_component_exclusivity.js' },
+        { name: 'fsm_chaos_test.js (Validação da Trava de CPF em Agendamento Familiar)', cmd: 'node tests/fsm_chaos_test.js' },
         { name: 'test_tenant_rls_isolation.js (Isolamento Multi-Tenant RLS)', cmd: 'node tests/test_tenant_rls_isolation.js' },
         { name: 'test_hmac_webhook_injection.js (Auditoria HMAC SHA-256)', cmd: 'node tests/test_hmac_webhook_injection.js' },
         { name: 'test_cpf.js (Validação Matemática CPF/LGPD)', cmd: 'node tests/unit/test_cpf.js' },

@@ -54,7 +54,7 @@ function encryptData(text) {
     return `${iv.toString('hex')}:${authTag}:${encrypted}`;
 }
 
-function decryptData(encryptedData) {
+function decryptData(encryptedData, fieldName = 'cpf') {
     if (!encryptedData) return null;
     const parts = encryptedData.split(':');
     if (parts.length !== 3) return encryptedData; // Fallback caso seja CPF antigo plano
@@ -66,7 +66,7 @@ function decryptData(encryptedData) {
         decrypted += decipher.final('utf8');
         return decrypted;
     } catch (err) {
-        logger.warn('DECRYPTION', `Falha ao descriptografar dado com a chave atual. Usando valor bruto/legado como fallback.`);
+        logger.warn('DECRYPTION', `Falha ao descriptografar campo [${fieldName}] com ciphertext [${encryptedData.substring(0, 20)}...]. Erro: ${err.message}. Usando valor bruto/legado como fallback.`);
         return encryptedData;
     }
 }
@@ -186,8 +186,12 @@ const patients = {
             if (error) throw new Error(`patients.findOrCreate (select): ${error.message}`);
 
             if (data) {
-                // Reativa paciente soft-deleted que voltou a mandar mensagem
-                if (data.deleted_at) {
+                // Paciente purgado (LGPD) não pode ser reativado
+                if (data.lgpd_purged_at) {
+                    data = null; // Força inserção de novo cadastro
+                } else {
+                    // Reativa paciente soft-deleted que voltou a mandar mensagem
+                    if (data.deleted_at) {
                     const { error: reactivateErr } = await supabase
                         .from('patients')
                         .update({ deleted_at: null })
@@ -201,6 +205,7 @@ const patients = {
                 }
                 if (data.cpf) data.cpf = decryptData(data.cpf);
                 return data;
+            }
             }
 
             // 2. Se não encontrou, insere novo paciente
@@ -236,6 +241,60 @@ const patients = {
             data = insertRes.data;
             if (data && data.cpf) data.cpf = decryptData(data.cpf);
             return data;
+        });
+    },
+
+    /**
+     * Purga os dados de um paciente (Direito ao Esquecimento LGPD)
+     * e limpa PII de tabelas associadas.
+     */
+    async purgePatient(patientId, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em patients.purgePatient');
+        return withRetry(async () => {
+            // Busca o telefone do paciente para limpar a sessão
+            const { data: patient } = await supabase
+                .from('patients')
+                .select('phone')
+                .eq('id', patientId)
+                .eq('clinic_id', clinicId)
+                .maybeSingle();
+
+            if (patient && patient.phone) {
+                // Deleta a sessão de histórico para remover PII
+                await supabase.from('sessions').delete().eq('phone', patient.phone).eq('clinic_id', clinicId);
+            }
+
+            // 1. Anonimiza o paciente (Ofusca o telefone para liberar a constraint - max 20 chars)
+            const shortRandom = Math.random().toString(36).substring(2, 10).toUpperCase();
+            const { error: patientErr } = await supabase
+                .from('patients')
+                .update({ 
+                    lgpd_purged_at: new Date().toISOString(),
+                    name: '[PURGED_LGPD]',
+                    cpf: `[DEL]-${shortRandom}`,
+                    cpf_hash: null,
+                    phone: `DEL-${shortRandom}`
+                })
+                .eq('id', patientId)
+                .eq('clinic_id', clinicId);
+
+            if (patientErr) throw new Error(`patients.purgePatient (patients): ${patientErr.message}`);
+
+            // 2. Cascata PII: Limpar notas de agendamentos
+            await supabase
+                .from('appointments')
+                .update({ notes: '[PURGED_PII]' })
+                .eq('patient_id', patientId)
+                .eq('clinic_id', clinicId);
+            
+            // 3. Cascata PII: Limpar logs de conversações
+            await supabase
+                .from('conversations')
+                .update({ content: '[PURGED_PII]' })
+                .eq('patient_id', patientId);
+                
+            await auditLog('PURGE_LGPD', 'PATIENT', patientId, clinicId, { status: 'irreversible_purge' });
+            return true;
         });
     },
 
@@ -295,7 +354,7 @@ const patients = {
             const cpfHash = hashForSearch(cleanCpf);
             // Procura tanto pelo Hash (novo formato seguro) quanto pelo texto plano (sanitizado anti-injeção PostgREST)
             const { data, error } = await supabase
-                .from('patients').select('*').is('deleted_at', null)
+                .from('patients').select('*').is('deleted_at', null).is('lgpd_purged_at', null)
                 .eq('clinic_id', clinicId)
                 .or(`cpf_hash.eq.${cpfHash},cpf.eq.${cleanCpf}`)
                 .maybeSingle();
@@ -315,7 +374,7 @@ const patients = {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.findByPhone');
         return withRetry(async () => {
             const { data, error } = await supabase
-                .from('patients').select('*').is('deleted_at', null)
+                .from('patients').select('*').is('deleted_at', null).is('lgpd_purged_at', null)
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
                 .order('created_at', { ascending: false })

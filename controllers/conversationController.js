@@ -1649,9 +1649,13 @@ class ConversationController {
                             }
                         }
                     } else {
-                        // Vinculação inicial (Cadastro Novo)
-                        await db.patients.updateCpf(phone, rawCpf, clinicId);
-                        processedText = `${sanitizedText}\n[SISTEMA: CPF não localizado. Novo cadastro iniciado para o número atual.]`;
+                        // Vinculação inicial (Cadastro Novo do titular)
+                        if (!draft?.is_family_booking) {
+                            await db.patients.updateCpf(phone, rawCpf, clinicId);
+                            processedText = `${sanitizedText}\n[SISTEMA: CPF não localizado. Novo cadastro iniciado para o número atual.]`;
+                        } else {
+                            processedText = `${sanitizedText}\n[SISTEMA: CPF do dependente registrado para a consulta.]`;
+                        }
                     }
                 } catch (err) {
                     if (err.isCpfConflict || err.message.includes('CPF_CONFLICT') || err.message.includes('duplicate key')) {
@@ -1780,7 +1784,12 @@ class ConversationController {
             if (!aiResponse.transferToHuman) {
                 // Verifica se o paciente possui nome válido (não é apenas o número de telefone) e CPF cadastrado/no rascunho
                 const hasPatientName = !!(draft.name || draft.dependentName || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
-                const hasCpf = !!(patient?.cpf || draft?.cpf || draft?.dependentCpf || rawCpf);
+                
+                // Em agendamentos para familiares/dependentes (FAMILY_BOOKING), o CPF do titular no banco NÃO satisfaz a checagem.
+                // É OBRIGATÓRIO coletar e validar o CPF do dependente (ou responsável legal) na sessão atual.
+                const hasCpf = draft.is_family_booking
+                    ? !!(draft.dependentCpf || (draft.cpf && draft.cpf !== patient?.cpf) || (rawCpf && draft.is_family_booking))
+                    : !!(patient?.cpf || draft?.cpf || rawCpf);
 
                 if (draft.type && draft.date && draft.time && hasCpf && hasPatientName) {
                     // Passo 5: Todos os dados coletados (incluindo nome e CPF) -> Confirmação explícita com Botões
@@ -1816,8 +1825,8 @@ class ConversationController {
                 }
 
                 // ── TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS (FIX DEFINITIVO) ──
-                // Se a IA ou a máquina de estados solicitou CPF ou Nome, ou se for pergunta de preço, NUNCA exiba calendário simultaneamente
-                const isAskingCpf = aiResponse.requireCpf || wasCpfRequested || /cpf/i.test(aiResponse.text);
+                // Se a IA ou a máquina de estados solicitou CPF ou Nome (e o dado ainda NÃO foi fornecido), ou se for pergunta de preço, NUNCA exiba calendário simultaneamente
+                const isAskingCpf = (aiResponse.requireCpf || (wasCpfRequested && !rawCpf && !hasCpf)) && !hasCpf;
                 const hasProvidedName = !!(draft.name || draft.dependentName);
                 const isAskingName = (wasNameRequested && !hasProvidedName) || /nome completo/i.test(aiResponse.text);
 

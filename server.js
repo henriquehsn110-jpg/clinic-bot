@@ -147,6 +147,10 @@ app.use((req, res, next) => {
 // Registra as rotas da API do Dashboard com Autenticação e Criptografia
 app.use('/api/dashboard', dashboardRoutes);
 
+// Registra as rotas administrativas dedicadas (Admin JWT + 2FA TOTP + Rate Limit + Audit Log)
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/admin', adminRoutes);
+
 // Rota de Ingestão de Webhooks de Faturamento & Assinaturas SaaS (Stripe / Asaas)
 const billingService = require('./services/billingService');
 app.post(['/api/webhooks/stripe', '/api/webhooks/billing'], async (req, res) => {
@@ -174,11 +178,16 @@ if (process.env.NODE_ENV !== 'production') {
         }
     });
 
-    app.post('/api/simulate/reset', localOnly, async (req, res) => {
-        const { phone } = req.body;
+    app.all('/api/simulate/reset', localOnly, async (req, res) => {
+        const phone = req.body?.phone || req.query?.phone;
         try {
             const db = require('./services/databaseService');
-            await db.sessions.delete(phone);
+            if (phone) {
+                await db.sessions.delete(phone);
+                try {
+                    await db.supabase.from('hand_offs').delete().eq('phone', phone);
+                } catch (hErr) {}
+            }
             res.json({ success: true });
         } catch (e) {
             res.status(500).json({ error: e.message });
