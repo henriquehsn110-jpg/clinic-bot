@@ -23,6 +23,8 @@ router.post('/auth/login', adminRateLimiter, (req, res) => adminController.login
 router.post('/auth/2fa-setup', adminRateLimiter, authenticateAdminJWT, (req, res) => adminController.setup2FA(req, res));
 router.get('/status', adminRateLimiter, authenticateAdminJWT, (req, res) => adminController.getStatus(req, res));
 router.get('/logs', adminRateLimiter, authenticateAdminJWT, (req, res) => adminController.getLogs(req, res));
+router.get('/audit-log', adminRateLimiter, authenticateAdminJWT, (req, res) => adminController.getAuditLogs(req, res));
+router.get('/queue/failed', adminRateLimiter, authenticateAdminJWT, (req, res) => adminController.getFailedQueue(req, res));
 router.post('/restart', adminRateLimiter, authenticateAdminJWT, (req, res) => adminController.restart(req, res));
 router.post('/rollback', adminRateLimiter, authenticateAdminJWT, (req, res) => adminController.rollback(req, res));
 

@@ -1407,7 +1407,11 @@ class ConversationController {
                     } else if (isQuestion) {
                         processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente fez uma pergunta. Responda com clareza e solicite gentilmente o CPF do dependente para continuar o agendamento.]`;
                     } else if (!isBypass) {
-                        const askDependentCpfText = "Perfeito! O agendamento ficará no nome de " + draft.dependentName + ". Agora, por favor, me informe o CPF do dependente (ou do responsável legal):";
+                        const isInitialCpfPrompt = sanitizedText.toLowerCase().includes(draft.dependentName.toLowerCase()) ||
+                                                   (extractCleanName(sanitizedText) && extractCleanName(sanitizedText).toLowerCase() === draft.dependentName.toLowerCase());
+                        const askDependentCpfText = isInitialCpfPrompt
+                            ? "Perfeito! O agendamento ficará no nome de " + draft.dependentName + ". Agora, por favor, me informe o CPF do dependente (ou do responsável legal):"
+                            : "O CPF informado parece inválido. Por favor, me informe um CPF válido com 11 dígitos para o agendamento de " + draft.dependentName + " (ex: 123.456.789-00):";
                         history.push({ role: 'user', parts: [{ text: processedText }] });
                         history.push({ role: 'model', parts: [{ text: `${askDependentCpfText}\n[SISTEMA: CPF solicitado, aguardando CPF]` }] });
                         if (history.length > 20) history = history.slice(-20);
