@@ -616,8 +616,13 @@ class ConversationController {
                 };
             }
 
-            // 2. Atalho para botão "Agendar Consulta"
+            // 2. Atalho para botão "Agendar Consulta" (Agendamento Pessoal)
             if (/^(agendar consulta|agendar|quero agendar|quero agendar consulta|quero agendar uma consulta)$/i.test(sanitizedText.trim())) {
+                draft.is_family_booking = false;
+                draft.dependentName = null;
+                draft.dependentCpf = null;
+                draft.cpf = null;
+                draft.name = null;
                 draft.pending_cancel_selection = false;
                 await db.sessions.setDraft(phone, draft, clinicId);
                 const procText = "Ótimo! Escolha qual procedimento você gostaria de agendar:";
@@ -827,8 +832,11 @@ class ConversationController {
             }
 
             if (sanitizedText.toLowerCase() === 'remarcar/cancelar') {
+                draft.is_family_booking = false;
+                draft.dependentName = null;
+                draft.dependentCpf = null;
                 draft.pending_cancel_selection = false;
-                await db.sessions.setDraft(phone, { pending_cancel_selection: false }, clinicId);
+                await db.sessions.setDraft(phone, draft, clinicId);
 
                 const rcText = "Sem problemas! Você prefere remarcar para uma nova data ou cancelar seu agendamento atual?";
                 const rcButtons = ["Remarcar Consulta", "Cancelar Consulta", "Manter Consulta"];
