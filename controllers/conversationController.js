@@ -117,6 +117,13 @@ function extractAndNormalizeCpf(text) {
     return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`;
 }
 
+function maskCpf(cpf) {
+    if (!cpf) return '';
+    const clean = String(cpf).replace(/\D/g, '');
+    if (clean.length !== 11) return cpf;
+    return `${clean.slice(0, 3)}.***.***-${clean.slice(9, 11)}`;
+}
+
 // Auxiliar para persistir o Handoff Humano no histórico da sessão com a última fala do usuário
 async function persistHumanHandoff(phone, patient, history, userText, extraNote = '', clinicId) {
     const marker = `[SISTEMA: conversa transferida para atendente humano]${extraNote ? ' ' + extraNote : ''}`;
@@ -1346,6 +1353,40 @@ class ConversationController {
 
             // ── GATE ABSOLUTO: agendamento familiar exige nome do dependente ANTES de qualquer avanço ──
             if (draft.is_family_booking && !draft.dependentName) {
+                const isRefusal = /não quero|nao quero|não vou|nao vou|desisti|prefiro não|prefiro nao|deixa pra lá|deixa pra la|mudei de ideia|voltar|menu|não informar|nao informar|não passar|nao passar/i.test(sanitizedText);
+                if (isRefusal || personalKeywords.test(sanitizedText)) {
+                    draft.is_family_booking = false;
+                    draft.dependentName = null;
+                    draft.dependentCpf = null;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+
+                    const cancelFamilyText = "Sem problemas! Cancelei o agendamento para o familiar. Como você gostaria de prosseguir?";
+                    const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+
+                    history.push({ role: 'user', parts: [{ text: processedText }] });
+                    history.push({ role: 'model', parts: [{ text: `${cancelFamilyText}\n[SISTEMA: Agendamento familiar cancelado pelo paciente.]` }] });
+                    if (history.length > 20) history = history.slice(-20);
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendInteractiveButtons(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
+                            return whatsappService.sendTextMessage(phone, cancelFamilyText, phoneId, clinicToken);
+                        });
+                    }
+
+                    return {
+                        text:            cancelFamilyText,
+                        buttons:         escapeButtons,
+                        showCalendar:    false,
+                        showTimeSlots:   false,
+                        showProceduresList: false,
+                        requireCpf:      false,
+                        procedures:      null,
+                        availableSlots:  null,
+                        transferToHuman: false
+                    };
+                }
+
                 const dependentNameMatch = sanitizedText.match(/(?:nome (?:dele|dela|é)|chama(?:-se)?|é o|é a|(?:mãe|pai|filho|filha|espos[oa]|marido|irm[ãa][o]?|av[ôó]|ti[oa]|prim[oa]|namorad[oa]|familiar)[,:]?\s+(?:de\s+nome\s+|chamad[oa]\s+)?)([A-ZÀ-Úa-zà-ú]{2,}(?:\s+[A-ZÀ-Úa-zà-ú]{2,}){0,4})/i);
                 const extractedClean = extractCleanName(sanitizedText);
 
@@ -1371,18 +1412,22 @@ class ConversationController {
                         processedText = `${sanitizedText}\n[SISTEMA INVISÍVEL: O paciente fez uma dúvida/pergunta. Responda à dúvida com clareza e, ao final, solicite gentilmente o nome completo da pessoa que será atendida no agendamento familiar.]`;
                     } else if (!isBypass) {
                         const askDependentNameText = "Entendido! Para prosseguirmos com o agendamento do seu familiar, qual é o nome completo da pessoa que será atendida?";
+                        const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+
                         history.push({ role: 'user', parts: [{ text: processedText }] });
                         history.push({ role: 'model', parts: [{ text: `${askDependentNameText}\n[SISTEMA: Qual é o seu nome completo?]` }] });
                         if (history.length > 20) history = history.slice(-20);
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, askDependentNameText, phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendInteractiveButtons(phone, askDependentNameText, escapeButtons, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, askDependentNameText, phoneId, clinicToken);
+                            });
                         }
 
                         return {
                             text:            askDependentNameText,
-                            buttons:         [],
+                            buttons:         escapeButtons,
                             showCalendar:    false,
                             showTimeSlots:   false,
                             showProceduresList: false,
@@ -1397,8 +1442,75 @@ class ConversationController {
 
             // ── GATE ABSOLUTO 2: agendamento familiar exige CPF do dependente ANTES de qualquer avanço ──
             if (draft.is_family_booking && draft.dependentName && !draft.dependentCpf) {
+                const isRefusal = /não quero|nao quero|não vou|nao vou|desisti|prefiro não|prefiro nao|deixa pra lá|deixa pra la|mudei de ideia|voltar|menu|não informar|nao informar|não passar|nao passar/i.test(sanitizedText);
+                if (isRefusal || personalKeywords.test(sanitizedText)) {
+                    draft.is_family_booking = false;
+                    draft.dependentName = null;
+                    draft.dependentCpf = null;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+
+                    const cancelFamilyText = "Sem problemas! Cancelei o agendamento para o familiar. Como você gostaria de prosseguir?";
+                    const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+
+                    history.push({ role: 'user', parts: [{ text: processedText }] });
+                    history.push({ role: 'model', parts: [{ text: `${cancelFamilyText}\n[SISTEMA: Agendamento familiar cancelado pelo paciente.]` }] });
+                    if (history.length > 20) history = history.slice(-20);
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendInteractiveButtons(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
+                            return whatsappService.sendTextMessage(phone, cancelFamilyText, phoneId, clinicToken);
+                        });
+                    }
+
+                    return {
+                        text:            cancelFamilyText,
+                        buttons:         escapeButtons,
+                        showCalendar:    false,
+                        showTimeSlots:   false,
+                        showProceduresList: false,
+                        requireCpf:      false,
+                        procedures:      null,
+                        availableSlots:  null,
+                        transferToHuman: false
+                    };
+                }
+
                 const earlyCpf = extractAndNormalizeCpf(sanitizedText);
                 if (earlyCpf) {
+                    // REGRA 17: O CPF do titular cadastrado NÃO satisfaz o CPF do dependente!
+                    const cleanEarlyCpf = earlyCpf.replace(/\D/g, '');
+                    const cleanPatientCpf = patient?.cpf ? patient.cpf.replace(/\D/g, '') : null;
+
+                    if (cleanPatientCpf && cleanEarlyCpf === cleanPatientCpf) {
+                        logger.warn('FAMILY_BOOKING_CPF_REJECTED', `CPF do titular informado para o dependente [${phone}]. Solicitação do CPF específico do dependente.`);
+                        const askSpecificCpfText = `Você informou o seu próprio CPF de titular (${maskCpf(earlyCpf)}). Para a consulta de ${draft.dependentName}, por favor me informe o CPF específico do dependente (ou do seu responsável legal):`;
+                        const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+
+                        history.push({ role: 'user', parts: [{ text: processedText }] });
+                        history.push({ role: 'model', parts: [{ text: `${askSpecificCpfText}\n[SISTEMA: CPF do titular rejeitado para dependente, aguardando CPF do dependente]` }] });
+                        if (history.length > 20) history = history.slice(-20);
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendInteractiveButtons(phone, askSpecificCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, askSpecificCpfText, phoneId, clinicToken);
+                            });
+                        }
+
+                        return {
+                            text:            askSpecificCpfText,
+                            buttons:         escapeButtons,
+                            showCalendar:    false,
+                            showTimeSlots:   false,
+                            showProceduresList: false,
+                            requireCpf:      true,
+                            procedures:      null,
+                            availableSlots:  null,
+                            transferToHuman: false
+                        };
+                    }
+
                     draft.dependentCpf = earlyCpf;
                     draft.cpf = earlyCpf;
                     await db.sessions.setDraft(phone, draft, clinicId);
@@ -1430,18 +1542,22 @@ class ConversationController {
                         const askDependentCpfText = isInitialCpfPrompt
                             ? "Perfeito! O agendamento ficará no nome de " + draft.dependentName + ". Agora, por favor, me informe o CPF do dependente (ou do responsável legal):"
                             : "O CPF informado parece inválido. Por favor, me informe um CPF válido com 11 dígitos para o agendamento de " + draft.dependentName + " (ex: 123.456.789-00):";
+                        const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+
                         history.push({ role: 'user', parts: [{ text: processedText }] });
                         history.push({ role: 'model', parts: [{ text: `${askDependentCpfText}\n[SISTEMA: CPF solicitado, aguardando CPF]` }] });
                         if (history.length > 20) history = history.slice(-20);
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, askDependentCpfText, phoneId, clinicToken).catch(() => {});
+                            await whatsappService.sendInteractiveButtons(phone, askDependentCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, askDependentCpfText, phoneId, clinicToken);
+                            });
                         }
 
                         return {
                             text:            askDependentCpfText,
-                            buttons:         [],
+                            buttons:         escapeButtons,
                             showCalendar:    false,
                             showTimeSlots:   false,
                             showProceduresList: false,
@@ -1453,6 +1569,7 @@ class ConversationController {
                     }
                 }
             }
+
 
             // 1. Extração do Procedimento/Tratamento (N5 - Match Exato / Dinâmico da Clínica)
             const customProcedures = clinicSettings?.procedures
@@ -1734,6 +1851,43 @@ class ConversationController {
             }
 
             if (rawCpf) {
+                const cleanRawCpf = rawCpf.replace(/\D/g, '');
+                const cleanPatientCpf = patient?.cpf ? patient.cpf.replace(/\D/g, '') : null;
+
+                // REGRA 17: Se for agendamento familiar e o paciente informou seu próprio CPF de titular
+                if (draft.is_family_booking && cleanPatientCpf && cleanRawCpf === cleanPatientCpf) {
+                    logger.warn('FAMILY_BOOKING_CPF_REJECTED', `CPF do titular informado para o dependente [${phone}]. Solicitação do CPF específico do dependente.`);
+                    draft.dependentCpf = null;
+                    draft.cpf = null;
+                    await db.sessions.setDraft(phone, draft, clinicId);
+
+                    const askSpecificCpfText = `Você informou o seu próprio CPF de titular (${maskCpf(rawCpf)}). Para o agendamento de ${draft.dependentName || 'seu dependente'}, por favor me informe o CPF específico do dependente (ou do seu responsável legal):`;
+                    const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+
+                    history.push({ role: 'user', parts: [{ text: processedText }] });
+                    history.push({ role: 'model', parts: [{ text: `${askSpecificCpfText}\n[SISTEMA: CPF do titular rejeitado para dependente, aguardando CPF do dependente]` }] });
+                    if (history.length > 20) history = history.slice(-20);
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendInteractiveButtons(phone, askSpecificCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                            return whatsappService.sendTextMessage(phone, askSpecificCpfText, phoneId, clinicToken);
+                        });
+                    }
+
+                    return {
+                        text:            askSpecificCpfText,
+                        buttons:         escapeButtons,
+                        showCalendar:    false,
+                        showTimeSlots:   false,
+                        showProceduresList: false,
+                        requireCpf:      true,
+                        procedures:      null,
+                        availableSlots:  null,
+                        transferToHuman: false
+                    };
+                }
+
                 draft.cpf = rawCpf;
                 if (draft.is_family_booking) {
                     draft.dependentCpf = rawCpf;
@@ -1750,7 +1904,7 @@ class ConversationController {
                             // Persiste a marca de Handoff no banco para validação humana segura (LGPD)
                             await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
 
-                            const blockText = "Para a segurança dos seus dados e agendamento de familiares, vou te transferir para um de nossos atendentes confirmar os dados com você.";
+                            const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                             if (!isSimulation) {
                                 await whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken).catch(() => {});
                             }

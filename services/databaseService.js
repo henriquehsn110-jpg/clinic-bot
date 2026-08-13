@@ -321,15 +321,20 @@ const patients = {
     async updateCpf(phone, cpf, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.updateCpf');
         return withRetry(async () => {
-            const encryptedCpf = encryptData(cpf);
-            const cpfHash = hashForSearch(cpf);
+            const cleanCpf = String(cpf || '').replace(/\D/g, '');
+            if (!cleanCpf) throw new Error('CPF inválido fornecido para patients.updateCpf');
+
+            const encryptedCpf = encryptData(cleanCpf);
+            const cpfHash = hashForSearch(cleanCpf);
             const { data, error } = await supabase
                 .from('patients')
                 .update({ cpf: encryptedCpf, cpf_hash: cpfHash })
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
+                .is('deleted_at', null)
                 .select()
-                .single();
+                .limit(1)
+                .maybeSingle();
 
             if (error) {
                 if (error.code === '23505' || error.message.includes('unique constraint') || error.message.includes('duplicate key')) {
@@ -351,9 +356,11 @@ const patients = {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.findByCpf');
         return withRetry(async () => {
             const cleanCpf = String(cpf || '').replace(/\D/g, '');
+            if (!cleanCpf) return null;
+
             const cpfHash = hashForSearch(cleanCpf);
             // Procura tanto pelo Hash (novo formato seguro) quanto pelo texto plano (sanitizado anti-injeção PostgREST)
-            const { data, error } = await supabase
+            let { data, error } = await supabase
                 .from('patients').select('*').is('deleted_at', null).is('lgpd_purged_at', null)
                 .eq('clinic_id', clinicId)
                 .or(`cpf_hash.eq.${cpfHash},cpf.eq.${cleanCpf}`)
@@ -362,6 +369,38 @@ const patients = {
             if (error) {
                 throw new Error(`[DB_ERROR] patients.findByCpf: ${error.message}`);
             }
+
+            // Fallback resiliente para registros legados onde cpf está encriptado e cpf_hash estava null
+            if (!data) {
+                const { data: list } = await supabase
+                    .from('patients')
+                    .select('*')
+                    .is('deleted_at', null)
+                    .is('lgpd_purged_at', null)
+                    .eq('clinic_id', clinicId)
+                    .not('cpf', 'is', null);
+                
+                if (list && list.length > 0) {
+                    for (const p of list) {
+                        if (p.cpf) {
+                            try {
+                                const dec = decryptData(p.cpf);
+                                if (dec && dec.replace(/\D/g, '') === cleanCpf) {
+                                    data = p;
+                                    // Auto-backfill do cpf_hash ausente para performance futura
+                                    if (!p.cpf_hash && cpfHash) {
+                                        await supabase.from('patients').update({ cpf_hash: cpfHash }).eq('id', p.id).catch(() => {});
+                                    }
+                                    break;
+                                }
+                            } catch (e) {
+                                // Ignora erros de decodificação se houver dado corrompido
+                            }
+                        }
+                    }
+                }
+            }
+
             if (data && data.cpf) data.cpf = decryptData(data.cpf);
             return data;
         });
