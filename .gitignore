@@ -4,6 +4,7 @@ node_modules/
 # Environment variables (NUNCA subir para o Git!)
 .env
 .env.local
+.env.staging
 .env.production
 
 # Logs

@@ -1666,9 +1666,13 @@ class ConversationController {
 
             const isProcMatch = PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase()));
             const isGreetingOrQuestion = /^(oi|olá|ola|hey|bom dia|boa tarde|boa noite|tudo bem|não entendi|nao entendi|ajuda|suporte)$/i.test(sanitizedText) || sanitizedText.includes('?');
-            const isBypassKeyword = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText) || isProcMatch || dateMatch || timeMatch || isGreetingOrQuestion;
+            const hasCpfEarly = draft.is_family_booking
+                ? !!(draft.dependentCpf || (draft.cpf && draft.cpf !== patient?.cpf) || (rawCpf && draft.is_family_booking))
+                : !!(patient?.cpf || draft?.cpf || rawCpf);
+            const isNamePhrase = /meu nome|chamo|sou o|sou a|nome é|nome e/i.test(sanitizedText) || !!extractCleanName(sanitizedText);
+            const isBypassKeyword = /atendente|humano|suporte|cancelar|cancelamento/i.test(sanitizedText) || isProcMatch || dateMatch || timeMatch || isGreetingOrQuestion || isNamePhrase;
 
-            if (wasCpfRequested && !rawCpf && !isBypassKeyword) {
+            if (wasCpfRequested && !rawCpf && !hasCpfEarly && !isBypassKeyword) {
                 // Conta quantas solicitações de CPF o modelo enviou no histórico recente
                 let invalidCount = 0;
                 for (let i = history.length - 1; i >= 0; i--) {

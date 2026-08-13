@@ -34,7 +34,7 @@ async function runTest() {
 
         const invalidCipher = '123456:7890ab:abcdef1234';
         const decryptedInvalid = db.decryptData(invalidCipher);
-        assert('DecryptData — Retorna fallback bruto ao invés de null em falha de chave', decryptedInvalid === invalidCipher);
+        assert('DecryptData — Retorna null em falha de chave para evitar vazamento de estado FSM', decryptedInvalid === null);
 
         // 2. Teste de Interceptação de Frustração ("Está errado", "Eu já informei", "Não entendi")
         const { data: clinic } = await db.supabase.from('clinics').select('id').eq('slug', 'clinica-modelo').maybeSingle();
@@ -92,7 +92,8 @@ async function runTest() {
             type: 'Consulta Geral',
             date: '2026-08-20',
             time: '11:00',
-            name: 'Paciente Teste Frustracao'
+            name: 'Paciente Teste Frustracao',
+            cpf: '123.456.789-00'
         }, clinicId);
 
         const resSim = await conversationController.handleIncomingMessage({

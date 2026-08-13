@@ -143,7 +143,20 @@ async function runConversationalMatrixSuite() {
 
         console.log('\n--- 📌 FASE 2: SIMULADOR GENERATIVO FUZZING (MULTI-PERSONAS) ---\n');
 
-        // Simulador de dições consecutivas de um paciente indeciso
+        function generateValidCpf() {
+            const d = Array.from({length: 9}, () => Math.floor(Math.random() * 10));
+            let v1 = d.reduce((sum, num, i) => sum + num * (10 - i), 0) % 11;
+            v1 = v1 < 2 ? 0 : 11 - v1;
+            d.push(v1);
+            let v2 = d.reduce((sum, num, i) => sum + num * (11 - i), 0) % 11;
+            v2 = v2 < 2 ? 0 : 11 - v2;
+            d.push(v2);
+            return `${d.slice(0,3).join('')}.${d.slice(3,6).join('')}.${d.slice(6,9).join('')}-${d.slice(9,11).join('')}`;
+        }
+
+        const freshTestCpf = generateValidCpf();
+
+        // Simulador de edições consecutivas de um paciente indeciso
         const indecisiveFlow = [
             "Quero agendar uma consulta",
             "Limpeza",
@@ -151,9 +164,11 @@ async function runConversationalMatrixSuite() {
             "Mudei de ideia, prefiro dia 2028-12-05",
             "14:00",
             "Meu nome é Paciente Fuzzing Test",
+            freshTestCpf,
             "Confirmar"
         ];
 
+        await db.supabase.from('patients').update({ cpf: null, cpf_hash: null }).eq('id', patient.id);
         await db.sessions.set(testPhone, [], clinicId);
         await db.sessions.setDraft(testPhone, { name: 'Paciente Fuzzing Test' }, clinicId);
         await db.supabase.from('appointments').delete().eq('clinic_id', clinicId).eq('appointment_date', '2028-12-05').eq('appointment_time', '14:00');

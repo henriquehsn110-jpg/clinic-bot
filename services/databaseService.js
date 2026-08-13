@@ -66,8 +66,8 @@ function decryptData(encryptedData, fieldName = 'cpf') {
         decrypted += decipher.final('utf8');
         return decrypted;
     } catch (err) {
-        logger.warn('DECRYPTION', `Falha ao descriptografar campo [${fieldName}] com ciphertext [${encryptedData.substring(0, 20)}...]. Erro: ${err.message}. Usando valor bruto/legado como fallback.`);
-        return encryptedData;
+        logger.warn('DECRYPTION', `Falha ao descriptografar campo [${fieldName}] com ciphertext [${encryptedData.substring(0, 20)}...]. Erro: ${err.message}. Retornando null para evitar bypass de FSM.`);
+        return null;
     }
 }
 
