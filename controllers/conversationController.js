@@ -1420,7 +1420,7 @@ class ConversationController {
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendInteractiveButtons(phone, askDependentNameText, escapeButtons, phoneId, clinicToken).catch(() => {
+                            await whatsappService.sendButtonMessage(phone, askDependentNameText, escapeButtons, phoneId, clinicToken).catch(() => {
                                 return whatsappService.sendTextMessage(phone, askDependentNameText, phoneId, clinicToken);
                             });
                         }
@@ -1458,7 +1458,7 @@ class ConversationController {
                     await db.sessions.set(phone, history, clinicId);
 
                     if (!isSimulation) {
-                        await whatsappService.sendInteractiveButtons(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
+                        await whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
                             return whatsappService.sendTextMessage(phone, cancelFamilyText, phoneId, clinicToken);
                         });
                     }
@@ -1493,7 +1493,7 @@ class ConversationController {
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendInteractiveButtons(phone, askSpecificCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                            await whatsappService.sendButtonMessage(phone, askSpecificCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
                                 return whatsappService.sendTextMessage(phone, askSpecificCpfText, phoneId, clinicToken);
                             });
                         }
@@ -1550,7 +1550,7 @@ class ConversationController {
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendInteractiveButtons(phone, askDependentCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                            await whatsappService.sendButtonMessage(phone, askDependentCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
                                 return whatsappService.sendTextMessage(phone, askDependentCpfText, phoneId, clinicToken);
                             });
                         }
@@ -1870,7 +1870,7 @@ class ConversationController {
                     await db.sessions.set(phone, history, clinicId);
 
                     if (!isSimulation) {
-                        await whatsappService.sendInteractiveButtons(phone, askSpecificCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                        await whatsappService.sendButtonMessage(phone, askSpecificCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
                             return whatsappService.sendTextMessage(phone, askSpecificCpfText, phoneId, clinicToken);
                         });
                     }

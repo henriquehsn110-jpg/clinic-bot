@@ -110,6 +110,10 @@ class WhatsAppService {
         }
     }
 
+    async sendInteractiveButtons(to, bodyText, buttons, phoneId, token) {
+        return this.sendButtonMessage(to, bodyText, buttons, phoneId, token);
+    }
+
     async sendListMessage(to, bodyText, buttonLabel, sections, headerText = "Clínica Modelo", phoneId, token) {
         logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Lista Interativa): "${bodyText}" | Botão: "${buttonLabel}"`);
         const { url, headers } = this._buildRequest(phoneId, token);
