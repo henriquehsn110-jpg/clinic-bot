@@ -376,8 +376,8 @@ class ConversationController {
             // Impede injeção de prompt que tenta forçar comandos do sistema via colchetes
             const sanitizedText = text.replace(/\[\s*SISTEMA\s*:.*?\]/gi, '').trim();
 
-            const familyKeywords = /\b(meu pai|minha mãe|meu filho|minha filha|meu marido|minha esposa|meu avô|minha avó|para o meu|para a minha|é para (ele|ela|meu|minha)|pro meu|pra minha)\b/i;
-            const personalKeywords = /\b(pra mim|para mim|meu agendamento|pra mim mesmo|para mim mesmo|agendar pra mim|agendar para mim|pra mim agora|para mim agora)\b/i;
+            const familyKeywords = /(agendar\s+p\/\s+outro|agendar\s+para\s+outro|agendar\s+p\/\s+terceiro|agendar\s+para\s+terceiro|outro\s+paciente|outra\s+pessoa|familiar|dependente|meu\s+pai|minha\s+mãe|minha\s+mae|meu\s+filho|minha\s+filha|meu\s+marido|minha\s+esposa|meu\s+avô|minha\s+avó|para\s+o\s+meu|para\s+a\s+minha|pro\s+meu|pra\s+minha)/i;
+            const personalKeywords = /(é|e)?\s*(pra|para)\s+mim(\s+mesmo|\s+mesma)?|meu\s+agendamento|agendar\s+(pra|para)\s+mim|sou\s+eu|é\s+meu|e\s+meu|mim\s+mesmo|mim\s+mesma/i;
 
             let history = await db.sessions.get(phone, clinicId);
 
@@ -474,10 +474,10 @@ class ConversationController {
 
             // 0a. Guardião Anti-Looping e Detector de Frustração (Camada 3 de Contingência - ANTES da Mensagem de Boas-Vindas)
             const frustrationRegex = /\b(está errado|esta errado|tá errado|ta errado|tá tudo errado|está tudo errado|está incorreto|esta incorreto|já informei|ja informei|já disse|ja disse|já mandei|ja mandei|já passei|ja passei|já escrevi|ja escrevi|você não entendeu|voce nao entendeu|não foi isso|nao foi isso|não é isso|nao e isso|não é o que|nao e o que|não foi o que|nao foi o que|não era o que|não pedi|nao pedi|de novo|está repetindo|esta repetindo|travou|preso|loop|looping|não funciona|nao funciona|resposta errada)\b/i;
-            const isExplicitAction = /^(agendar consulta|agendar|remarcar\/cancelar|remarcar|cancelar|outras dúvidas|outras duvidas|sim|não|nao|confirmar|tanto faz|doc_any|selecionei a data|selecionei o horário|bom dia|boa tarde|boa noite|olá|ola|oi)$/i.test(sanitizedText.trim()) || PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /quais\s+consultas|consultas?\s+agendada|minhas?\s+consulta/i.test(sanitizedText);
+            const isExplicitAction = /^(agendar consulta|agendar|remarcar\/cancelar|remarcar|cancelar|outras dúvidas|outras duvidas|sim|não|nao|confirmar|tanto faz|doc_any|selecionei a data|selecionei o horário|bom dia|boa tarde|boa noite|olá|ola|oi|agendar p\/ outro|agendar para outro|é para mim mesmo|é pra mim mesmo|é para mim|é pra mim|para mim|pra mim)$/i.test(sanitizedText.trim()) || PROCEDURES_LIST.some(p => sanitizedText.toLowerCase().includes(p.toLowerCase())) || /quais\s+consultas|consultas?\s+agendada|minhas?\s+consulta/i.test(sanitizedText) || familyKeywords.test(sanitizedText) || personalKeywords.test(sanitizedText);
 
             const isFrustrated = frustrationRegex.test(sanitizedText);
-            const isStagnated = !isExplicitAction && history.length >= 12 && (history.length % 4 === 0) && (!draft || (!draft.type && !draft.date));
+            const isStagnated = !isExplicitAction && history.length >= 12 && (history.length % 4 === 0) && (!draft || (!draft.type && !draft.date && !draft.is_family_booking && !draft.step));
 
             if (isFrustrated || isStagnated) {
                 logger.warn('FRUSTRATION_GUARD', `Detector de Frustração/Stagnation ativado para [${phone}]. Motivo: ${isFrustrated ? 'Frustração do usuário' : 'Sessão estagnada (>8 msgs)'}. Transferindo imediatamente para transbordo humano.`);
@@ -1360,6 +1360,38 @@ class ConversationController {
                     draft.dependentCpf = null;
                     await db.sessions.setDraft(phone, draft, clinicId);
 
+                    // Se já possui um agendamento pré-configurado no rascunho, retoma a confirmação do titular
+                    if (draft.type && draft.date && draft.time) {
+                        const doctorName = draft.doctor_name || 'médico responsável';
+                        const dateFmt = draft.date.split('-').reverse().join('/');
+                        const currentPatientName = patient?.name || 'você';
+                        const resumeText = `Perfeito! Voltamos ao seu agendamento.\n\nConfirmando: consulta de ${draft.type} com ${doctorName} no dia ${dateFmt} às ${draft.time}, para ${currentPatientName}. Está correto?`;
+                        const resumeButtons = ["Confirmar", "Agendar p/ Outro", "Alterar"];
+
+                        history.push({ role: 'user', parts: [{ text: processedText }] });
+                        history.push({ role: 'model', parts: [{ text: resumeText }] });
+                        if (history.length > 20) history = history.slice(-20);
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendButtonMessage(phone, resumeText, resumeButtons, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, resumeText, phoneId, clinicToken);
+                            });
+                        }
+
+                        return {
+                            text: resumeText,
+                            buttons: resumeButtons,
+                            showCalendar: false,
+                            showTimeSlots: false,
+                            showProceduresList: false,
+                            requireCpf: false,
+                            procedures: null,
+                            availableSlots: null,
+                            transferToHuman: false
+                        };
+                    }
+
                     const cancelFamilyText = "Sem problemas! Cancelei o agendamento para o familiar. Como você gostaria de prosseguir?";
                     const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
 
@@ -1369,7 +1401,7 @@ class ConversationController {
                     await db.sessions.set(phone, history, clinicId);
 
                     if (!isSimulation) {
-                        await whatsappService.sendInteractiveButtons(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
+                        await whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
                             return whatsappService.sendTextMessage(phone, cancelFamilyText, phoneId, clinicToken);
                         });
                     }
@@ -1897,7 +1929,7 @@ class ConversationController {
                 try {
                     const foundPatient = await db.patients.findByCpf(rawCpf, clinicId);
 
-                    if (foundPatient) {
+                    if (foundPatient && !draft.is_family_booking) {
                         if (foundPatient.phone !== phone) {
                             logger.warn('SECURITY', `Tentativa de agendamento de terceiros/familiar para CPF ${rawCpf} por telefone [${phone}]. Transferindo para validação humana.`);
                             
