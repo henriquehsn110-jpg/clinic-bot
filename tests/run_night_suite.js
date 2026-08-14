@@ -51,6 +51,7 @@ async function runNightlySuite() {
         { name: 'Pergunta de Preço (Bug 1)', script: 'tests/test_price_question_no_calendar.js' },
         { name: 'Agendamento Familiar / Dependente (Bug 2)', script: 'tests/test_family_booking_name_collection.js' },
         { name: 'Recusa Familiar & Validação de CPF (Bugs Produção)', script: 'tests/test_family_booking_refusal_and_cpf_validation.js' },
+        { name: 'Gate FSM draft.type NULL (Prevenção Avanço/Silêncio)', script: 'tests/test_draft_type_null_gate.js' },
         { name: 'Matriz Determinística & Fuzzing Multi-Personas', script: 'tests/run_conversation_matrix_fuzzing.js' },
         { name: 'Isolamento Multi-Tenant & RLS Supabase', script: 'tests/test_tenant_rls_isolation.js' },
         { name: 'Segurança & Validação Webhook HMAC SHA-256', script: 'tests/test_hmac_webhook_injection.js' }

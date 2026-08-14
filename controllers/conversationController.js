@@ -1290,6 +1290,7 @@ class ConversationController {
             let wasCpfRequested = false;
             let wasCalendarShown = false;
             let wasTimeSlotsShown = false;
+            let wasProceduresListShown = false;
             let previousOffset = 0;
             for (let i = history.length - 1; i >= 0; i--) {
                 if (history[i].role === 'model') {
@@ -1304,6 +1305,8 @@ class ConversationController {
                         }
                     } else if (modelText.includes('[SISTEMA: horários exibidos, aguardando escolha]')) {
                         wasTimeSlotsShown = true;
+                    } else if (modelText.includes('[SISTEMA: procedimentos exibidos, aguardando escolha]')) {
+                        wasProceduresListShown = true;
                     }
                     break;
                 }
@@ -1796,13 +1799,18 @@ class ConversationController {
             const dateMatch = dateNorm.match(DATE_SELECTION_REGEX) || dateNorm.match(/\b(\d{4}-\d{2}-\d{2})\b/);
             if (dateMatch) {
                 const selectedDate = dateMatch[1];
-                const slots = await calendarService.getAvailableSlots(selectedDate, clinicId, draft.doctor_id, draft.type);
-                if (slots.length === 0) {
-                    processedText = `${processedText}\n[SISTEMA: Nenhum horário disponível para ${selectedDate}. Informe ao paciente que o dia está cheio e solicite outra data.]`;
+                if (!draft.type) {
+                    logger.warn('FSM_GATE', `[${phone}] Data [${selectedDate}] recebida sem procedimento no rascunho (draft.type: null). Forçando escolha do procedimento.`);
+                    processedText = `${processedText}\n[SISTEMA: O paciente enviou uma data (${selectedDate}), porém ainda não selecionou o procedimento. Exija cordialmente que escolha primeiro o procedimento no menu.]`;
                 } else {
-                    // Salva a data selecionada no rascunho
-                    draft.date = selectedDate;
-                    await db.sessions.setDraft(phone, draft, clinicId);
+                    const slots = await calendarService.getAvailableSlots(selectedDate, clinicId, draft.doctor_id, draft.type);
+                    if (slots.length === 0) {
+                        processedText = `${processedText}\n[SISTEMA: Nenhum horário disponível para ${selectedDate}. Informe ao paciente que o dia está cheio e solicite outra data.]`;
+                    } else {
+                        // Salva a data selecionada no rascunho
+                        draft.date = selectedDate;
+                        await db.sessions.setDraft(phone, draft, clinicId);
+                    }
                 }
             }
 
@@ -2130,12 +2138,23 @@ class ConversationController {
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
-                } else if (!skipStateAdvanceForQuestion && (draft.type || isProcSelection || processedText.includes('Outras datas...')) && !draft.date) {
+                } else if (!skipStateAdvanceForQuestion && draft.type && !draft.date) {
                     // Passo 2: Procedimento escolhido -> Exibe calendário de datas
                     aiResponse.showCalendar = true;
                     aiResponse.showProceduresList = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showDoctorList = false;
+                } else if (!draft.type && !isInformationalPriceQuestion && (dateMatch || timeMatch || isProcSelection || processedText.includes('Selecionei') || wasProceduresListShown || /agendar/i.test(sanitizedText))) {
+                    // GATE DE SEGURANÇA ABSOLUTO (FIX DRAFT.TYPE NULL):
+                    // Se o procedimento não foi selecionado no rascunho, É ESTRITAMENTE PROIBIDO avançar para calendário/horários.
+                    // Força a exibição da lista de procedimentos para que o usuário faça a seleção interativa.
+                    logger.warn('FSM_GATE', `[${phone}] Tentativa de avançar fluxo de agendamento sem procedimento (draft.type: null). Re-solicitando procedimento.`);
+                    aiResponse.showProceduresList = true;
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showDoctorList = false;
+                    aiResponse.requireCpf = false;
+                    aiResponse.text = "Para prosseguirmos com o seu agendamento, por favor escolha um dos procedimentos disponíveis abaixo:";
                 }
 
                 // ── TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS (FIX DEFINITIVO) ──
@@ -2158,6 +2177,15 @@ class ConversationController {
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.showDoctorList = false;
+                } else if (aiResponse.showProceduresList || (!draft.type && !isInformationalPriceQuestion && (dateMatch || timeMatch || processedText.includes('Selecionei')))) {
+                    aiResponse.showProceduresList = true;
+                    aiResponse.showCalendar = false;
+                    aiResponse.showTimeSlots = false;
+                    aiResponse.showDoctorList = false;
+                    aiResponse.requireCpf = false;
+                    if (!aiResponse.text || aiResponse.text.includes('escolha a melhor data')) {
+                        aiResponse.text = "Para prosseguirmos com o seu agendamento, por favor escolha um dos procedimentos disponíveis abaixo:";
+                    }
                 } else if (aiResponse.showCalendar) {
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
