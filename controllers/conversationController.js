@@ -38,6 +38,101 @@ function formatDoctorNameForAppointment(appt) {
     if (raw.includes('/')) {
         raw = raw.split('/')[0].trim();
     }
+    return raw;
+}
+
+/**
+ * Normaliza um texto para comparação (minúsculas, sem acentos, sem pontuação).
+ */
+function normalizeTextForMatch(str) {
+    if (!str) return '';
+    return str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim();
+}
+
+/**
+ * Tenta encontrar correspondências entre o texto livre do usuário e a lista de procedimentos ativos da clínica.
+ * Utiliza match determinístico por tokenização e substrings para evitar falsos positivos de distância de edição (Levenshtein).
+ * Retorna: { match: string|null, ambiguousMatches: string[] }
+ */
+function matchProcedureFromText(userText, proceduresList) {
+    if (!userText || !proceduresList || proceduresList.length === 0) {
+        return { match: null, ambiguousMatches: [] };
+    }
+
+    const normUser = normalizeTextForMatch(userText);
+    if (!normUser) return { match: null, ambiguousMatches: [] };
+
+    // Palavras genéricas e numéricas de sistema/saudação desconsideradas como gatilho isolado
+    const stopWords = new Set([
+        'eu', 'sou', 'o', 'a', 'os', 'as', 'e', 'ja', 'escolhi', 'procedimento',
+        'tratamento', 'consulta', 'quero', 'fazer', 'gostaria', 'de', 'um', 'uma',
+        'para', 'com', 'no', 'na', 'nos', 'nas', 'por', 'favor', 'marcar', 'agendar',
+        'na', 'verdade', 'prefiro'
+    ]);
+
+    // Extrai palavras chave do usuário (filtrando stopwords e termos curtos)
+    const userWords = normUser.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+    if (userWords.length === 0) {
+        return { match: null, ambiguousMatches: [] };
+    }
+
+    // Filtra procedimentos que coincidem com as palavras/substrings do usuário
+    const matchedItems = proceduresList.filter(p => {
+        const normP = normalizeTextForMatch(p);
+
+        // Se o nome exato do procedimento normalizado é igual à frase do usuário
+        if (normP === normUser) return true;
+
+        // Se o nome do procedimento (normalizado) está contido na frase do usuário
+        if (normUser.includes(normP)) return true;
+
+        // Se o procedimento contém alguma das palavras chave fornecidas pelo usuário
+        const procWords = normP.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+        const hasMatchingWord = procWords.some(pw => userWords.some(uw => uw === pw || (uw.length > 4 && pw.includes(uw)) || (pw.length > 4 && uw.includes(pw))));
+
+        return hasMatchingWord;
+    });
+
+    if (matchedItems.length === 1) {
+        return { match: matchedItems[0], ambiguousMatches: matchedItems };
+    } else if (matchedItems.length > 1) {
+        // Se há opções como "Limpeza Simples" e "Limpeza Profunda", força ambiguidade (match: null)
+        const isTrueAmbiguity = matchedItems.length >= 2 && matchedItems.some(p => /simples|profunda|caseiro|laser|fixo|movel|estetico/i.test(p));
+
+        if (isTrueAmbiguity) {
+            const cleanAmbiguousList = matchedItems.filter(p => p !== 'Limpeza' && p !== 'Clareamento');
+            return { match: null, ambiguousMatches: cleanAmbiguousList.length > 0 ? cleanAmbiguousList : matchedItems };
+        }
+
+        // Se 1 dos itens for uma correspondência EXATA das palavras de procedimento do usuário (ex: "Implante" vs "Implante Dental")
+        const exactTokenMatch = matchedItems.find(p => {
+            const normP = normalizeTextForMatch(p);
+            return normP === userWords.join(' ') || normP === normUser;
+        });
+        if (exactTokenMatch) {
+            return { match: exactTokenMatch, ambiguousMatches: [exactTokenMatch] };
+        }
+
+        return { match: matchedItems[0], ambiguousMatches: matchedItems };
+    }
+
+    return { match: null, ambiguousMatches: [] };
+}
+
+function formatDoctorNameForAppointment(appt) {
+    let raw = appt.doctors?.name || appt.doctor_name;
+    if (!raw) {
+        const proc = PROCEDURES_RICH.find(p => p.title.toLowerCase() === (appt.type || '').toLowerCase());
+        raw = proc ? proc.doctor : 'Dr. Carlos Eduardo';
+    }
+    if (raw.includes('/')) {
+        raw = raw.split('/')[0].trim();
+    }
     if (/^Dr\(?a?\)?\./i.test(raw)) return raw;
     if (raw === 'Profissional da Clínica' || raw === 'Equipe Clínica Modelo') return raw;
     return `Dr(a). ${raw}`;
@@ -346,6 +441,7 @@ class ConversationController {
         let isSimulation = typeof phoneOrObj === 'object' ? (phoneOrObj.isSimulation ?? false) : isSimulationParam;
         let clinicId = typeof phoneOrObj === 'object' ? phoneOrObj.clinicId : clinicIdParam;
         let phoneId = typeof phoneOrObj === 'object' ? (phoneOrObj.phoneNumberId || phoneOrObj.phoneId) : phoneIdParam;
+        let passedClinicSettings = typeof phoneOrObj === 'object' ? phoneOrObj.clinicSettings : null;
 
         if (!clinicId) {
             const defaultClinic = await db.clinics.findBySlug('clinica-modelo') || (await db.clinics.getAll())[0];
@@ -362,7 +458,8 @@ class ConversationController {
             cData = res?.data || null;
             clinicToken = cData?.whatsapp_token || null;
             if (cData?.whatsapp_list_title) clinicListTitle = cData.whatsapp_list_title;
-            clinicSettings = db.parseClinicSettings(cData);
+            const dbSettings = db.parseClinicSettings(cData);
+            clinicSettings = passedClinicSettings ? { ...dbSettings, ...passedClinicSettings } : dbSettings;
         } catch (e) { console.error('ERR_LOADING_CLINIC:', e); }
 
         const personaName = clinicSettings.personaName || 'Ana';
@@ -589,13 +686,19 @@ class ConversationController {
 
             // 0d. Atualização automática de rascunho se um procedimento for mencionado explicitamente
             const isInformationalPriceQuestion = /\b(quanto custa|qual (o|é) o preço|qual (o|é) o valor|quanto (é|sai|fica)|preço de|valor de|quanto vale)\b/i.test(sanitizedText);
-            const explicitProcMatch = !isInformationalPriceQuestion && PROCEDURES_LIST.find(p => {
-                const pLow = p.toLowerCase();
-                const sLow = sanitizedText.toLowerCase();
-                return sLow.includes(pLow) || pLow.includes(sLow) || (sLow.includes('clareamento') && pLow.includes('clareamento'));
-            });
+            const customProceduresEarly = clinicSettings?.procedures
+                ? clinicSettings.procedures.split(',').map(p => p.trim()).filter(Boolean)
+                : [];
+            const activeProceduresEarly = [...new Set([...PROCEDURES_LIST, ...customProceduresEarly])];
+            const earlyMatchResult = !isInformationalPriceQuestion ? matchProcedureFromText(sanitizedText, activeProceduresEarly) : { match: null, ambiguousMatches: [] };
+            const explicitProcMatch = earlyMatchResult.match;
             if (explicitProcMatch && draft.type !== explicitProcMatch) {
                 draft.type = explicitProcMatch;
+                draft.ambiguous_procedures = null;
+                await db.sessions.setDraft(phone, draft, clinicId);
+            } else if (earlyMatchResult.ambiguousMatches && earlyMatchResult.ambiguousMatches.length > 1) {
+                draft.type = null;
+                draft.ambiguous_procedures = earlyMatchResult.ambiguousMatches;
                 await db.sessions.setDraft(phone, draft, clinicId);
             }
 
@@ -1612,9 +1715,20 @@ class ConversationController {
                 : [];
             const activeProceduresList = [...new Set([...PROCEDURES_LIST, ...customProcedures])];
 
-            const selectedProc = !isInformationalPriceQuestion && activeProceduresList.find(p => sanitizedText.toLowerCase() === p.toLowerCase() || (p.length > 3 && sanitizedText.toLowerCase().includes(p.toLowerCase())));
+            let selectedProc = null;
+            let ambiguousProcList = [];
+            if (!isInformationalPriceQuestion) {
+                const matchResult = matchProcedureFromText(sanitizedText, activeProceduresList);
+                if (matchResult.match) {
+                    selectedProc = matchResult.match;
+                } else if (matchResult.ambiguousMatches && matchResult.ambiguousMatches.length > 1) {
+                    ambiguousProcList = matchResult.ambiguousMatches;
+                }
+            }
+
             if (selectedProc) {
                 draft.type = selectedProc;
+                draft.ambiguous_procedures = null;
                 
                 let clinicDoctors = [];
                 try {
@@ -1641,6 +1755,10 @@ class ConversationController {
                     draft.doctor_id = null;
                 }
                 
+                await db.sessions.setDraft(phone, draft, clinicId);
+            } else if (ambiguousProcList.length > 1) {
+                draft.type = null;
+                draft.ambiguous_procedures = ambiguousProcList;
                 await db.sessions.setDraft(phone, draft, clinicId);
             }
 
@@ -1770,9 +1888,14 @@ class ConversationController {
             }
 
             // ── Interceptação determinística de Procedimento e Nome no texto ──────────
-            const matchedProcedureObj = !isInformationalPriceQuestion && PROCEDURES_RICH.find(p => sanitizedText.toLowerCase().includes(p.title.toLowerCase()));
-            if (matchedProcedureObj && !draft.type) {
-                draft.type = matchedProcedureObj.title;
+            const lateMatchResult = !isInformationalPriceQuestion ? matchProcedureFromText(sanitizedText, activeProceduresList) : { match: null, ambiguousMatches: [] };
+            if (lateMatchResult.match && !draft.type) {
+                draft.type = lateMatchResult.match;
+                draft.ambiguous_procedures = null;
+                await db.sessions.setDraft(phone, draft, clinicId);
+            } else if (lateMatchResult.ambiguousMatches && lateMatchResult.ambiguousMatches.length > 1 && !draft.type) {
+                draft.type = null;
+                draft.ambiguous_procedures = lateMatchResult.ambiguousMatches;
                 await db.sessions.setDraft(phone, draft, clinicId);
             }
 
@@ -2154,7 +2277,11 @@ class ConversationController {
                     aiResponse.showTimeSlots = false;
                     aiResponse.showDoctorList = false;
                     aiResponse.requireCpf = false;
-                    aiResponse.text = "Para prosseguirmos com o seu agendamento, por favor escolha um dos procedimentos disponíveis abaixo:";
+                    if (draft.ambiguous_procedures && draft.ambiguous_procedures.length > 1) {
+                        aiResponse.text = "Encontrei mais de uma opção correspondente ao seu pedido. Por favor, escolha qual delas você deseja:";
+                    } else {
+                        aiResponse.text = "Para prosseguirmos com o seu agendamento, por favor escolha um dos procedimentos disponíveis abaixo:";
+                    }
                 }
 
                 // ── TRAVA ABSOLUTA ANTI-ALUCINAÇÃO DE COMPONENTES VISUAIS (FIX DEFINITIVO) ──
@@ -2183,7 +2310,9 @@ class ConversationController {
                     aiResponse.showTimeSlots = false;
                     aiResponse.showDoctorList = false;
                     aiResponse.requireCpf = false;
-                    if (!aiResponse.text || aiResponse.text.includes('escolha a melhor data')) {
+                    if (draft.ambiguous_procedures && draft.ambiguous_procedures.length > 1) {
+                        aiResponse.text = "Encontrei mais de uma opção correspondente ao seu pedido. Por favor, escolha qual delas você deseja:";
+                    } else if (!aiResponse.text || aiResponse.text.includes('escolha a melhor data')) {
                         aiResponse.text = "Para prosseguirmos com o seu agendamento, por favor escolha um dos procedimentos disponíveis abaixo:";
                     }
                 } else if (aiResponse.showCalendar) {
@@ -2200,7 +2329,6 @@ class ConversationController {
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
-                    aiResponse.requireCpf = false;
                     aiResponse.text = "Perfeito! Selecione o profissional de sua preferência para o atendimento:";
                 }
             }
@@ -2417,8 +2545,10 @@ class ConversationController {
             await db.sessions.set(phone, history, clinicId);
             await db.conversations.log(patient.id, 'assistant', responseText);
 
-            // Definição da lista real de procedimentos centralizada no Backend
-            const procedures = aiResponse.showProceduresList ? PROCEDURES_LIST : null;
+            // Definição da lista real de procedimentos centralizada no Backend (com suporte a ambiguidade)
+            const procedures = aiResponse.showProceduresList
+                ? ((draft.ambiguous_procedures && draft.ambiguous_procedures.length > 1) ? draft.ambiguous_procedures : PROCEDURES_LIST)
+                : null;
 
             return {
                 text:            responseText,
