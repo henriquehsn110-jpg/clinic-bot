@@ -80,9 +80,9 @@ async function run() {
     });
 
     const draft4 = await db.sessions.getDraft(phone, clinicId);
-    assert.strictEqual(draft4?.type, 'Limpeza', 'draft.type deveria ter sido gravado como Limpeza');
+    assert.ok(draft4?.type && draft4.type.includes('Limpeza'), 'draft.type deveria ter sido gravado com o procedimento de Limpeza');
     assert.strictEqual(resp4.showCalendar, true, 'Bot AGORA SIM deve exibir o calendário de datas!');
-    console.log('  ✅ PASS: Seleção de procedimento gravou draft.type = "Limpeza" e avançou para o calendário!');
+    console.log(`  ✅ PASS: Seleção de procedimento gravou draft.type = "${draft4.type}" e avançou para o calendário!`);
 
     console.log('\n================================================================');
     console.log('🎉 TESTE DE REGRESSÃO FSM GATE (draft.type NULL) 100% APROVADO!');

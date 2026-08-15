@@ -81,12 +81,14 @@ function matchProcedureFromText(userText, proceduresList) {
         return { match: null, ambiguousMatches: [] };
     }
 
+    const normUserClean = userWords.join(' ');
+
     // Filtra procedimentos que coincidem com as palavras/substrings do usuário
     const matchedItems = proceduresList.filter(p => {
         const normP = normalizeTextForMatch(p);
 
-        // Se o nome exato do procedimento normalizado é igual à frase do usuário
-        if (normP === normUser) return true;
+        // Se o nome exato do procedimento normalizado é igual à frase ou termos limpos do usuário
+        if (normP === normUser || normP === normUserClean) return true;
 
         // Se o nome do procedimento (normalizado) está contido na frase do usuário
         if (normUser.includes(normP)) return true;
@@ -98,30 +100,40 @@ function matchProcedureFromText(userText, proceduresList) {
         return hasMatchingWord;
     });
 
+    if (matchedItems.length === 0) {
+        return { match: null, ambiguousMatches: [] };
+    }
+
     if (matchedItems.length === 1) {
-        return { match: matchedItems[0], ambiguousMatches: matchedItems };
-    } else if (matchedItems.length > 1) {
-        // Se há opções como "Limpeza Simples" e "Limpeza Profunda", força ambiguidade (match: null)
-        const isTrueAmbiguity = matchedItems.length >= 2 && matchedItems.some(p => /simples|profunda|caseiro|laser|fixo|movel|estetico/i.test(p));
-
-        if (isTrueAmbiguity) {
-            const cleanAmbiguousList = matchedItems.filter(p => p !== 'Limpeza' && p !== 'Clareamento');
-            return { match: null, ambiguousMatches: cleanAmbiguousList.length > 0 ? cleanAmbiguousList : matchedItems };
-        }
-
-        // Se 1 dos itens for uma correspondência EXATA das palavras de procedimento do usuário (ex: "Implante" vs "Implante Dental")
-        const exactTokenMatch = matchedItems.find(p => {
-            const normP = normalizeTextForMatch(p);
-            return normP === userWords.join(' ') || normP === normUser;
-        });
-        if (exactTokenMatch) {
-            return { match: exactTokenMatch, ambiguousMatches: [exactTokenMatch] };
-        }
-
         return { match: matchedItems[0], ambiguousMatches: matchedItems };
     }
 
-    return { match: null, ambiguousMatches: [] };
+    // REGRA DE SEGURANÇA DETERMINÍSTICA (SEM REGEX HARDCODED):
+    // 1. Verifica se o usuário digitou exatamente o nome completo de 1 dos itens (ex: "limpeza simples" quando há "Limpeza" e "Limpeza Simples")
+    const exactFullMatches = matchedItems.filter(p => {
+        const normP = normalizeTextForMatch(p);
+        return normP === normUserClean || normP === normUser;
+    });
+
+    if (exactFullMatches.length === 1) {
+        // Se o match exato é um termo raiz/genérico (ex: "Limpeza") e existem 2 ou mais especializações (ex: "Limpeza Simples" e "Limpeza Profunda"),
+        // o termo raiz é ambíguo em relação às especializações!
+        const genericTerm = normalizeTextForMatch(exactFullMatches[0]);
+        const specializations = matchedItems.filter(p => {
+            const normP = normalizeTextForMatch(p);
+            return normP !== genericTerm && normP.includes(genericTerm);
+        });
+
+        if (specializations.length >= 2) {
+            return { match: null, ambiguousMatches: specializations };
+        }
+
+        return { match: exactFullMatches[0], ambiguousMatches: [exactFullMatches[0]] };
+    }
+
+    // 2. Se houver 2 ou mais correspondências e NENHUMA for match exato único (ex: "limpeza" batendo com "Limpeza Simples" e "Limpeza Profunda", ou "odontopediatria" batendo com "Odontopediatria Preventiva" e "Odontopediatria Curativa"):
+    // Retorna NULO para o match e a lista completa de procedimentos ambíguos. NUNCA escolhe sozinho!
+    return { match: null, ambiguousMatches: matchedItems };
 }
 
 function formatDoctorNameForAppointment(appt) {

@@ -146,6 +146,42 @@ async function run() {
     assert.strictEqual(resp4.showProceduresList, true, 'FALHA: Bot deve re-solicitar a lista de procedimentos!');
     console.log('  ✅ PASS: Caso do log do Henrique validado 100%! Zero falsos positivos, gate mantido!');
 
+    // --------------------------------------------------------------------------
+    // TESTE 5: Ambiguidade Genérica (sem regex hardcoded - ex: "odontopediatria")
+    // --------------------------------------------------------------------------
+    console.log('\n[Teste 5/5] Ambiguidade Genérica: Usuário digita "odontopediatria" (fora do vocabulário padronizado)');
+    const phone5 = '5511999995555';
+    await db.sessions.set(phone5, [], clinicId).catch(() => {});
+    await db.sessions.setDraft(phone5, null, clinicId).catch(() => {});
+
+    const clinicSettingsCustom = { procedures: 'Odontopediatria Preventiva, Odontopediatria Curativa, Implante' };
+
+    await conversationController.handleIncomingMessage({
+        phone: phone5,
+        clinicId: clinicId,
+        messageText: 'Quero agendar uma consulta',
+        phoneNumberId: '5511979992719',
+        isSimulation: true,
+        clinicSettings: clinicSettingsCustom
+    });
+
+    const resp5 = await conversationController.handleIncomingMessage({
+        phone: phone5,
+        clinicId: clinicId,
+        messageText: 'odontopediatria',
+        phoneNumberId: '5511979992719',
+        isSimulation: true,
+        clinicSettings: clinicSettingsCustom
+    });
+
+    const draft5 = await db.sessions.getDraft(phone5, clinicId);
+    assert.strictEqual(draft5?.type || null, null, 'FALHA DE SEGURANÇA: Bot NÃO pode escolher sozinho para "odontopediatria"!');
+    assert.strictEqual(resp5.showCalendar, false, 'FALHA: Bot NÃO pode avançar para o calendário!');
+    assert.strictEqual(resp5.showProceduresList, true, 'FALHA: Bot deve re-solicitar a lista de procedimentos!');
+    assert.strictEqual(resp5.procedures.length, 2, 'FALHA: Deve retornar EXATAMENTE as 2 opções de odontopediatria!');
+    assert.deepStrictEqual(resp5.procedures.sort(), ['Odontopediatria Curativa', 'Odontopediatria Preventiva'].sort(), 'FALHA: As opções ambíguas devem ser as duas Odontopediatrias!');
+    console.log('  ✅ PASS: Ambiguidade genérica validada sem regex hardcoded! "odontopediatria" detectou 2 opções e travou!');
+
     console.log('\n================================================================');
     console.log('🎉 SUÍTE DE INTERPRETAÇÃO DE TEXTO LIVRE 100% APROVADA!');
     console.log('================================================================\n');
