@@ -43,7 +43,8 @@ async function run() {
     });
 
     const draftAfterRefusal = await db.sessions.getDraft(phoneRefusal, clinicId);
-    assert.strictEqual(draftAfterRefusal?.is_family_booking, false, 'FALHA: Recusa deveria ter resetado is_family_booking para false');
+    assert.strictEqual(Boolean(draftAfterRefusal?.is_family_booking), false, 'FALHA: Recusa deveria ter resetado is_family_booking para false');
+    assert.strictEqual(Object.keys(draftAfterRefusal || {}).length, 0, 'FALHA: Draft no banco deve estar completamente vazio {} após reset');
     assert.strictEqual(respRefusal.buttons.includes('Agendar para mim'), true, 'FALHA: Deveria oferecer botão Agendar para mim na recusa');
     console.log('  ✅ PASS: Recusa de nome cancela agendamento familiar, reseta rascunho e retorna botões de escape!');
 

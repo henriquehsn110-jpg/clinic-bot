@@ -1600,21 +1600,8 @@ class ConversationController {
                     const cancelFamilyText = "Sem problemas! Cancelei o agendamento para o familiar. Como você gostaria de prosseguir?";
                     const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
 
-                    draft.is_family_booking = false;
-                    draft.dependentName = null;
-                    draft.dependentCpf = null;
-                    draft.cpf = null;
-                    draft.name = null;
-                    draft.type = null;
-                    draft.date = null;
-                    draft.time = null;
-                    draft.doctor_id = null;
-                    draft.doctor_name = null;
-                    draft.needs_doctor = null;
-                    draft.available_doctors = null;
-                    draft.pending_cancel_selection = false;
-                    draft.ambiguous_procedures = null;
-                    await db.sessions.setDraft(phone, draft, clinicId);
+                    draft = {};
+                    await db.sessions.setDraft(phone, null, clinicId);
 
                     history.push({ role: 'user', parts: [{ text: processedText }] });
                     history.push({ role: 'model', parts: [{ text: `${cancelFamilyText}\n[SISTEMA: Agendamento familiar cancelado pelo paciente.]` }] });
@@ -1697,21 +1684,8 @@ class ConversationController {
             if (draft.is_family_booking && draft.dependentName && !draft.dependentCpf) {
                 const isRefusal = /não quero|nao quero|não vou|nao vou|desisti|prefiro não|prefiro nao|deixa pra lá|deixa pra la|mudei de ideia|voltar|menu|não informar|nao informar|não passar|nao passar|cancelar|cancelar agendamento|cancelamento|cancelar consulta/i.test(sanitizedText);
                 if (isRefusal || personalKeywords.test(sanitizedText)) {
-                    draft.is_family_booking = false;
-                    draft.dependentName = null;
-                    draft.dependentCpf = null;
-                    draft.cpf = null;
-                    draft.name = null;
-                    draft.type = null;
-                    draft.date = null;
-                    draft.time = null;
-                    draft.doctor_id = null;
-                    draft.doctor_name = null;
-                    draft.needs_doctor = null;
-                    draft.available_doctors = null;
-                    draft.pending_cancel_selection = false;
-                    draft.ambiguous_procedures = null;
-                    await db.sessions.setDraft(phone, draft, clinicId);
+                    draft = {};
+                    await db.sessions.setDraft(phone, null, clinicId);
 
                     const cancelFamilyText = "Sem problemas! Cancelei o agendamento para o familiar. Como você gostaria de prosseguir?";
                     const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
