@@ -486,7 +486,7 @@ const appointments = {
 
             if (error) {
                 const dbError = new Error(`appointments.create: ${error.message}`);
-                dbError.code = error.code;
+                dbError.code = (error.code === '23505' || error.message?.includes('23505')) ? 'SLOT_OCCUPIED' : error.code;
                 throw dbError;
             }
             return appointment;
@@ -508,6 +508,40 @@ const appointments = {
 
             if (error) throw new Error(`appointments.getOccupiedSlots: ${error.message}`);
             return data.map(row => row.appointment_time.substring(0, 5)); // "09:00:00" → "09:00"
+        });
+    },
+
+    /**
+     * Verifica atomicamente se um slot de horário já está ocupado por outro paciente.
+     * Suporta filtro por médico e exclusão do próprio paciente (idempotência).
+     */
+    async isSlotOccupied(dateStr, timeStr, clinicId, doctorId = null, excludePatientId = null) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em appointments.isSlotOccupied');
+        if (!dateStr || !timeStr) return false;
+        return withRetry(async () => {
+            const cleanTime = timeStr.trim();
+            const fullTime = cleanTime.length === 5 ? `${cleanTime}:00` : cleanTime;
+            const shortTime = cleanTime.substring(0, 5);
+
+            let query = supabase
+                .from('appointments')
+                .select('id, patient_id')
+                .is('deleted_at', null)
+                .eq('clinic_id', clinicId)
+                .eq('appointment_date', dateStr)
+                .in('appointment_time', [fullTime, shortTime])
+                .in('status', ['pending', 'confirmed']);
+
+            if (doctorId) {
+                query = query.eq('doctor_id', doctorId);
+            }
+            if (excludePatientId) {
+                query = query.neq('patient_id', excludePatientId);
+            }
+
+            const { data, error } = await query;
+            if (error) throw new Error(`appointments.isSlotOccupied: ${error.message}`);
+            return Array.isArray(data) && data.length > 0;
         });
     },
 

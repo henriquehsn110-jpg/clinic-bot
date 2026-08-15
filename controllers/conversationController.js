@@ -1381,7 +1381,7 @@ class ConversationController {
                         };
 
                     } catch (dbErr) {
-                        if (dbErr.code === '23505' || dbErr.message.includes('23505') || dbErr.message.includes('unique_violation')) {
+                        if (dbErr.code === '23505' || dbErr.code === 'SLOT_OCCUPIED' || dbErr.message?.includes('23505') || dbErr.message?.includes('unique_violation') || dbErr.message?.includes('SLOT_OCCUPIED')) {
                             logger.warn('SCHEDULING_CONFLICT', `Tentativa de agendamento em slot já preenchido: [${phone}] - ${draft.date} ${draft.time}`);
                             const conflictText = "Esse horário acabou de ser preenchido por outro paciente. Por favor, selecione outra data e horário nas opções abaixo:";
                             

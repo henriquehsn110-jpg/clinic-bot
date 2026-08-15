@@ -56,6 +56,7 @@ async function runNightlySuite() {
         { name: 'Interpretação de Texto Livre vs Procedimentos (Prompt 2)', script: 'tests/test_free_text_procedure_match.js' },
         { name: 'Matriz Determinística & Fuzzing Multi-Personas', script: 'tests/run_conversation_matrix_fuzzing.js' },
         { name: 'Cifragem AES-256-GCM em sessions.draft (LGPD Privacy by Design)', script: 'tests/test_sessions_draft_encryption.js' },
+        { name: 'Prevenção de Race Condition & Double-Booking (FSM Concurrency)', script: 'tests/test_scheduling_concurrency_race_condition.js' },
         { name: 'Isolamento Multi-Tenant & RLS Supabase', script: 'tests/test_tenant_rls_isolation.js' },
         { name: 'Segurança & Validação Webhook HMAC SHA-256', script: 'tests/test_hmac_webhook_injection.js' }
     ];

@@ -184,6 +184,7 @@ class CalendarService {
 
     /**
      * Cria o agendamento no banco após coleta dos dados pelo bot.
+     * Executa revalidação atômica de concorrência antes do INSERT para impedir double-booking.
      */
     async scheduleAppointment(patientData) {
         const targetClinicId = patientData.clinicId || patientData.clinic_id;
@@ -193,6 +194,22 @@ class CalendarService {
             
             if (patientData.name && patientData.name !== patient.name) {
                 await db.patients.updateName(patientData.phone, patientData.name, targetClinicId);
+            }
+
+            // Revalidação de concorrência: verifica se o horário foi ocupado por outro paciente
+            const isOccupied = await db.appointments.isSlotOccupied(
+                patientData.date,
+                patientData.time,
+                targetClinicId,
+                patientData.doctor_id || patientData.doctorId || null,
+                patient.id
+            );
+
+            if (isOccupied) {
+                logger.warn('CALENDAR_CONFLICT', `Tentativa de agendamento em horário ocupado: ${patientData.date} ${patientData.time} para clínica [${targetClinicId}]`);
+                const conflictErr = new Error('SLOT_OCCUPIED');
+                conflictErr.code = 'SLOT_OCCUPIED';
+                throw conflictErr;
             }
 
             return await db.appointments.create({
