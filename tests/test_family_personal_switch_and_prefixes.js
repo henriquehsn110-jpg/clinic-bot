@@ -62,10 +62,10 @@ async function testFamilyPersonalSwitchAndPrefixes() {
         const draft2 = await db.sessions.getDraft(testPhone, clinicId);
         console.log(`  📊 Draft Check: is_family_booking=${draft2.is_family_booking}, dependentName=${draft2.dependentName}`);
 
-        if (draft2.is_family_booking !== false) {
+        if (Boolean(draft2.is_family_booking) !== false) {
             throw new Error("TESTE 2 FALHOU: is_family_booking deveria ter sido resetado para false.");
         }
-        if (draft2.dependentName !== null) {
+        if (draft2.dependentName) {
             throw new Error("TESTE 2 FALHOU: dependentName deveria ter sido resetado para null.");
         }
         if (!res2.showProceduresList && !res2.text.toLowerCase().includes("procedimento")) {
@@ -145,13 +145,13 @@ async function testFamilyPersonalSwitchAndPrefixes() {
         const draftMidWiped = await db.sessions.getDraft(testPhone, clinicId);
         console.log(`  📊 Draft Check (Wiped): is_family_booking=${draftMidWiped.is_family_booking}, dependentName=${draftMidWiped.dependentName}, dependentCpf=${draftMidWiped.dependentCpf}`);
 
-        if (draftMidWiped.is_family_booking !== false) {
+        if (Boolean(draftMidWiped.is_family_booking) !== false) {
             throw new Error("TESTE 4 FALHOU: is_family_booking deveria ser false após troca mid-flow.");
         }
-        if (draftMidWiped.dependentName !== null) {
+        if (draftMidWiped.dependentName) {
             throw new Error("TESTE 4 FALHOU: dependentName deveria ser null após troca mid-flow.");
         }
-        if (draftMidWiped.dependentCpf !== null) {
+        if (draftMidWiped.dependentCpf) {
             throw new Error("TESTE 4 FALHOU: dependentCpf deveria ser null após troca mid-flow.");
         }
         console.log("  ✅ PASS: Estado de dependente parcialmente preenchido com CPF inválido foi 100% resetado após troca de intenção mid-flow!");

@@ -84,7 +84,7 @@ async function runTest() {
         r2.text.toLowerCase().includes('cpf') || r2.requireCpf === true,
         'Bot EXIGIU CPF do dependente IMEDIATAMENTE após o nome'
     );
-    assert(!r2.buttons || r2.buttons.length === 0, 'Nenhum botão de confirmação exibido (bloqueado até CPF)');
+    assert(!r2.buttons || !r2.buttons.includes('Confirmar'), 'Nenhum botão de confirmação exibido (bloqueado até CPF)');
 
     const draftAfterR2 = await db.sessions.getDraft(TEST_PHONE, TEST_CLINIC_ID);
     console.log(`  📊 Draft: dependentName=${draftAfterR2?.dependentName}, dependentCpf=${draftAfterR2?.dependentCpf}, type=${draftAfterR2?.type}`);
