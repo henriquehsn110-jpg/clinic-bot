@@ -75,6 +75,36 @@ function hashForSearch(text) {
     return crypto.createHmac('sha256', ENCRYPTION_SECRET).update(text).digest('hex');
 }
 
+/**
+ * Criptografa campos sensíveis dentro do JSONB draft (ex: cpf e dependentCpf) antes de salvar no Supabase.
+ */
+function encryptDraftFields(draft) {
+    if (!draft || typeof draft !== 'object') return draft;
+    const cloned = { ...draft };
+    if (cloned.cpf && typeof cloned.cpf === 'string' && cloned.cpf.split(':').length !== 3) {
+        cloned.cpf = encryptData(cloned.cpf);
+    }
+    if (cloned.dependentCpf && typeof cloned.dependentCpf === 'string' && cloned.dependentCpf.split(':').length !== 3) {
+        cloned.dependentCpf = encryptData(cloned.dependentCpf);
+    }
+    return cloned;
+}
+
+/**
+ * Descriptografa campos sensíveis lidos do JSONB draft do Supabase.
+ */
+function decryptDraftFields(draft) {
+    if (!draft || typeof draft !== 'object') return {};
+    const cloned = { ...draft };
+    if (cloned.cpf && typeof cloned.cpf === 'string') {
+        cloned.cpf = decryptData(cloned.cpf, 'cpf');
+    }
+    if (cloned.dependentCpf && typeof cloned.dependentCpf === 'string') {
+        cloned.dependentCpf = decryptData(cloned.dependentCpf, 'dependentCpf');
+    }
+    return cloned;
+}
+
 // Função auxiliar de retry com backoff exponencial para resiliência de banco
 async function withRetry(operation, retries = 3, delay = 200) {
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -690,6 +720,7 @@ const sessions = {
 
     /**
      * Retorna o rascunho de agendamento estruturado associado à sessão.
+     * Descriptografa automaticamente campos sensíveis (como cpf e dependentCpf).
      */
     async getDraft(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.getDraft');
@@ -701,12 +732,13 @@ const sessions = {
                 .maybeSingle();
 
             if (error) throw new Error(`sessions.getDraft: ${error.message}`);
-            return (data && data.draft) ? data.draft : {};
+            return (data && data.draft) ? decryptDraftFields(data.draft) : {};
         });
     },
 
     /**
-     * Atualiza o rascunho de forma atômica (merge JSONB via RPC).
+     * Atualiza o rascunho de forma atômica no Supabase.
+     * Criptografa automaticamente campos sensíveis (como cpf e dependentCpf) via AES-256-GCM.
      */
     async setDraft(phone, draftPatch, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.setDraft');
@@ -722,6 +754,8 @@ const sessions = {
                 return;
             }
 
+            const encryptedDraft = encryptDraftFields(draftPatch);
+
             const { data: existing } = await supabase
                 .from('sessions')
                 .select('id')
@@ -732,12 +766,12 @@ const sessions = {
             if (!existing) {
                 const { error: insErr } = await supabase
                     .from('sessions')
-                    .insert({ phone, clinic_id: clinicId, history: [], draft: draftPatch, last_activity: new Date().toISOString() });
+                    .insert({ phone, clinic_id: clinicId, history: [], draft: encryptedDraft, last_activity: new Date().toISOString() });
                 if (insErr) throw new Error(`sessions.setDraft (insert new): ${insErr.message}`);
             } else {
                 const { error } = await supabase
                     .from('sessions')
-                    .update({ draft: draftPatch, last_activity: new Date().toISOString() })
+                    .update({ draft: encryptedDraft, last_activity: new Date().toISOString() })
                     .eq('id', existing.id);
                 if (error) throw new Error(`sessions.setDraft (update): ${error.message}`);
             }
