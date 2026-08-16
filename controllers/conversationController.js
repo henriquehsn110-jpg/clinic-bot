@@ -168,16 +168,29 @@ function formatDoctorNameForAppointment(appt) {
     return `Dr(a). ${raw}`;
 }
 
-function buildDirectGoogleCalendarUrl(type, dateStr, timeStr) {
+function buildDirectGoogleCalendarUrl(type, dateStr, timeStr, clinicName = '', clinicAddress = '') {
     const cleanType = encodeURIComponent(`Consulta: ${type || 'Avaliação'}`).replace(/%20/g, '+');
     const dateRaw = (dateStr || '').replace(/-/g, '');
     const timeClean = (timeStr || '09:00').substring(0, 5);
-    const startTm = timeClean.replace(/:/g, '') + '00';
+    const [startH, startM] = timeClean.split(':').map(n => parseInt(n, 10) || 0);
+    const startTm = `${String(startH).padStart(2, '0')}${String(startM).padStart(2, '0')}00`;
 
-    let endHour = parseInt(timeClean.split(':')[0], 10) + 1;
-    let endTm = String(endHour).padStart(2, '0') + timeClean.split(':')[1] + '00';
+    // Duração padrão da consulta: 30 minutos (evita bloquear 1 hora cheia desnecessariamente)
+    let endH = startH;
+    let endM = startM + 30;
+    if (endM >= 60) {
+        endH = (endH + Math.floor(endM / 60)) % 24;
+        endM = endM % 60;
+    }
+    const endTm = `${String(endH).padStart(2, '0')}${String(endM).padStart(2, '0')}00`;
 
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${cleanType}&dates=${dateRaw}T${startTm}/${dateRaw}T${endTm}&ctz=America/Sao_Paulo`;
+    const detailsText = encodeURIComponent(
+        `Consulta de ${type || 'Avaliação'}${clinicName ? ' na ' + clinicName : ''}.\n\n⚠️ Por favor, chegue com 15 minutos de antecedência para recepção e preenchimento de ficha.`
+    ).replace(/%20/g, '+');
+
+    const locationText = clinicAddress ? `&location=${encodeURIComponent(clinicAddress).replace(/%20/g, '+')}` : '';
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${cleanType}&dates=${dateRaw}T${startTm}/${dateRaw}T${endTm}&details=${detailsText}${locationText}&ctz=America/Sao_Paulo`;
 }
 
 // Função para validação matemática do dígito verificador do CPF
@@ -501,6 +514,7 @@ class ConversationController {
 
         const personaName = clinicSettings.personaName || 'Ana';
         const clinicName = clinicSettings.name || 'Clínica Modelo';
+        const clinicAddress = clinicSettings.address || cData?.address || '';
 
         try {
             const patient = await db.patients.findOrCreate(phone, clinicId);
@@ -665,7 +679,7 @@ class ConversationController {
                     const activeAppt = activeAppts[0];
                     const dateFmt = activeAppt.appointment_date.split('-').reverse().join('/');
                     const timeFmt = activeAppt.appointment_time.substring(0, 5);
-                    const calUrl = buildDirectGoogleCalendarUrl(activeAppt.type, activeAppt.appointment_date, activeAppt.appointment_time);
+                    const calUrl = buildDirectGoogleCalendarUrl(activeAppt.type, activeAppt.appointment_date, activeAppt.appointment_time, clinicName, clinicAddress);
                     
                     let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊`;
                     
@@ -1495,9 +1509,10 @@ class ConversationController {
                         await db.sessions.setDraft(phone, null, clinicId);
 
                         const dateFmt = apptDate.split('-').reverse().join('/');
-                        const calUrl = buildDirectGoogleCalendarUrl(apptType, apptDate, apptTime);
+                        const calUrl = buildDirectGoogleCalendarUrl(apptType, apptDate, apptTime, clinicName, clinicAddress);
 
-                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📍 Nosso endereço:\nAv. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP\n\nAté lá! ✅`;
+                        const displayAddress = clinicAddress || 'Av. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP';
+                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📍 Nosso endereço:\n${displayAddress}\n\nAté lá! ✅`;
 
                         // Reseta o histórico de turnos para manter sessões futuras limpas sem acúmulo de msgs
                         history = [];
@@ -1560,7 +1575,7 @@ class ConversationController {
                         const activeAppt = activeAppts[0];
                         const dateFmt = activeAppt.appointment_date.split('-').reverse().join('/');
                         const timeFmt = activeAppt.appointment_time.substring(0, 5);
-                        const calUrl = buildDirectGoogleCalendarUrl(activeAppt.type, activeAppt.appointment_date, activeAppt.appointment_time);
+                        const calUrl = buildDirectGoogleCalendarUrl(activeAppt.type, activeAppt.appointment_date, activeAppt.appointment_time, clinicName, clinicAddress);
                         
                         let confirmText = `Sua consulta de ${activeAppt.type || 'avaliação'} já está confirmada para ${dateFmt} às ${timeFmt}! Te esperamos lá! 😊`;
                         
