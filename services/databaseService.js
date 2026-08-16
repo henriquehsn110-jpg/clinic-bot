@@ -214,12 +214,13 @@ const patients = {
     async findOrCreate(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.findOrCreate');
         return withRetry(async () => {
-            // 1. Tenta buscar o paciente por telefone e clínica (incluindo soft-deleted)
+            // 1. Tenta buscar o paciente titular por telefone e clínica (guardian_id IS NULL)
             let { data, error } = await supabase
                 .from('patients')
                 .select('*')
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
+                .is('guardian_id', null)
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -233,26 +234,26 @@ const patients = {
                 } else {
                     // Reativa paciente soft-deleted que voltou a mandar mensagem
                     if (data.deleted_at) {
-                    const { error: reactivateErr } = await supabase
-                        .from('patients')
-                        .update({ deleted_at: null })
-                        .eq('id', data.id);
-                    if (reactivateErr) {
-                        console.warn(`[DB_WARN] patients.findOrCreate: falha ao reativar paciente soft-deleted ${data.id}: ${reactivateErr.message}`);
-                    } else {
-                        console.log(`[DB_INFO] patients.findOrCreate: paciente ${data.id} reativado (deleted_at limpo) — retornou a enviar mensagens.`);
+                        const { error: reactivateErr } = await supabase
+                            .from('patients')
+                            .update({ deleted_at: null })
+                            .eq('id', data.id);
+                        if (reactivateErr) {
+                            console.warn(`[DB_WARN] patients.findOrCreate: falha ao reativar paciente soft-deleted ${data.id}: ${reactivateErr.message}`);
+                        } else {
+                            console.log(`[DB_INFO] patients.findOrCreate: paciente ${data.id} reativado (deleted_at limpo) — retornou a enviar mensagens.`);
+                        }
+                        data.deleted_at = null;
                     }
-                    data.deleted_at = null;
+                    if (data.cpf) data.cpf = decryptData(data.cpf);
+                    return data;
                 }
-                if (data.cpf) data.cpf = decryptData(data.cpf);
-                return data;
-            }
             }
 
-            // 2. Se não encontrou, insere novo paciente
+            // 2. Se não encontrou, insere novo paciente titular (guardian_id: null)
             const insertRes = await supabase
                 .from('patients')
-                .insert({ phone, clinic_id: clinicId })
+                .insert({ phone, clinic_id: clinicId, guardian_id: null })
                 .select()
                 .single();
 
@@ -264,6 +265,7 @@ const patients = {
                         .select('*')
                         .eq('phone', phone)
                         .eq('clinic_id', clinicId)
+                        .is('guardian_id', null)
                         .maybeSingle();
                     if (retryRes.data) {
                         // Reativa também no caminho de race condition
@@ -340,7 +342,7 @@ const patients = {
     },
 
     /**
-     * Atualiza o nome do paciente
+     * Atualiza o nome do paciente titular
      */
     async updateName(phone, name, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.updateName');
@@ -350,6 +352,7 @@ const patients = {
                 .update({ name })
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
+                .is('guardian_id', null)
                 .select()
                 .single();
 
@@ -372,6 +375,7 @@ const patients = {
                 .update({ cpf: encryptedCpf, cpf_hash: cpfHash })
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
+                .is('guardian_id', null)
                 .is('deleted_at', null)
                 .select()
                 .limit(1)
@@ -448,7 +452,7 @@ const patients = {
     },
 
     /**
-     * Busca paciente pelo telefone sem criar.
+     * Busca paciente titular pelo telefone sem criar.
      */
     async findByPhone(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em patients.findByPhone');
@@ -457,6 +461,7 @@ const patients = {
                 .from('patients').select('*').is('deleted_at', null).is('lgpd_purged_at', null)
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
+                .is('guardian_id', null)
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle(); // retorna null se não encontrar (sem erro)
@@ -464,6 +469,135 @@ const patients = {
             if (error) throw new Error(`patients.findByPhone: ${error.message}`);
             if (data && data.cpf) data.cpf = decryptData(data.cpf);
             return data;
+        });
+    },
+
+    /**
+     * Busca todos os dependentes vinculados a um paciente titular (guardianId).
+     */
+    async findDependentsByGuardian(guardianId, clinicId) {
+        if (!guardianId || !clinicId) return [];
+        return withRetry(async () => {
+            const { data, error } = await supabase
+                .from('patients')
+                .select('id, name, phone, cpf, guardian_id, created_at')
+                .eq('guardian_id', guardianId)
+                .eq('clinic_id', clinicId)
+                .is('deleted_at', null)
+                .is('lgpd_purged_at', null)
+                .order('created_at', { ascending: true });
+
+            if (error) throw new Error(`patients.findDependentsByGuardian: ${error.message}`);
+            return (data || []).map(p => {
+                if (p.cpf) p.cpf = decryptData(p.cpf);
+                return p;
+            });
+        });
+    },
+
+    /**
+     * Busca ou cria um dependente vinculado a um titular (guardianId).
+     * @param {Object} params - { guardianId, clinicId, name, cpf, phone, dependentId }
+     */
+    async findOrCreateDependent({ guardianId, clinicId, name, cpf, phone, dependentId }) {
+        if (!guardianId || !clinicId) throw new Error('guardianId e clinicId são obrigatórios em patients.findOrCreateDependent');
+        return withRetry(async () => {
+            // Busca direta por ID se fornecido
+            if (dependentId) {
+                const { data: byId } = await supabase
+                    .from('patients')
+                    .select('*')
+                    .eq('id', dependentId)
+                    .eq('clinic_id', clinicId)
+                    .is('deleted_at', null)
+                    .maybeSingle();
+                if (byId) {
+                    if (byId.cpf) byId.cpf = decryptData(byId.cpf);
+                    return byId;
+                }
+            }
+
+            const cleanCpf = cpf ? String(cpf).replace(/\D/g, '') : null;
+            const cpfHash = cleanCpf ? hashForSearch(cleanCpf) : null;
+            
+            // 1. Tenta buscar dependente existente pelo guardian_id + cpf_hash (ou nome se cpf não informado)
+            let query = supabase
+                .from('patients')
+                .select('*')
+                .eq('guardian_id', guardianId)
+                .eq('clinic_id', clinicId)
+                .is('deleted_at', null)
+                .is('lgpd_purged_at', null);
+
+            if (name) {
+                query = query.ilike('name', name.trim());
+            } else if (cpfHash) {
+                query = query.eq('cpf_hash', cpfHash);
+            }
+
+            const { data: existing, error: findErr } = await query.maybeSingle();
+            if (findErr) throw new Error(`patients.findOrCreateDependent (select): ${findErr.message}`);
+
+            if (existing) {
+                // Atualiza nome ou dados se necessário
+                const updates = {};
+                if (name && existing.name !== name.trim()) updates.name = name.trim();
+                if (phone && existing.phone !== phone) updates.phone = phone;
+                if (cleanCpf && !existing.cpf) {
+                    updates.cpf = encryptData(cleanCpf);
+                    updates.cpf_hash = cpfHash;
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    const { data: updated, error: updErr } = await supabase
+                        .from('patients')
+                        .update(updates)
+                        .eq('id', existing.id)
+                        .select()
+                        .single();
+                    if (updErr) throw new Error(`patients.findOrCreateDependent (update): ${updErr.message}`);
+                    if (updated && updated.cpf) updated.cpf = decryptData(updated.cpf);
+                    return updated;
+                }
+
+                if (existing.cpf) existing.cpf = decryptData(existing.cpf);
+                return existing;
+            }
+
+            // 2. Insere novo dependente com vínculo de guardian_id
+            const insertPayload = {
+                clinic_id: clinicId,
+                guardian_id: guardianId,
+                name: name ? name.trim() : null,
+                phone: phone || null,
+                cpf: cleanCpf ? encryptData(cleanCpf) : null,
+                cpf_hash: cpfHash
+            };
+
+            const { data: created, error: insertErr } = await supabase
+                .from('patients')
+                .insert(insertPayload)
+                .select()
+                .single();
+
+            if (insertErr) {
+                // Trata race condition no insert (23505)
+                if (insertErr.code === '23505' && cpfHash) {
+                    const { data: retryData } = await supabase
+                        .from('patients')
+                        .select('*')
+                        .eq('clinic_id', clinicId)
+                        .eq('cpf_hash', cpfHash)
+                        .maybeSingle();
+                    if (retryData) {
+                        if (retryData.cpf) retryData.cpf = decryptData(retryData.cpf);
+                        return retryData;
+                    }
+                }
+                throw new Error(`patients.findOrCreateDependent (insert): ${insertErr.message}`);
+            }
+            if (created && created.cpf) created.cpf = decryptData(created.cpf);
+            return created;
         });
     }
 };

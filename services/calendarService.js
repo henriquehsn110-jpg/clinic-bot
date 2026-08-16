@@ -185,15 +185,30 @@ class CalendarService {
     /**
      * Cria o agendamento no banco após coleta dos dados pelo bot.
      * Executa revalidação atômica de concorrência antes do INSERT para impedir double-booking.
+     * Suporta agendamento para familiares/dependentes vinculando guardian_id.
      */
     async scheduleAppointment(patientData) {
         const targetClinicId = patientData.clinicId || patientData.clinic_id;
         if (!targetClinicId) throw new Error('clinicId é obrigatório em scheduleAppointment');
         try {
-            const patient = await db.patients.findOrCreate(patientData.phone, targetClinicId);
+            const titular = await db.patients.findOrCreate(patientData.phone, targetClinicId);
             
-            if (patientData.name && patientData.name !== patient.name) {
-                await db.patients.updateName(patientData.phone, patientData.name, targetClinicId);
+            let appointmentPatient = titular;
+
+            if (patientData.is_family_booking || patientData.dependentName || patientData.dependentCpf || patientData.dependent_id || patientData.dependentId) {
+                // Cria ou recupera a entidade do dependente vinculada ao titular (guardian_id)
+                appointmentPatient = await db.patients.findOrCreateDependent({
+                    guardianId: titular.id,
+                    clinicId: targetClinicId,
+                    name: patientData.dependentName || patientData.name || null,
+                    cpf: patientData.dependentCpf || patientData.cpf || null,
+                    phone: patientData.phone,
+                    dependentId: patientData.dependent_id || patientData.dependentId || null
+                });
+            } else {
+                if (patientData.name && patientData.name !== titular.name) {
+                    await db.patients.updateName(patientData.phone, patientData.name, targetClinicId);
+                }
             }
 
             // Revalidação de concorrência: verifica se o horário foi ocupado por outro paciente
@@ -202,7 +217,7 @@ class CalendarService {
                 patientData.time,
                 targetClinicId,
                 patientData.doctor_id || patientData.doctorId || null,
-                patient.id
+                appointmentPatient.id
             );
 
             if (isOccupied) {
@@ -213,7 +228,7 @@ class CalendarService {
             }
 
             return await db.appointments.create({
-                patient_id:       patient.id,
+                patient_id:       appointmentPatient.id,
                 clinic_id:        targetClinicId,
                 doctor_id:        patientData.doctor_id || patientData.doctorId || null,
                 appointment_date: patientData.date,

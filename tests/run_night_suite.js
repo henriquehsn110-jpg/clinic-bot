@@ -57,6 +57,9 @@ async function runNightlySuite() {
         { name: 'Matriz Determinística & Fuzzing Multi-Personas', script: 'tests/run_conversation_matrix_fuzzing.js' },
         { name: 'Cifragem AES-256-GCM em sessions.draft (LGPD Privacy by Design)', script: 'tests/test_sessions_draft_encryption.js' },
         { name: 'Prevenção de Race Condition & Double-Booking (FSM Concurrency)', script: 'tests/test_scheduling_concurrency_race_condition.js' },
+        { name: 'Persistência Relacional de Dependentes (FAMILY_BOOKING)', script: 'tests/test_family_booking_persistence_relational.js' },
+        { name: 'Extração e Atualização de Nome do Titular ("É para mim mesmo, [Nome]")', script: 'tests/test_personal_booking_name_extraction.js' },
+        { name: 'Fix de Looping de Seleção de Procedimentos (Casing & Ambiguidade)', script: 'tests/test_procedure_selection_loop_fix.js' },
         { name: 'Isolamento Multi-Tenant & RLS Supabase', script: 'tests/test_tenant_rls_isolation.js' },
         { name: 'Segurança & Validação Webhook HMAC SHA-256', script: 'tests/test_hmac_webhook_injection.js' }
     ];

@@ -221,11 +221,18 @@ class DashboardController {
             let sessionsList = sessionsRes.data || [];
             let clinicData = clinicRes?.data || null;
 
+            // Mapeia pacientes para lookup rápido de responsáveis (guardian)
+            const patientMap = new Map();
+            (patientsList || []).forEach(p => patientMap.set(p.id, p));
+
             // Sanitização LGPD de CPFs para exibição no frontend (mascara os números e remove CPF bruto)
             const safePatients = (patientsList || []).map(p => {
                 const { cpf, ...rest } = p;
+                const guardian = p.guardian_id ? patientMap.get(p.guardian_id) : null;
                 return {
                     ...rest,
+                    is_dependent: !!p.guardian_id,
+                    guardian_name: guardian ? (guardian.name || guardian.phone) : null,
                     cpfMasked: cpf ? '•••.•••.•••-•• (Protegido LGPD)' : 'Não informado'
                 };
             });

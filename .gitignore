@@ -47,3 +47,7 @@ test_template_send.js
 mingit/
 mingit.zip
 
+# Scratch and Backups
+scratch/
+backups/
+
