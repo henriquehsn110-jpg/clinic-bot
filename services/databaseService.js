@@ -111,7 +111,18 @@ async function withRetry(operation, retries = 3, delay = 200) {
         try {
             return await operation();
         } catch (error) {
-            if (error.code === '23505' || (error.message && error.message.includes('23505'))) {
+            if (
+                error.code === '23505' ||
+                error.code === 'SLOT_OCCUPIED' ||
+                error.code === '23503' || // foreign key violation
+                error.code === '23502' || // not null violation
+                (error.message && (
+                    error.message.includes('23505') ||
+                    error.message.includes('duplicate key') ||
+                    error.message.includes('violates unique constraint') ||
+                    error.message.includes('SLOT_OCCUPIED')
+                ))
+            ) {
                 throw error;
             }
             if (attempt === retries) throw error;
