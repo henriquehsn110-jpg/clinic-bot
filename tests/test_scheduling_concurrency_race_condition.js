@@ -9,10 +9,7 @@
 
 const assert = require('assert');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env.staging') });
-if (!process.env.SUPABASE_URL) {
-    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-}
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
 
 const db = require('../services/databaseService');
 const calendarService = require('../services/calendarService');
@@ -126,14 +123,8 @@ async function testConcurrency() {
             const tenantFulfilled = tenantResults.filter(r => r.status === 'fulfilled');
             const tenantRejected = tenantResults.filter(r => r.status === 'rejected');
 
-            console.log(`  📊 Sucessos Multi-Tenant no mesmo slot: ${tenantFulfilled.length}`);
+            console.log(`  📊 Sucessos Multi-Tenant no mesmo slot: ${tenantFulfilled.length}/2`);
             console.log(`  📊 Rejeições Multi-Tenant no mesmo slot: ${tenantRejected.length}`);
-
-            // Evidência da constraint legada: o 2º insert falha no banco porque a constraint appointments_active_slot_unique não possui clinic_id
-            if (tenantRejected.length > 0) {
-                console.log(`  ⚠️ ACHADO DE SCHEMA COMPROVADO: Tenant B rejeitado por "${tenantRejected[0].reason.message}" (Code: ${tenantRejected[0].reason.code})`);
-                console.log('  📌 Isso comprova a necessidade de aplicar a migração DDL de DROP CONSTRAINT + CREATE UNIQUE INDEX com clinic_id.');
-            }
 
             // Dump direto do banco
             const { data: multiDbRows } = await db.supabase
@@ -142,8 +133,10 @@ async function testConcurrency() {
                 .eq('appointment_date', sameDate);
             console.log('  📊 DUMP BANCO DE AGENDAMENTOS MULTI-TENANT:', JSON.stringify(multiDbRows, null, 2));
 
-            assert.strictEqual(tenantFulfilled.length + tenantRejected.length, 2, 'Ambos os tenants foram processados');
-            console.log('  ✅ PASS: Comportamento multi-tenant mapeado e auditado com precisão empírica!\n');
+            assert.strictEqual(tenantFulfilled.length, 2, 'Ambas as clínicas independentes devem conseguir agendar no mesmo dia e horário');
+            assert.strictEqual(tenantRejected.length, 0, 'Zero rejeições indevidas entre clínicas distintas');
+            assert.strictEqual(multiDbRows.length, 2, 'Banco de dados deve conter ambos os agendamentos isolados por clinic_id');
+            console.log('  ✅ PASS: Isolamento Multi-Tenant garantido em nível de schema e aplicação (2/2 Sucessos)!\n');
         } finally {
             await db.supabase.from('appointments').delete().eq('appointment_date', sameDate);
             await db.supabase.from('clinics').delete().eq('id', clinicB.id);

@@ -14,10 +14,7 @@
 
 const assert = require('assert');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env.staging') });
-if (!process.env.SUPABASE_URL) {
-    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-}
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
 
 const conversationController = require('../controllers/conversationController');
 const db = require('../services/databaseService');
