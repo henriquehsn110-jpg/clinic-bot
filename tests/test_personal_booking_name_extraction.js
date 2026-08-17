@@ -28,7 +28,15 @@ async function runTest() {
     let patientId = null;
 
     try {
-        // Setup: cria paciente inicial com nome antigo e CPF válido
+        // Setup: limpa qualquer colisão prévia de CPF/telefone e cria paciente inicial
+        try {
+            const existingWithCpf = await db.patients.findByCpf(TEST_CPF, clinicId);
+            if (existingWithCpf) {
+                await db.supabase.from('appointments').delete().eq('patient_id', existingWithCpf.id);
+                await db.supabase.from('patients').delete().eq('id', existingWithCpf.id);
+            }
+        } catch (_) {}
+
         const created = await db.patients.findOrCreate(TEST_PHONE, clinicId);
         patientId = created.id;
         await db.patients.updateName(TEST_PHONE, OLD_NAME, clinicId);
