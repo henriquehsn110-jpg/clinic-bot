@@ -1467,33 +1467,25 @@ class ConversationController {
 
                 if (draft.date && draft.time && draft.type) {
                     try {
-                        let newApptId = null;
-                        // Verifica primeiro se já não existe exatamente esse agendamento ativo para esse paciente (idempotência de reentrega)
-                        const existing = await db.appointments.findActiveAppointment(patient.id, draft.date, draft.time, clinicId).catch(() => null);
-                        if (existing) {
-                            newApptId = existing.id;
-                            logger.info('SCHEDULING', `Agendamento idempotente detectado para [${phone}] - ${draft.date} ${draft.time}`);
+                        const newAppt = await calendarService.scheduleAppointment({
+                            clinicId,
+                            phone,
+                            name: draft.name || null,
+                            is_family_booking: draft.is_family_booking,
+                            dependentName: draft.dependentName || null,
+                            dependentCpf: draft.dependentCpf || null,
+                            dependent_id: draft.dependent_id || null,
+                            date: draft.date,
+                            time: draft.time,
+                            type: draft.type,
+                            doctor_id: draft.doctor_id || null,
+                            notes: draft.notes || null
+                        });
+                        const newApptId = newAppt.id;
+                        if (!isSimulation) {
+                            logger.info('SCHEDULING', `Agendamento confirmado com sucesso via WhatsApp para [${phone}] - ${draft.date} ${draft.time} (ID: ${newApptId})`);
                         } else {
-                            const newAppt = await calendarService.scheduleAppointment({
-                                clinicId,
-                                phone,
-                                name: draft.name || null,
-                                is_family_booking: draft.is_family_booking,
-                                dependentName: draft.dependentName || null,
-                                dependentCpf: draft.dependentCpf || null,
-                                dependent_id: draft.dependent_id || null,
-                                date: draft.date,
-                                time: draft.time,
-                                type: draft.type,
-                                doctor_id: draft.doctor_id || null,
-                                notes: draft.notes || null
-                            });
-                            newApptId = newAppt.id;
-                            if (!isSimulation) {
-                                logger.info('SCHEDULING', `Agendamento criado com sucesso via WhatsApp para [${phone}] - ${draft.date} ${draft.time}`);
-                            } else {
-                                logger.info('SCHEDULING', `Agendamento criado com sucesso via Simulador para [${phone}] - ${draft.date} ${draft.time}`);
-                            }
+                            logger.info('SCHEDULING', `Agendamento confirmado com sucesso via Simulador para [${phone}] - ${draft.date} ${draft.time} (ID: ${newApptId})`);
                         }
 
                         const apptType = draft.type;

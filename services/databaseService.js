@@ -670,16 +670,13 @@ const appointments = {
 
             let query = supabase
                 .from('appointments')
-                .select('id, patient_id')
+                .select('id, patient_id, doctor_id')
                 .is('deleted_at', null)
                 .eq('clinic_id', clinicId)
                 .eq('appointment_date', dateStr)
                 .in('appointment_time', [fullTime, shortTime])
                 .in('status', ['pending', 'confirmed']);
 
-            if (doctorId) {
-                query = query.eq('doctor_id', doctorId);
-            }
             if (excludePatientId) {
                 query = query.neq('patient_id', excludePatientId);
             }

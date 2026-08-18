@@ -60,6 +60,7 @@ async function runNightlySuite() {
         { name: 'Persistência Relacional de Dependentes (FAMILY_BOOKING)', script: 'tests/test_family_booking_persistence_relational.js' },
         { name: 'Extração e Atualização de Nome do Titular ("É para mim mesmo, [Nome]")', script: 'tests/test_personal_booking_name_extraction.js' },
         { name: 'Fix de Looping de Seleção de Procedimentos (Casing & Ambiguidade)', script: 'tests/test_procedure_selection_loop_fix.js' },
+        { name: 'Conflito de Slot Médico Nulo vs Específico & Idempotência de Dependentes', script: 'tests/test_family_booking_slot_conflict_and_idempotency.js' },
         { name: 'Isolamento Multi-Tenant & RLS Supabase', script: 'tests/test_tenant_rls_isolation.js' },
         { name: 'Segurança & Validação Webhook HMAC SHA-256', script: 'tests/test_hmac_webhook_injection.js' }
     ];

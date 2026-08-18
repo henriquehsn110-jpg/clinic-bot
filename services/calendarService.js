@@ -77,20 +77,15 @@ class CalendarService {
                 return []; // Domingo sem expediente
             }
 
-            // 2. Busca grade de horários ocupados no banco (considerando doctorId)
-            let occupiedQuery = db.supabase
+            // 2. Busca grade de horários ocupados no banco para a clínica
+            const { data: appts } = await db.supabase
                 .from('appointments')
-                .select('appointment_time')
+                .select('appointment_time, doctor_id')
                 .eq('clinic_id', clinicId)
                 .eq('appointment_date', dateStr)
                 .in('status', ['pending', 'confirmed'])
                 .is('deleted_at', null);
             
-            if (doctorId) {
-                occupiedQuery = occupiedQuery.eq('doctor_id', doctorId);
-            }
-            
-            const { data: appts } = await occupiedQuery;
             const occupied = (appts || []).map(a => a.appointment_time.substring(0, 5));
 
             // 3. Tenta buscar a clínica para determinar o tempo do procedimento e horários de funcionamento
@@ -209,6 +204,19 @@ class CalendarService {
                 if (patientData.name && patientData.name !== titular.name) {
                     await db.patients.updateName(patientData.phone, patientData.name, targetClinicId);
                 }
+            }
+
+            // Verifica se este EXATO paciente já tem este agendamento ativo (idempotência verdadeira)
+            const existing = await db.appointments.findActiveAppointment(
+                appointmentPatient.id,
+                patientData.date,
+                patientData.time,
+                targetClinicId
+            ).catch(() => null);
+
+            if (existing) {
+                logger.info('SCHEDULING', `Agendamento idempotente detectado para paciente [${appointmentPatient.id}] - ${patientData.date} ${patientData.time}`);
+                return existing;
             }
 
             // Revalidação de concorrência: verifica se o horário foi ocupado por outro paciente
