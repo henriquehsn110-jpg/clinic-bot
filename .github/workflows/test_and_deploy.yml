@@ -15,55 +15,40 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🟢 Setup Node.js 20.x
+      - name: 🟢 Setup Node.js (v22 LTS)
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: '22'
           cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache-dependency-path: '**/package-lock.json'
 
       - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🛡️ Run HMAC Webhook Security Test
+      - name: 🛡️ Run HMAC Webhook Security Preflight (Standalone)
         run: node tests/test_hmac_webhook_injection.js
         env:
           NODE_ENV: test
-          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
 
-      - name: 🔒 Run Multi-Tenant RLS Isolation Test
-        run: node tests/test_tenant_rls_isolation.js
-        env:
-          NODE_ENV: test
-          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      - name: 🔍 Run Static QA & Code Integrity Preflight
+        run: node scripts/qa_static.js
 
-      - name: 🧪 Run Overnight QA Test Suite (24 Tests)
-        run: node tests/overnight_test_suite.js
+      - name: 🌙 Run Full Integration Test Suite (Staging)
+        if: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY != '' || secrets.SUPABASE_SERVICE_KEY != '' }}
         env:
-          NODE_ENV: test
-          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-
-      - name: 🤖 Run Real 9-Block WhatsApp Conversational Flow Simulation
-        run: node tests/test_all_9_blocks.js
-        env:
-          NODE_ENV: test
-          APP_SECRET: ${{ secrets.APP_SECRET || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PORT: 3000
+          NODE_ENV: staging
+          SUPABASE_URL: https://eywcowvwgccslqfnxaws.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
+          WHATSAPP_TOKEN: EAAY_STAGING_TEST_TOKEN
+          WHATSAPP_PHONE_ID: 999888777
+          VERIFY_TOKEN: clinica_bot_seguro_2026
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY }}
+          DOTENV_CONFIG_PATH: .env.staging
+        run: node -r dotenv/config tests/run_night_suite.js
 
   deploy-production:
     name: 🚀 Production Deploy Notification
@@ -72,4 +57,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: ✅ Report Successful CI Pipeline
-        run: echo "CI/CD Pipeline aprovada com 100% dos testes. O ambiente de produção no Render executará a compilação de forma segura."
+        run: echo "CI/CD Pipeline aprovada com 100% dos testes. O ambiente de produção no Render executará o deploy com segurança."

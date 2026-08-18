@@ -15,10 +15,10 @@ jobs:
       - name: Checkout Código-Fonte
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js (v20)
+      - name: Configurar Node.js (v22 LTS)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: '**/package-lock.json'
 
@@ -29,14 +29,14 @@ jobs:
         env:
           PORT: 3000
           NODE_ENV: staging
-          SUPABASE_URL: https://eywcovvwgccslqfnxaws.supabase.co
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY }}
+          SUPABASE_URL: https://eywcowvwgccslqfnxaws.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
           WHATSAPP_TOKEN: EAAY_STAGING_TEST_TOKEN
           WHATSAPP_PHONE_ID: 999888777
           VERIFY_TOKEN: clinica_bot_seguro_2026
-          APP_SECRET: sua_chave_secreta_da_meta_aqui
+          APP_SECRET: ${{ secrets.APP_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CPF_ENCRYPTION_KEY: 1cd66335394b12caf8fdc562c9d1e1117aeab545b3b1dea77cfe10125ca28a63
+          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY }}
           DOTENV_CONFIG_PATH: .env.staging
         run: node -r dotenv/config tests/run_night_suite.js
 
