@@ -40,7 +40,7 @@ jobs:
       - name: ⚙️ Prepare Staging Environment
         if: env.HAS_STAGING_KEY != '' || env.HAS_SERVICE_KEY != ''
         run: |
-          cat << EOF > .env.staging
+          cat << 'EOF' > .env.staging
           PORT=3000
           NODE_ENV=staging
           SUPABASE_URL=https://eywcowvwgccslqfnxaws.supabase.co
