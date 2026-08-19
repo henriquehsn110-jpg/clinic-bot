@@ -4,6 +4,7 @@
  * 
  * Uso CLI:  node scripts/onboard_tenant.js --name "Clínica X" --slug "clinica-x" --phone-id "123" --token "EAAY..."
  * Uso API:  const { onboardTenant, supabase } = require('./scripts/onboard_tenant');
+ */
 const path = require('path');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
 const { createClient } = require('@supabase/supabase-js');

@@ -13,12 +13,22 @@ const conversationController = require('../controllers/conversationController');
 const calendarService = require('../services/calendarService');
 const db = require('../services/databaseService');
 
+function generateValidCpf() {
+    const rnd = () => Math.floor(Math.random() * 9);
+    const n = Array.from({ length: 9 }, rnd);
+    let d1 = n.reduce((total, num, i) => total + num * (10 - i), 0) % 11;
+    d1 = d1 < 2 ? 0 : 11 - d1;
+    let d2 = [...n, d1].reduce((total, num, i) => total + num * (11 - i), 0) % 11;
+    d2 = d2 < 2 ? 0 : 11 - d2;
+    return `${n.slice(0,3).join('')}.${n.slice(3,6).join('')}.${n.slice(6,9).join('')}-${d1}${d2}`;
+}
+
 const TEST_PHONE = '5511995' + Math.floor(100000 + Math.random() * 900000);
 const TITULAR_NAME = 'Henrique Silva do Nascimento';
-const TITULAR_CPF = '529.982.247-25';
+const TITULAR_CPF = generateValidCpf();
 
 const DEPENDENT_NAME = 'Raquel Pereira da Silva';
-const DEPENDENT_CPF = '266.390.128-80';
+const DEPENDENT_CPF = generateValidCpf();
 
 const TEST_DATE = '2027-09-15';
 const TEST_TIME_CONFLICT = '08:00';

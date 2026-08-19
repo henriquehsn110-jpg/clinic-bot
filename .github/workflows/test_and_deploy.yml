@@ -53,7 +53,6 @@ jobs:
           CPF_ENCRYPTION_KEY=${{ secrets.CPF_ENCRYPTION_KEY }}
           DOTENV_CONFIG_PATH=.env.staging
           EOF
-          cp .env.staging .env
 
       - name: 🌙 Run Full Integration Test Suite (Staging)
         if: env.HAS_STAGING_KEY != '' || env.HAS_SERVICE_KEY != ''

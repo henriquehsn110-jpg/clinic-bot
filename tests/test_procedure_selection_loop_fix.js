@@ -25,7 +25,8 @@ async function run() {
     const clinicId = 'e8f24abe-381d-499d-9596-252507b32194';
     const testPhone = '5511979992719';
 
-    // 1. Limpa sessão anterior
+    // 1. Limpa sessão anterior e garante paciente
+    await db.patients.findOrCreate(testPhone, clinicId, 'Henrique Silva');
     await db.sessions.set(testPhone, [], clinicId).catch(() => {});
     await db.sessions.setDraft(testPhone, null, clinicId).catch(() => {});
 
