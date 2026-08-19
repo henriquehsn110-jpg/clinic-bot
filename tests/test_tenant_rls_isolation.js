@@ -1,4 +1,5 @@
-require('dotenv').config({ path: __dirname + '/../.env' });
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
 const { onboardTenant, supabase } = require('../scripts/onboard_tenant');
 const db = require('../services/databaseService');
 const crypto = require('crypto');

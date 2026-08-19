@@ -10,6 +10,9 @@ jobs:
   test:
     name: 🧪 Automated Test Battery & Security Preflight
     runs-on: ubuntu-latest
+    env:
+      HAS_STAGING_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY }}
+      HAS_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
     steps:
       - name: 📥 Checkout Repository
@@ -35,9 +38,9 @@ jobs:
         run: node scripts/qa_static.js
 
       - name: ⚙️ Prepare Staging Environment
-        if: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY != '' || secrets.SUPABASE_SERVICE_KEY != '' }}
+        if: env.HAS_STAGING_KEY != '' || env.HAS_SERVICE_KEY != ''
         run: |
-          cat << 'EOF' > .env.staging
+          cat << EOF > .env.staging
           PORT=3000
           NODE_ENV=staging
           SUPABASE_URL=https://eywcowvwgccslqfnxaws.supabase.co
@@ -50,9 +53,10 @@ jobs:
           CPF_ENCRYPTION_KEY=${{ secrets.CPF_ENCRYPTION_KEY }}
           DOTENV_CONFIG_PATH=.env.staging
           EOF
+          cp .env.staging .env
 
       - name: 🌙 Run Full Integration Test Suite (Staging)
-        if: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY != '' || secrets.SUPABASE_SERVICE_KEY != '' }}
+        if: env.HAS_STAGING_KEY != '' || env.HAS_SERVICE_KEY != ''
         env:
           DOTENV_CONFIG_PATH: .env.staging
         run: node -r dotenv/config tests/run_night_suite.js
