@@ -77,8 +77,14 @@ async function runNightlySuite() {
         log('----------------------------------------------------------------');
 
         try {
-            const command = `cmd.exe /c "set \"DOTENV_CONFIG_PATH=${envPath}\" && node -r dotenv/config ${suite.script}"`;
-            const output = execSync(command, { cwd: rootDir, encoding: 'utf8' });
+            const output = execSync(`node -r dotenv/config ${suite.script}`, {
+                cwd: rootDir,
+                encoding: 'utf8',
+                env: {
+                    ...process.env,
+                    DOTENV_CONFIG_PATH: envPath
+                }
+            });
             log(output);
             log(`  ✅ PASS: ${suite.name}`);
             passedCount++;
