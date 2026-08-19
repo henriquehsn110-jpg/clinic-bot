@@ -34,19 +34,26 @@ jobs:
       - name: 🔍 Run Static QA & Code Integrity Preflight
         run: node scripts/qa_static.js
 
+      - name: ⚙️ Prepare Staging Environment
+        if: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY != '' || secrets.SUPABASE_SERVICE_KEY != '' }}
+        run: |
+          cat << 'EOF' > .env.staging
+          PORT=3000
+          NODE_ENV=staging
+          SUPABASE_URL=https://eywcowvwgccslqfnxaws.supabase.co
+          SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_STAGING_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
+          WHATSAPP_TOKEN=EAAY_STAGING_TEST_TOKEN
+          WHATSAPP_PHONE_ID=999888777
+          VERIFY_TOKEN=clinica_bot_seguro_2026
+          APP_SECRET=${{ secrets.APP_SECRET }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          CPF_ENCRYPTION_KEY=${{ secrets.CPF_ENCRYPTION_KEY }}
+          DOTENV_CONFIG_PATH=.env.staging
+          EOF
+
       - name: 🌙 Run Full Integration Test Suite (Staging)
         if: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY != '' || secrets.SUPABASE_SERVICE_KEY != '' }}
         env:
-          PORT: 3000
-          NODE_ENV: staging
-          SUPABASE_URL: https://eywcowvwgccslqfnxaws.supabase.co
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
-          WHATSAPP_TOKEN: EAAY_STAGING_TEST_TOKEN
-          WHATSAPP_PHONE_ID: 999888777
-          VERIFY_TOKEN: clinica_bot_seguro_2026
-          APP_SECRET: ${{ secrets.APP_SECRET }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY }}
           DOTENV_CONFIG_PATH: .env.staging
         run: node -r dotenv/config tests/run_night_suite.js
 
