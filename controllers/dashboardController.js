@@ -105,6 +105,7 @@ class DashboardController {
 
             if (req.isSuperAdmin) {
                 req.resolvedClinicId = null;
+                req.clinicData = null;
                 return next();
             }
 
@@ -114,16 +115,19 @@ class DashboardController {
             }
 
             const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clinicId);
+            let clinicQuery = db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, work_hours, address, eval_price');
             if (isUuid) {
-                req.resolvedClinicId = clinicId;
+                clinicQuery = clinicQuery.eq('id', clinicId);
             } else {
-                const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', clinicId).maybeSingle();
-                if (cRow && cRow.id) {
-                    req.resolvedClinicId = cRow.id;
-                } else {
-                    logger.warn('RESOLVE_CLINIC_ID_NOT_FOUND', `Acesso negado: slug de clínica '${clinicId}' não cadastrado no banco para usuário ${req.user?.email}`);
-                    return res.status(403).json({ error: 'Acesso negado: clínica não cadastrada no sistema.' });
-                }
+                clinicQuery = clinicQuery.eq('slug', clinicId);
+            }
+            const { data: cRow } = await clinicQuery.maybeSingle();
+            if (cRow && cRow.id) {
+                req.resolvedClinicId = cRow.id;
+                req.clinicData = cRow;
+            } else {
+                logger.warn('RESOLVE_CLINIC_ID_NOT_FOUND', `Acesso negado: slug de clínica '${clinicId}' não cadastrado no banco para usuário ${req.user?.email}`);
+                return res.status(403).json({ error: 'Acesso negado: clínica não cadastrada no sistema.' });
             }
 
             next();
@@ -188,16 +192,20 @@ class DashboardController {
             const targetClinicId = req.resolvedClinicId;
 
             let clinicIdToFetch = targetClinicId;
-            if (!clinicIdToFetch) {
-                const { data: cRow } = await db.supabase.from('clinics').select('id').eq('slug', 'clinica-modelo').maybeSingle();
+            let clinicData = req.clinicData;
+
+            if (!clinicData && !clinicIdToFetch) {
+                const { data: cRow } = await db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, work_hours, address, eval_price').eq('slug', 'clinica-modelo').maybeSingle();
                 clinicIdToFetch = cRow?.id || null;
+                clinicData = cRow || null;
+            } else if (!clinicData && clinicIdToFetch) {
+                const { data: cRow } = await db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, work_hours, address, eval_price').eq('id', clinicIdToFetch).maybeSingle();
+                clinicData = cRow || null;
             }
 
-            let clinicQuery = clinicIdToFetch ? db.supabase.from('clinics').select('id, name, slug, whatsapp_list_title, work_hours, address, eval_price').eq('id', clinicIdToFetch).maybeSingle() : Promise.resolve({ data: null });
-
-            let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-            let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at', { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-            let sessionsQuery = db.supabase.from('sessions').select('*').is('deleted_at', null);
+            let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)').is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+            let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at').is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+            let sessionsQuery = db.supabase.from('sessions').select('id, phone, history').is('deleted_at', null);
 
             if (!req.isSuperAdmin && !targetClinicId) {
                 return res.status(403).json({ error: 'Acesso negado: clínica não resolvida.' });
@@ -209,17 +217,15 @@ class DashboardController {
                 sessionsQuery = sessionsQuery.eq('clinic_id', targetClinicId);
             }
 
-            const [apptsRes, patientsRes, sessionsRes, clinicRes] = await Promise.all([
+            const [apptsRes, patientsRes, sessionsRes] = await Promise.all([
                 apptsQuery,
                 patientsQuery,
-                sessionsQuery,
-                clinicQuery
+                sessionsQuery
             ]);
 
             let appts = apptsRes.data || [];
             let patientsList = patientsRes.data || [];
             let sessionsList = sessionsRes.data || [];
-            let clinicData = clinicRes?.data || null;
 
             // Mapeia pacientes para lookup rápido de responsáveis (guardian)
             const patientMap = new Map();

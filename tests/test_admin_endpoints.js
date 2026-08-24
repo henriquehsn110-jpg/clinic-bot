@@ -41,9 +41,11 @@ function request(method, pathName, data = null, headers = {}) {
 
 async function ensureServerRunning() {
     try {
+        const { execSync } = require('child_process');
         if (process.platform === 'win32') {
-            const { execSync } = require('child_process');
-            execSync('powershell -Command "Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"', { stdio: 'ignore' });
+            execSync('cmd.exe /c "npx --yes kill-port 3000"', { stdio: 'ignore' });
+        } else {
+            execSync('fuser -k 3000/tcp || true', { stdio: 'ignore' });
         }
         await new Promise(r => setTimeout(r, 1000));
     } catch (e) {}
@@ -51,15 +53,23 @@ async function ensureServerRunning() {
     console.log("  🚀 Auto-iniciando server.js na porta 3000...");
     serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
         cwd: path.join(__dirname, '..'),
-        stdio: 'ignore'
+        stdio: 'ignore',
+        shell: true
     });
 
-    for (let i = 0; i < 20; i++) {
+    let ready = false;
+    for (let i = 0; i < 40; i++) {
         await new Promise(r => setTimeout(r, 500));
         try {
-            const res = await request('GET', '/admin/status');
-            if (res.status) break;
+            const res = await request('GET', '/health');
+            if (res && res.status === 200) {
+                ready = true;
+                break;
+            }
         } catch (e) {}
+    }
+    if (!ready) {
+        throw new Error('Falha ao iniciar server.js na porta 3000 após 20 segundos');
     }
 }
 

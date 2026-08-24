@@ -6,15 +6,17 @@ class AIService {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         // P5: Modelos ativos e de menor custo da API Gemini
         this.candidateModels = [
-            process.env.GEMINI_MODEL || 'gemini-flash-lite-latest',
-            'gemini-flash-lite-latest',
-            'gemini-1.5-flash-latest'
+            process.env.GEMINI_MODEL || 'gemini-3.6-flash',
+            'gemini-3.6-flash'
         ].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicatas
         this.modelIndex = 0;
 
         // P2: Rate Limiter — máximo de chamadas por minuto à API Gemini
         this.MAX_CALLS_PER_MINUTE = parseInt(process.env.GEMINI_RATE_LIMIT) || 15;
         this._callTimestamps = [];
+
+        // P3: Timeout de Aplicação — evita travar o webhook da Meta caso a API do Google engasgue
+        this.TIMEOUT_MS = parseInt(process.env.GEMINI_TIMEOUT_MS) || 6500;
 
         this.initModel();
     }
@@ -367,7 +369,17 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
                     }
                 });
 
-                const result       = await chat.sendMessage(userMessage);
+                const timeoutPromise = new Promise((_, reject) => {
+                    const timer = setTimeout(() => {
+                        reject(new Error(`GEMINI_TIMEOUT: Chamada à API do Gemini excedeu o tempo limite de ${this.TIMEOUT_MS}ms`));
+                    }, this.TIMEOUT_MS);
+                    if (typeof timer.unref === 'function') timer.unref();
+                });
+
+                const result       = await Promise.race([
+                    chat.sendMessage(userMessage),
+                    timeoutPromise
+                ]);
                 const responseText = result.response.text();
                 let parsed;
                 try {
@@ -432,10 +444,14 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
 
             } catch (error) {
                 lastError = error;
-                if (error.message && (error.message.includes('429') || error.message.includes('Quota') || error.message.includes('404') || error.message.includes('not found'))) {
+                if (error.message && (error.message.includes('429') || error.message.includes('Quota') || error.message.includes('404') || error.message.includes('not found') || error.message.includes('TIMEOUT'))) {
                     this.modelIndex = (this.modelIndex + 1) % this.candidateModels.length;
                     this.initModel();
-                    logger.warn('GEMINI_API', `Cota ou modelo indisponível (${error.message}). Alternando para modelo fallback: ${this.candidateModels[this.modelIndex]}`);
+                    logger.warn('GEMINI_API', `Indisponibilidade ou Timeout (${error.message}). Alternando para modelo fallback: ${this.candidateModels[this.modelIndex]}`);
+                }
+                // Em caso de timeout de rede, limita a no máximo 1 retentativa para garantir resposta antes do limite de 15s da Meta
+                if (error.message && error.message.includes('TIMEOUT') && attempt >= 2) {
+                    break;
                 }
                 if (attempt <= maxRetries) {
                     const delayMs = attempt * 300 + Math.floor(Math.random() * 200);

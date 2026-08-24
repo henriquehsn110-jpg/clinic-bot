@@ -1,4 +1,3 @@
-
 function chunkArray(array, size) {
     const chunked = [];
     for (let i = 0; i < array.length; i += size) {
@@ -131,6 +130,7 @@ class ReminderService {
                         } catch (e) {
                             logger.error('REMINDER_LOG_FAILED', e.message);
                         }
+
                         stats.details.push({ id: appt.id, phone, time, status: 'sent' });
                         logger.info('REMINDER_SENT', `Lembrete enviado com sucesso para [${phone}] (Clínica ${clinic.slug}) - consulta ${time}`);
 
@@ -139,6 +139,9 @@ class ReminderService {
                         stats.details.push({ id: appt.id, phone, status: 'failed', error: sendErr.message });
                         logger.error('REMINDER_FAILED', `Falha ao enviar lembrete para [${phone}] (Clínica ${clinic.slug}): ${sendErr.message}`, sendErr.stack);
                     }
+
+                    // Pacing buffer de 50ms para evitar estouro de MPS (Messages Per Second) na Meta
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
             }
 
