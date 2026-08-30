@@ -1,0 +1,43 @@
+name: 💾 Daily Production Database Backup
+
+on:
+  schedule:
+    # Rodar diariamente às 03:00 BRT (06:00 UTC)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  production-backup:
+    name: 🛡️ Run & Upload Production Database Backup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Código-Fonte
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js (v22 LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: 📦 Instalar Dependências
+        run: npm ci
+
+      - name: 🚀 Executar Backup Completo do Banco de Produção
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://vqnhtejriorlegqvtivq.supabase.co' }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/backup_production_database.js
+
+      - name: 🧪 Validar Integridade e Descompressão do Arquivo
+        run: node tests/test_backup_and_restore_integrity.js
+
+      - name: ☁️ Fazer Upload do Artefato de Backup (Retenção 90 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-production-backup-${{ github.run_id }}
+          path: backups/*.json.gz
+          retention-days: 90
+          if-no-files-found: error
