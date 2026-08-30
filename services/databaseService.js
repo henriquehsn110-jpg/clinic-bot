@@ -990,9 +990,11 @@ const conversations = {
                 .insert({ patient_id: patientId, role, content });
 
             // Log nunca deve travar o fluxo principal — só registra o erro
-            if (error) console.error(`conversations.log: ${error.message}`);
+            if (error && !error.message.includes('conversations')) console.error(`conversations.log: ${error.message}`);
         }).catch(err => {
-            console.error(`[DATABASE] Erro ao gravar log de conversa (esgotado retry): ${err.message}`);
+            if (!err.message.includes('conversations')) {
+                console.error(`[DATABASE] Erro ao gravar log de conversa (esgotado retry): ${err.message}`);
+            }
         });
     },
 

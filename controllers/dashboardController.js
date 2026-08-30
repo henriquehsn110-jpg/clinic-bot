@@ -203,29 +203,28 @@ class DashboardController {
                 clinicData = cRow || null;
             }
 
-            let apptsQuery = db.supabase.from('appointments').select('*, patients(id, name, phone, cpf)').is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-            let patientsQuery = db.supabase.from('patients').select('id, name, phone, cpf, created_at').is('deleted_at', null).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-            let sessionsQuery = db.supabase.from('sessions').select('id, phone, history').is('deleted_at', null);
-
-            if (!req.isSuperAdmin && !targetClinicId) {
+                        if (!req.isSuperAdmin && !targetClinicId) {
                 return res.status(403).json({ error: 'Acesso negado: clínica não resolvida.' });
             }
 
-            if (!req.isSuperAdmin && targetClinicId) {
-                apptsQuery = apptsQuery.eq('clinic_id', targetClinicId);
-                patientsQuery = patientsQuery.eq('clinic_id', targetClinicId);
-                sessionsQuery = sessionsQuery.eq('clinic_id', targetClinicId);
+            const { data: rpcData, error: rpcError } = await db.supabase.rpc('get_dashboard_data', {
+                p_clinic_id: clinicIdToFetch,
+                p_limit: limit,
+                p_offset: offset
+            });
+
+            if (rpcError) {
+                logger.error('DASHBOARD_RPC_ERR', `Erro na RPC get_dashboard_data: ${rpcError.message}`);
+                throw new Error('Falha ao carregar dados do dashboard via RPC.');
             }
 
-            const [apptsRes, patientsRes, sessionsRes] = await Promise.all([
-                apptsQuery,
-                patientsQuery,
-                sessionsQuery
-            ]);
+            let appts = rpcData?.appointments || [];
+            let patientsList = rpcData?.patients || [];
+            let sessionsList = rpcData?.sessions || [];
 
-            let appts = apptsRes.data || [];
-            let patientsList = patientsRes.data || [];
-            let sessionsList = sessionsRes.data || [];
+            if (!clinicData && rpcData?.clinic) {
+                clinicData = rpcData.clinic;
+            }
 
             // Mapeia pacientes para lookup rápido de responsáveis (guardian)
             const patientMap = new Map();
@@ -271,8 +270,8 @@ class DashboardController {
                 pagination: {
                     page,
                     limit,
-                    totalAppts: apptsRes.count || appts.length,
-                    totalPatients: patientsRes.count || safePatients.length
+                    totalAppts: appts.length,
+                    totalPatients: safePatients.length
                 },
                 kpis: {
                     todayCount: todayAppts.length,

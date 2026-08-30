@@ -300,6 +300,7 @@ async function runTestSuite() {
         { name: 'qa_static.js (Auditoria Estática de Segurança)', cmd: 'node scripts/qa_static.js' },
         { name: 'qa_investigador_estados.js (Simulação de Fluxos da Ana)', cmd: 'node scripts/qa_investigador_estados.js' },
         { name: 'test_reminders.js (Cron de Lembretes BRT)', cmd: 'node tests/test_reminders.js' },
+        { name: 'test_reminder_rules_d1_h2.js (Lembretes Multi-Nível D-1 Véspera e H-2 Antecedência)', cmd: 'node tests/test_reminder_rules_d1_h2.js' },
         { name: 'test_name_extraction.js (Sanitização do Nome do Paciente)', cmd: 'node tests/test_name_extraction.js' },
         { name: 'test_component_exclusivity.js (Trava Absoluta Anti-Alucinação de Componentes)', cmd: 'node tests/test_component_exclusivity.js' },
         { name: 'fsm_chaos_test.js (Validação da Trava de CPF em Agendamento Familiar)', cmd: 'node tests/fsm_chaos_test.js' },
@@ -308,6 +309,7 @@ async function runTestSuite() {
         { name: 'test_cpf.js (Validação Matemática CPF/LGPD)', cmd: 'node tests/unit/test_cpf.js' },
         { name: 'test_race_condition.js (Concorrência Anti-Overbooking)', cmd: 'node tests/unit/test_race_condition.js' },
         { name: 'test_chat_dashboard_integration.js (Integração E2E Chat ↔ Dashboard)', cmd: 'node tests/test_chat_dashboard_integration.js' },
+        { name: 'test_dashboard_full_lifecycle.js (Ciclo de Vida Completo do Dashboard E2E)', cmd: 'node tests/test_dashboard_full_lifecycle.js' },
         { name: 'e2e_dashboard_test.js (Auditoria Visual Headless DOM)', cmd: 'node tests/e2e_dashboard_test.js' },
         { name: 'e2e_browser_test.js (Auditoria Links Vendas & Breakpoints)', cmd: 'node tests/e2e_browser_test.js' },
         { name: 'stress_test.js (Teste de Carga 100 Reqs Concorrentes)', cmd: 'node tests/stress_test.js' }

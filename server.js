@@ -449,20 +449,42 @@ app.listen(PORT, () => {
     console.log(`[SIMULATOR] Acesse http://localhost:${PORT}/simulator/index.html`);
     console.log(`[WEBHOOK] Roteie o tráfego para http://localhost:${PORT}/api/webhook`);
 
-    // Ativação do Agendador de Lembretes Automáticos via Cron (diariamente às 08:00 AM America/Sao_Paulo)
+    // Ativação do Agendador de Lembretes Automáticos Multi-Nível via Cron (fuso America/Sao_Paulo)
     const isDev = process.env.NODE_ENV !== 'production';
     console.log(`⏰ [REMINDERS] Agendador de lembretes ativado (modo simulação: ${isDev})`);
     try {
         const cron = require('node-cron');
+
+        // 1. Lembrete do Dia (D-0 às 08:00 AM BRT)
         cron.schedule('0 8 * * *', () => {
-            console.log('⏰ [REMINDERS] Executando disparo diário de lembretes (08:00 BRT)...');
+            console.log('⏰ [REMINDERS] Executando disparo matinal de lembretes (08:00 BRT)...');
             reminderService.processDailyReminders(isDev).catch(err => {
-                console.error('❌ Erro no ciclo agendado de lembretes:', err.message);
+                console.error('❌ Erro no ciclo agendado de lembretes matinais:', err.message);
             });
         }, {
             timezone: 'America/Sao_Paulo'
         });
-        console.log('✅ [REMINDERS] Cron job agendado com sucesso para 08:00 AM (America/Sao_Paulo)');
+
+        // 2. Lembrete de Véspera (D-1 às 18:00 BRT)
+        cron.schedule('0 18 * * *', () => {
+            console.log('⏰ [REMINDERS_D1] Executando disparo de lembretes de véspera D-1 (18:00 BRT)...');
+            reminderService.processEveReminders(isDev).catch(err => {
+                console.error('❌ Erro no ciclo agendado de lembretes D-1:', err.message);
+            });
+        }, {
+            timezone: 'America/Sao_Paulo'
+        });
+
+        // 3. Lembrete de Antecedência Imediata (H-2 a cada 15 minutos)
+        cron.schedule('*/15 * * * *', () => {
+            reminderService.processTwoHourReminders(isDev).catch(err => {
+                console.error('❌ Erro no ciclo agendado de lembretes H-2:', err.message);
+            });
+        }, {
+            timezone: 'America/Sao_Paulo'
+        });
+
+        console.log('✅ [REMINDERS] Cron jobs agendados com sucesso: D-0 (08:00), D-1 (18:00) e H-2 (*/15 min) em America/Sao_Paulo');
     } catch (cronErr) {
         console.warn('⚠️ [REMINDERS] Erro ao inicializar node-cron:', cronErr.message);
     }

@@ -149,7 +149,29 @@ function matchProcedureFromText(userText, proceduresList) {
         return { match: firstExact, ambiguousMatches: [firstExact] };
     }
 
-    // 2. Se houver 2 ou mais correspondências e NENHUMA for match exato único (ex: "limpeza" batendo com "Limpeza Simples" e "Limpeza Profunda", ou "odontopediatria" batendo com "Odontopediatria Preventiva" e "Odontopediatria Curativa"):
+    // 2. Correspondência por Substring Completa de Frase (normUser contém literalmente o nome normalizado do procedimento)
+    // Ex: "Quero agendar um implante dental" contém "implante dental", mas NÃO contém "implantes"
+    const fullSubstringMatches = matchedItems.filter(p => {
+        const normP = normalizeTextForMatch(p);
+        return normUser.includes(normP);
+    });
+
+    if (fullSubstringMatches.length === 1) {
+        return { match: fullSubstringMatches[0], ambiguousMatches: fullSubstringMatches };
+    }
+
+    if (fullSubstringMatches.length > 1) {
+        // Ordena por tamanho decrescente para selecionar o procedimento mais específico (ex: "Limpeza Simples" > "Limpeza")
+        fullSubstringMatches.sort((a, b) => normalizeTextForMatch(b).length - normalizeTextForMatch(a).length);
+        const longestNorm = normalizeTextForMatch(fullSubstringMatches[0]);
+        const secondLongestNorm = normalizeTextForMatch(fullSubstringMatches[1]);
+        if (longestNorm.includes(secondLongestNorm) && longestNorm.length > secondLongestNorm.length) {
+            return { match: fullSubstringMatches[0], ambiguousMatches: [fullSubstringMatches[0]] };
+        }
+        return { match: null, ambiguousMatches: fullSubstringMatches };
+    }
+
+    // 3. Se houver 2 ou mais correspondências e NENHUMA for match exato único ou substring completa:
     // Retorna NULO para o match e a lista completa de procedimentos ambíguos. NUNCA escolhe sozinho!
     return { match: null, ambiguousMatches: matchedItems };
 }

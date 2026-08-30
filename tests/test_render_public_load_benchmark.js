@@ -1,12 +1,13 @@
 /**
- * BENCHMARK DE CARGA REAL NO RENDER HOSPEDADO (PROMPT 5 - STARTER COMPARISON)
- * Alvo: https://clinic-bot-zksc.onrender.com (URL Pública Real no Render)
- * Mede a capacidade e latência de ponta a ponta pós-upgrade (0.5 vCPU dedicada / 1 GB RAM).
+ * BENCHMARK DE CARGA REAL NO RENDER HOSPEDADO / LOCAL STAGING (PROMPT 10 - RPC COMPARISON)
+ * Mede a capacidade e latência de ponta a ponta pós-migração RPC.
  */
-require('dotenv').config();
+process.env.DOTENV_CONFIG_PATH = process.env.DOTENV_CONFIG_PATH || require('path').resolve(__dirname, '../.env.staging');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH });
+
 const axios = require('axios');
 
-const RENDER_BASE_URL = 'https://clinic-bot-zksc.onrender.com';
+const RENDER_BASE_URL = process.env.RENDER_BASE_URL || process.env.BASE_URL || 'https://clinic-bot-zksc.onrender.com';
 
 async function authenticate(clinicSlug = 'clinica-modelo') {
     const res = await axios.post(`${RENDER_BASE_URL}/api/dashboard/auth/login`, {
@@ -87,34 +88,30 @@ async function runRenderConcurrencyTier(concurrencyLevel, token, testType = 'das
 
 async function runBenchmark() {
     console.log('================================================================');
-    console.log('🌐 [PROMPT 5] BENCHMARK DE CARGA REAL NO RENDER (PÓS-UPGRADE STARTER)');
+    console.log('🌐 [PROMPT 10] BENCHMARK DE CARGA REAL NO ENDPOINT DE DASHBOARD (RPC ÚNICA)');
     console.log('================================================================');
-    console.log(`Alvo: ${RENDER_BASE_URL} | Plano: Starter (0.5 CPU, 1 GB RAM)\n`);
+    console.log(`Alvo: ${RENDER_BASE_URL}\n`);
 
-    console.log('🔑 Autenticando no serviço do Render para obter JWT...');
+    console.log('🔑 Autenticando no serviço para obter JWT...');
     let token = '';
     try {
         token = await authenticate('clinica-modelo');
-        console.log('✅ Autenticação realizada com sucesso no Render.\n');
+        console.log('✅ Autenticação realizada com sucesso.\n');
     } catch (err) {
-        console.error('❌ Falha ao autenticar no Render:', err.message);
+        console.error('❌ Falha ao autenticar:', err.message);
         process.exit(1);
     }
 
-    // Degraus para Dashboard (incluindo 30 e 40)
+    // Degraus para Dashboard (5, 10, 20, 30, 40)
     const dashboardTiers = [5, 10, 20, 30, 40];
-    const healthTiers = [5, 10, 20, 40, 80];
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // FASE 1: Carga Real em Endpoint Relacional Pesado (/api/dashboard/data)
-    // ─────────────────────────────────────────────────────────────────────────
     console.log('================================================================');
-    console.log('📊 FASE 1: CARGA HTTPS EM ENDPOINT RELACIONAL (/api/dashboard/data)');
+    console.log('📊 FASE 1: CARGA EM ENDPOINT RELACIONAL (/api/dashboard/data)');
     console.log('================================================================\n');
 
     const phase1Results = [];
     for (const level of dashboardTiers) {
-        process.stdout.write(`⏳ Disparando ${level} requisições HTTPS simultâneas contra o Render... `);
+        process.stdout.write(`⏳ Disparando ${level} requisições simultâneas... `);
         const res = await runRenderConcurrencyTier(level, token, 'dashboard_data');
         phase1Results.push(res);
         console.log(`Concluído em ${(res.totalDuration / 1000).toFixed(1)}s | Latência: Média ${res.meanLatency}ms (p50: ${res.p50}ms, p95: ${res.p95}ms) | Erros: ${res.errorRate}% | Vazão: ${res.rps} req/s`);
@@ -126,30 +123,9 @@ async function runBenchmark() {
         await new Promise(r => setTimeout(r, 1000));
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // FASE 2: Carga HTTPS em Endpoint de Health & DB Ping (/health)
-    // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n================================================================');
-    console.log('📊 FASE 2: CARGA HTTPS EM ENDPOINT DE INFRAESTRUTURA (/health)');
-    console.log('================================================================\n');
-
-    const phase2Results = [];
-    for (const level of healthTiers) {
-        process.stdout.write(`⏳ Disparando ${level} requisições HTTPS simultâneas contra o Render... `);
-        const res = await runRenderConcurrencyTier(level, token, 'health');
-        phase2Results.push(res);
-        console.log(`Concluído em ${(res.totalDuration / 1000).toFixed(1)}s | Latência: Média ${res.meanLatency}ms (p50: ${res.p50}ms, p95: ${res.p95}ms) | Erros: ${res.errorRate}% | Vazão: ${res.rps} req/s`);
-
-        if (res.errorRate > 5.0 || res.p95 > 20000) {
-            console.log(`⚠️ Ponto de parada atingido no nível ${level} (Erros: ${res.errorRate}%, p95: ${res.p95}ms)`);
-            break;
-        }
-        await new Promise(r => setTimeout(r, 1000));
-    }
-
     // Relatórios Finais
     console.log('\n================================================================');
-    console.log('📋 RESULTADOS CONSOLIDADOS DO BENCHMARK NO RENDER STARTER');
+    console.log('📋 RESULTADOS CONSOLIDADOS DO BENCHMARK (RPC ÚNICA)');
     console.log('================================================================\n');
 
     console.log('### TABELA FASE 1 — Endpoint de Dados Relacionais (/api/dashboard/data):');
@@ -158,16 +134,9 @@ async function runBenchmark() {
     phase1Results.forEach(r => {
         console.log(`| **${r.concurrency} conexões** | ${r.successful}/${r.concurrency} | ${r.failed} | ${r.errorRate}% | ${r.meanLatency}ms | ${r.p50}ms | ${r.p95}ms | **${r.rps} req/s** |`);
     });
-
-    console.log('\n### TABELA FASE 2 — Endpoint de Health & DB Ping (/health):');
-    console.log('| Concorrência | Sucesso | Falhas | Erro (%) | Média (ms) | p50 (ms) | p95 (ms) | Vazão (req/s) |');
-    console.log('|---|---|---|---|---|---|---|---|');
-    phase2Results.forEach(r => {
-        console.log(`| **${r.concurrency} conexões** | ${r.successful}/${r.concurrency} | ${r.failed} | ${r.errorRate}% | ${r.meanLatency}ms | ${r.p50}ms | ${r.p95}ms | **${r.rps} req/s** |`);
-    });
 }
 
 runBenchmark().then(() => process.exit(0)).catch(err => {
-    console.error('❌ ERRO NO BENCHMARK DO RENDER:', err);
+    console.error('❌ ERRO NO BENCHMARK:', err);
     process.exit(1);
 });
