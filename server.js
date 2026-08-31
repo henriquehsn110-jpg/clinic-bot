@@ -450,15 +450,16 @@ app.listen(PORT, () => {
     console.log(`[WEBHOOK] Roteie o tráfego para http://localhost:${PORT}/api/webhook`);
 
     // Ativação do Agendador de Lembretes Automáticos Multi-Nível via Cron (fuso America/Sao_Paulo)
-    const isDev = process.env.NODE_ENV !== 'production';
-    console.log(`⏰ [REMINDERS] Agendador de lembretes ativado (modo simulação: ${isDev})`);
+    // Se WHATSAPP_TOKEN estiver presente, realiza o disparo real via Meta API, a menos que REMINDERS_SIMULATION=true seja explicitamente forçado
+    const isSimulation = process.env.REMINDERS_SIMULATION === 'true' || (!process.env.WHATSAPP_TOKEN && process.env.NODE_ENV !== 'production');
+    console.log(`⏰ [REMINDERS] Agendador de lembretes ativado (modo simulação: ${isSimulation})`);
     try {
         const cron = require('node-cron');
 
         // 1. Lembrete do Dia (D-0 às 08:00 AM BRT)
         cron.schedule('0 8 * * *', () => {
             console.log('⏰ [REMINDERS] Executando disparo matinal de lembretes (08:00 BRT)...');
-            reminderService.processDailyReminders(isDev).catch(err => {
+            reminderService.processDailyReminders(isSimulation).catch(err => {
                 console.error('❌ Erro no ciclo agendado de lembretes matinais:', err.message);
             });
         }, {
@@ -468,7 +469,7 @@ app.listen(PORT, () => {
         // 2. Lembrete de Véspera (D-1 às 18:00 BRT)
         cron.schedule('0 18 * * *', () => {
             console.log('⏰ [REMINDERS_D1] Executando disparo de lembretes de véspera D-1 (18:00 BRT)...');
-            reminderService.processEveReminders(isDev).catch(err => {
+            reminderService.processEveReminders(isSimulation).catch(err => {
                 console.error('❌ Erro no ciclo agendado de lembretes D-1:', err.message);
             });
         }, {
@@ -477,7 +478,7 @@ app.listen(PORT, () => {
 
         // 3. Lembrete de Antecedência Imediata (H-2 a cada 15 minutos)
         cron.schedule('*/15 * * * *', () => {
-            reminderService.processTwoHourReminders(isDev).catch(err => {
+            reminderService.processTwoHourReminders(isSimulation).catch(err => {
                 console.error('❌ Erro no ciclo agendado de lembretes H-2:', err.message);
             });
         }, {
