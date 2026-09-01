@@ -32,8 +32,8 @@
                     <span id="user-display-name">Carregando perfil...</span>
                 </div>
                 <button class="btn" id="sound-btn" onclick="toggleSoundNotification()" title="Ativar/Desativar Alerta Sonoro do Painel"><i class="fa-solid fa-volume-high" id="sound-icon"></i> <span id="sound-text">Som Ativo</span></button>
-                <button class="btn btn-primary" onclick="openModal('modal-patient')"><i class="fa-solid fa-user-plus"></i> + Paciente</button>
-                <button class="btn btn-success" onclick="openModal('modal-appointment')"><i class="fa-solid fa-calendar-plus"></i> + Agendamento</button>
+                <button class="btn btn-primary" onclick="openModal('modal-patient')"><i class="fa-solid fa-user-plus"></i> Paciente</button>
+                <button class="btn btn-success" onclick="openModal('modal-appointment')"><i class="fa-solid fa-calendar-plus"></i> Agendamento</button>
                 <button class="btn btn-danger" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
                 <button class="btn" id="refresh-btn" onclick="handleManualRefresh()" title="Atualizar Dados do Servidor"><i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i> Atualizar</button>
             </div>
@@ -158,7 +158,7 @@
         <div id="tab-patients" class="section-card" style="display: none;">
             <div class="table-toolbar">
                 <div style="font-weight: 700; font-size: 16px;">Base de Pacientes (Criptografia AES-256 no BD)</div>
-                <button class="btn btn-primary" onclick="openModal('modal-patient')"><i class="fa-solid fa-user-plus"></i> + Cadastrar Paciente</button>
+                <button class="btn btn-primary" onclick="openModal('modal-patient')"><i class="fa-solid fa-user-plus"></i> Cadastrar Paciente</button>
             </div>
             <div class="table-responsive">
                 <table>
@@ -208,7 +208,7 @@
                     <h2 style="font-size: 20px; font-weight: 800; color: var(--text-main);"><i class="fa-solid fa-user-doctor" style="color: var(--primary);"></i> Corpo Clínico & Médicos Especialistas</h2>
                     <p style="font-size: 14px; color: var(--text-muted);">Gerencie os profissionais de saúde da clínica, suas especialidades, registro profissional (CRO/CRM) e dias de atendimento no WhatsApp.</p>
                 </div>
-                <button class="btn btn-primary" onclick="openModal('modal-doctor')"><i class="fa-solid fa-plus"></i> + Cadastrar Médico</button>
+                <button class="btn btn-primary" onclick="openModal('modal-doctor')"><i class="fa-solid fa-user-doctor"></i> Cadastrar Médico</button>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;" id="doctors-cards-container">

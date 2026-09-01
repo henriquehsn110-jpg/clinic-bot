@@ -3,6 +3,24 @@ const whatsappService   = require('../services/whatsappService');
 const db                = require('../services/databaseService');
 const calendarService   = require('../services/calendarService');
 const logger            = require('../services/logger');
+const crypto            = require('crypto');
+
+/**
+ * Transiciona o rascunho para agendamento de familiar/dependente preservando
+ * estritamente os dados de procedimento, data, horário, médico e observações já escolhidos.
+ */
+function switchToFamilyBooking(draft = {}) {
+    draft.is_family_booking = true;
+    draft.name = null;
+    draft.dependentName = null;
+    draft.dependentCpf = null;
+    draft.dependent_id = null;
+    draft.cpf = null;
+    // Invalida token de confirmação anterior pois novo paciente exige validação
+    draft.confirmation_token = null;
+    draft.step = 'collecting_dependent_name';
+    return draft;
+}
 
 // Reconhece o formato enviado pelo frontend quando o paciente
 // clica numa data no widget de calendário
@@ -103,6 +121,19 @@ function matchProcedureFromText(userText, proceduresList) {
     const matchedItems = dedupedProcedures.filter(p => {
         const normP = normalizeTextForMatch(p);
 
+        // Guardrail anti-falso-positivo: "Outro" só é procedimento se digitado estritamente como opção de catálogo
+        // Frases como "outro dia", "outra data", "outro horário", "outra pessoa", "prefiro outro dia" NÃO são procedimentos
+        if (normP === 'outro') {
+            const isStrictOther = /^(outro|outros|outro procedimento|outros procedimentos|opcao outro|opção outro|6)$/i.test(userText.trim());
+            if (!isStrictOther) return false;
+        }
+
+        // Guardrail anti-falso-positivo: "Consulta" não deve capturar frases genéricas como "marcar consulta de limpeza"
+        if (normP === 'consulta') {
+            const isGenericQuery = /\b(consulta\s+de|consulta\s+para|marcar\s+consulta|agendar\s+consulta|minha\s+consulta)\b/i.test(userText);
+            if (isGenericQuery && normUser !== 'consulta' && normUser !== 'consulta geral') return false;
+        }
+
         // Se o nome exato do procedimento normalizado é igual à frase ou termos limpos do usuário
         if (normP === normUser || normP === normUserClean) return true;
 
@@ -122,6 +153,39 @@ function matchProcedureFromText(userText, proceduresList) {
 
     if (matchedItems.length === 1) {
         return { match: matchedItems[0], ambiguousMatches: matchedItems };
+    }
+
+    // REGRA DE MULTIPLOS PROCEDIMENTOS SOLICITADOS NA MESMA FRASE:
+    // Se o usuário mencionou termos de 2 ou mais procedimentos distintos (ex: "Limpeza e Clareamento", "Implante e Aparelho"),
+    // o bot DEVE solicitar desambiguação e NUNCA selecionar silenciosamente apenas o primeiro.
+    if (matchedItems.length > 1) {
+        const procToUserWords = new Map();
+        for (const p of matchedItems) {
+            const normP = normalizeTextForMatch(p);
+            const procWords = normP.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+            const matchedUWs = userWords.filter(uw => procWords.some(pw => uw === pw || (uw.length > 4 && pw.includes(uw)) || (pw.length > 4 && uw.includes(pw))));
+            procToUserWords.set(p, matchedUWs);
+        }
+
+        const procs = Array.from(procToUserWords.keys());
+        let hasDistinctMultiple = false;
+        for (let i = 0; i < procs.length; i++) {
+            for (let j = i + 1; j < procs.length; j++) {
+                const wordsI = procToUserWords.get(procs[i]) || [];
+                const wordsJ = procToUserWords.get(procs[j]) || [];
+                const hasIOnly = wordsI.some(w => !wordsJ.includes(w));
+                const hasJOnly = wordsJ.some(w => !wordsI.includes(w));
+                if (hasIOnly && hasJOnly) {
+                    hasDistinctMultiple = true;
+                    break;
+                }
+            }
+            if (hasDistinctMultiple) break;
+        }
+
+        if (hasDistinctMultiple) {
+            return { match: null, ambiguousMatches: matchedItems };
+        }
     }
 
     // REGRA DE SEGURANÇA DETERMINÍSTICA (SEM REGEX HARDCODED):
@@ -888,20 +952,7 @@ class ConversationController {
             // 3. Atalho para botão "Agendar p/ Outro" (Agendamento para familiar/dependente)
             if (sanitizedText.toLowerCase() === 'agendar p/ outro' || sanitizedText.toLowerCase() === 'agendar para outro' || sanitizedText.toLowerCase() === 'agendar para outra pessoa') {
                 logger.info('FAMILY_BOOKING', `Paciente [${phone}] iniciou agendamento para familiar/dependente.`);
-                draft.is_family_booking = true;
-                draft.name = null;
-                draft.dependentName = null;
-                draft.dependentCpf = null;
-                draft.dependent_id = null;
-                draft.cpf = null;
-                // RESET COMPLETO: limpar dados do agendamento anterior para evitar bypass do CPF gate
-                draft.type = null;
-                draft.date = null;
-                draft.time = null;
-                draft.doctor_id = null;
-                draft.doctor_name = null;
-                draft.needs_doctor = null;
-                draft.available_doctors = null;
+                switchToFamilyBooking(draft);
 
                 // Busca dependentes já vinculados ao titular
                 const savedDependents = (patient && patient.id)
@@ -1019,6 +1070,10 @@ class ConversationController {
             // 4. Atalhos para botão "Alterar" e suas variações
             if (sanitizedText.toLowerCase() === 'alterar' || sanitizedText.toLowerCase() === 'alterar agendamento') {
                 logger.info('ALTER_BOOKING', `Paciente [${phone}] solicitou alteração do agendamento em andamento.`);
+                draft.confirmation_token = null;
+                draft.step = 'editing';
+                await db.sessions.setDraft(phone, draft, clinicId);
+
                 const alterText = "Sem problemas! O que você gostaria de alterar no seu agendamento?";
                 const alterButtons = ["Alterar Data/Horário", "Alterar Especialidade", "Remarcar/Cancelar"];
                 
@@ -1046,7 +1101,9 @@ class ConversationController {
             if (sanitizedText.toLowerCase() === 'alterar data/horário' || sanitizedText.toLowerCase() === 'alterar data' || sanitizedText.toLowerCase() === 'alterar horário') {
                 draft.date = null;
                 draft.time = null;
-                await db.sessions.setDraft(phone, { date: null, time: null }, clinicId);
+                draft.confirmation_token = null;
+                draft.step = 'editing';
+                await db.sessions.setDraft(phone, draft, clinicId);
 
                 const calText = "Claro! Escolha uma nova data para a consulta no calendário abaixo:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
@@ -1070,7 +1127,9 @@ class ConversationController {
                 draft.type = null;
                 draft.date = null;
                 draft.time = null;
-                await db.sessions.setDraft(phone, { type: null, date: null, time: null }, clinicId);
+                draft.confirmation_token = null;
+                draft.step = 'editing';
+                await db.sessions.setDraft(phone, draft, clinicId);
 
                 const procText = "Perfeito! Escolha qual especialidade ou procedimento você deseja agendar:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
@@ -1429,15 +1488,45 @@ class ConversationController {
             }
 
             const isConfirmKeyword = /^(confirmar|confirmado|confirmo)$/i.test(sanitizedText.trim());
-            const isAffirmativeConfirmation = (draft && draft.date && draft.time && draft.type) && /^(sim|sim,|pode|pode agendar|pode ser|ok|certo|está certo|esta certo|correto)$/i.test(sanitizedText.trim());
+            const hasCompleteDraft = !!(draft && draft.date && draft.time && draft.type);
+            const isAffirmativeConfirmation = hasCompleteDraft && /^(sim|sim,|pode|pode agendar|pode ser|ok|certo|está certo|esta certo|correto)$/i.test(sanitizedText.trim());
             const isConfirming = isConfirmKeyword || isAffirmativeConfirmation;
+
             if (isConfirming) {
+                // GUARDA P0: Se o usuário enviou "Confirmar" mas NÃO há rascunho completo de agendamento ativo
+                if (!hasCompleteDraft) {
+                    const noDraftText = "Não há um agendamento pendente para confirmar no momento. Posso te ajudar a agendar, remarcar ou cancelar uma consulta?";
+                    const noDraftButtons = ["Agendar Consulta", "Minhas Consultas", "Falar com Atendente"];
+
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: noDraftText }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendButtonMessage(phone, noDraftText, noDraftButtons, phoneId, clinicToken).catch(() => {
+                            return whatsappService.sendTextMessage(phone, noDraftText, phoneId, clinicToken);
+                        });
+                    }
+
+                    return {
+                        text: noDraftText,
+                        buttons: noDraftButtons,
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: false
+                    };
+                }
+
                 const hasPatientName = !!(draft.name || draft.dependentName || (patient && patient.name && patient.name !== phone && patient.name !== patient.phone));
                 const hasCpf = draft?.is_family_booking
                     ? !!(draft.dependentCpf || (draft.cpf && draft.cpf !== patient?.cpf))
                     : !!(patient?.cpf || draft?.cpf);
 
-                logger.info('FSM_DEBUG_CONFIRMING', `[${phone}] is_family_booking: ${draft?.is_family_booking}, dependentCpf: ${draft?.dependentCpf}, draft.cpf: ${draft?.cpf}, patient.cpf: ${patient?.cpf} => hasCpf: ${hasCpf}`);
+                logger.info('FSM_DEBUG_CONFIRMING', `[${phone}] is_family_booking: ${draft?.is_family_booking}, dependentCpf: ${maskCpf(draft?.dependentCpf)}, draft.cpf: ${maskCpf(draft?.cpf)}, patient.cpf: ${maskCpf(patient?.cpf)} => hasCpf: ${hasCpf}`);
 
                 if (!hasPatientName) {
                     const askNameText = "Para finalizarmos a confirmação do seu agendamento, por favor me informe o seu nome completo:";
@@ -1510,9 +1599,12 @@ class ConversationController {
                             logger.info('SCHEDULING', `Agendamento confirmado com sucesso via Simulador para [${phone}] - ${draft.date} ${draft.time} (ID: ${newApptId})`);
                         }
 
-                        const apptType = draft.type;
-                        const apptDate = draft.date;
-                        const apptTime = draft.time;
+                        // Construção da mensagem de sucesso exclusivamente a partir do registro persistido (P0)
+                        const savedType = newAppt.type || draft.type || 'Consulta';
+                        const savedDate = newAppt.appointment_date || draft.date;
+                        const savedTime = (newAppt.appointment_time || draft.time || '').substring(0, 5);
+                        const savedPatientName = draft.is_family_booking ? (draft.dependentName || 'seu dependente') : (draft.name || patient?.name || 'você');
+                        const savedDoctorName = draft.doctor_name || 'Profissional da Clínica';
 
                         // Limpa o rascunho após criação com sucesso (no banco e na memória local da requisição)
                         draft.type = null;
@@ -1520,13 +1612,15 @@ class ConversationController {
                         draft.time = null;
                         draft.name = null;
                         draft.notes = null;
+                        draft.confirmation_token = null;
+                        draft.confirmed_appointment_id = newApptId;
                         await db.sessions.setDraft(phone, null, clinicId);
 
-                        const dateFmt = apptDate.split('-').reverse().join('/');
-                        const calUrl = buildDirectGoogleCalendarUrl(apptType, apptDate, apptTime, clinicName, clinicAddress);
+                        const dateFmt = savedDate.split('-').reverse().join('/');
+                        const calUrl = buildDirectGoogleCalendarUrl(savedType, savedDate, savedTime, clinicName, clinicAddress);
 
                         const displayAddress = clinicAddress || 'Av. Paulista, 1000 - 12º andar\nBela Vista,\nSão Paulo/SP';
-                        const confirmText = `Agendamento confirmado para o dia ${dateFmt} às ${apptTime.substring(0, 5)}!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📍 Nosso endereço:\n${displayAddress}\n\nAté lá! ✅`;
+                        const confirmText = `Agendamento confirmado para ${savedPatientName} no dia ${dateFmt} às ${savedTime} (${savedType} com ${savedDoctorName})!\n\nVocê receberá lembretes 24h e 2h antes da consulta.\n\n📍 Nosso endereço:\n${displayAddress}\n\nAté lá! ✅`;
 
                         // Reseta o histórico de turnos para manter sessões futuras limpas sem acúmulo de msgs
                         history = [];
@@ -2277,7 +2371,7 @@ class ConversationController {
 
                     if (foundPatient && !draft.is_family_booking) {
                         if (foundPatient.phone !== phone) {
-                            logger.warn('SECURITY', `Tentativa de agendamento de terceiros/familiar para CPF ${rawCpf} por telefone [${phone}]. Transferindo para validação humana.`);
+                            logger.warn('SECURITY', `Tentativa de agendamento de terceiros/familiar para CPF [${maskCpf(rawCpf)}] por telefone [${phone}]. Transferindo para validação humana.`);
                             
                             // Persiste a marca de Handoff no banco para validação humana segura (LGPD)
                             await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
@@ -2300,7 +2394,7 @@ class ConversationController {
                             };
                         } else {
                             if (draft?.is_family_booking) {
-                                logger.info('FAMILY_BOOKING', `Agendamento familiar autorizado para CPF ${rawCpf} pelo telefone ${phone}`);
+                                logger.info('FAMILY_BOOKING', `Agendamento familiar autorizado para CPF [${maskCpf(rawCpf)}] pelo telefone ${phone}`);
                                 processedText = `${sanitizedText}\n[SISTEMA: Agendamento familiar/dependente detectado e autorizado.]`;
                             } else {
                                 processedText = `${sanitizedText}\n[SISTEMA: Paciente localizado! Nome: ${foundPatient.name}]`;
@@ -2317,7 +2411,7 @@ class ConversationController {
                     }
                 } catch (err) {
                     if (err.isCpfConflict || err.message.includes('CPF_CONFLICT') || err.message.includes('duplicate key')) {
-                        logger.warn('SECURITY', `Conflito de CPF duplicado [${rawCpf}] para o telefone [${phone}]. Transferindo para validação humana LGPD.`);
+                        logger.warn('SECURITY', `Conflito de CPF duplicado [${maskCpf(rawCpf)}] para o telefone [${phone}]. Transferindo para validação humana LGPD.`);
                         await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
                         const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                         if (!isSimulation) {
@@ -2432,7 +2526,10 @@ class ConversationController {
                     };
                 }
             }
-            logger.info('STATE_MACHINE', `text: ${sanitizedText}, draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
+            const logSanitizedText = rawCpf
+                ? sanitizedText.replace(new RegExp(rawCpf.replace(/\D/g, ''), 'g'), maskCpf(rawCpf)).replace(new RegExp(rawCpf, 'g'), maskCpf(rawCpf))
+                : sanitizedText;
+            logger.info('STATE_MACHINE', `text: ${logSanitizedText}, draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
             console.log(`[DEBUG] draft.type: ${draft.type}, draft.needs_doctor: ${draft.needs_doctor}, draft.doctor_id: ${draft.doctor_id}`);
 
             // ── MÁQUINA DE ESTADOS 100% DETERMINÍSTICA DO BACKEND ───────────────────
@@ -2449,15 +2546,25 @@ class ConversationController {
                     ? !!(draft.dependentCpf || (draft.cpf && draft.cpf !== patient?.cpf) || (rawCpf && draft.is_family_booking))
                     : !!(patient?.cpf || draft?.cpf || rawCpf);
 
-                logger.info('FSM_DEBUG_STATE_MACHINE', `[${phone}] is_family_booking: ${draft?.is_family_booking}, dependentCpf: ${draft?.dependentCpf}, draft.cpf: ${draft?.cpf}, patient.cpf: ${patient?.cpf} => hasCpf: ${hasCpf}`);
+                logger.info('FSM_DEBUG_STATE_MACHINE', `[${phone}] is_family_booking: ${draft?.is_family_booking}, dependentCpf: ${maskCpf(draft?.dependentCpf)}, draft.cpf: ${maskCpf(draft?.cpf)}, patient.cpf: ${maskCpf(patient?.cpf)} => hasCpf: ${hasCpf}`);
 
                 if (draft.type && draft.date && draft.time && hasCpf && hasPatientName) {
                     // Passo 5: Todos os dados coletados (incluindo nome e CPF) -> Confirmação explícita com Botões
+                    draft.confirmation_token = crypto.randomBytes(8).toString('hex');
+                    draft.draft_version = (draft.draft_version || 0) + 1;
+                    draft.step = 'confirming';
+                    await db.sessions.setDraft(phone, draft, clinicId);
+
                     aiResponse.buttons = ["Confirmar", "Agendar p/ Outro", "Alterar"];
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
                     aiResponse.requireCpf = false;
+
+                    const doctorDisplayName = draft.doctor_name || 'Profissional Disponível';
+                    const dateFmt = draft.date.split('-').reverse().join('/');
+                    const targetPatientName = draft.is_family_booking ? (draft.dependentName || 'seu dependente') : (draft.name || patient?.name || 'você');
+                    aiResponse.text = `Perfeito! Confirmando o seu agendamento:\n\n📋 Procedimento: *${draft.type}*\n👩‍⚕️ Profissional: *${doctorDisplayName}*\n📅 Data: *${dateFmt}*\n⏰ Horário: *${draft.time.substring(0, 5)}*\n👤 Paciente: *${targetPatientName}*\n\nEstá tudo correto? Clique em *Confirmar* abaixo para garantir o seu horário! 😊`;
                 } else if (draft.type && draft.date && draft.time && !hasCpf) {
                     // Passo 4: Falta CPF -> Solicita CPF
                     aiResponse.requireCpf = true;
@@ -2493,7 +2600,8 @@ class ConversationController {
                     aiResponse.showDoctorList = false;
                     aiResponse.requireCpf = false;
                     if (draft.ambiguous_procedures && draft.ambiguous_procedures.length > 1) {
-                        aiResponse.text = "Encontrei mais de uma opção correspondente ao seu pedido. Por favor, escolha qual delas você deseja:";
+                        aiResponse.text = `Posso ajudar você com esses procedimentos! Qual você gostaria de agendar primeiro: ${draft.ambiguous_procedures.join(' ou ')}?`;
+                        aiResponse.buttons = draft.ambiguous_procedures.slice(0, 3);
                     } else {
                         aiResponse.text = "Para prosseguirmos com o seu agendamento, por favor escolha um dos procedimentos disponíveis abaixo:";
                     }
@@ -2526,7 +2634,8 @@ class ConversationController {
                     aiResponse.showDoctorList = false;
                     aiResponse.requireCpf = false;
                     if (draft.ambiguous_procedures && draft.ambiguous_procedures.length > 1) {
-                        aiResponse.text = "Encontrei mais de uma opção correspondente ao seu pedido. Por favor, escolha qual delas você deseja:";
+                        aiResponse.text = `Posso ajudar você com esses procedimentos! Qual você gostaria de agendar primeiro: ${draft.ambiguous_procedures.join(' ou ')}?`;
+                        aiResponse.buttons = draft.ambiguous_procedures.slice(0, 3);
                     } else if (!aiResponse.text || aiResponse.text.includes('escolha a melhor data')) {
                         aiResponse.text = "Para prosseguirmos com o seu agendamento, por favor escolha um dos procedimentos disponíveis abaixo:";
                     }
