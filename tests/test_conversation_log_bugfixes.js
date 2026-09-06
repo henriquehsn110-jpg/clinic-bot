@@ -4,6 +4,7 @@
  * 2. Precedência de Match Exato em matchProcedureFromText (anti-falso-positivo em Implante Dental)
  * 3. Tolerância a Formatações Móveis de CPF em extractAndNormalizeCpf (ex: 128.617.928.92)
  * 4. Determinismo e Completude no Passo 4 (Solicitação de CPF sem truncamento)
+ * 5. Paridade Bidirecional de Reset em Troca de Intenção (Pessoal ↔ Familiar)
  */
 const path = require('path');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env.staging') });
@@ -122,8 +123,81 @@ async function runBugfixesTest() {
     assert.ok(resStep4.text.includes('informe o seu CPF (11 dígitos)'), `Texto não deve estar truncado. Obteve: '${resStep4.text}'`);
     console.log('   ✅ Mensagem do Passo 4 emitida deterministicamente e sem truncamento');
 
+    // ── TESTE 5: PARIDADE BIDIRECIONAL DE RESET EM TROCA DE INTENÇÃO ──────────
+    console.log('\n5. Testando Paridade Bidirecional de Troca de Intenção (Pessoal ↔ Familiar)...');
+    
+    // Sub-teste 5.1: Pessoal -> Familiar ("é pra minha filha")
+    await db.sessions.set(testPhone, [
+        { role: 'user', parts: [{ text: 'Quero agendar uma Limpeza' }] },
+        { role: 'model', parts: [{ text: 'Por favor, informe seu CPF:' }] }
+    ], clinicId);
+    await db.supabase.from('patients').update({ name: 'Paciente Titular', cpf: null, cpf_hash: null }).eq('phone', testPhone);
+    const draftPersonalInit = {
+        is_family_booking: false,
+        type: 'Limpeza',
+        date: '2026-09-10',
+        time: '14:00',
+        cpf: '123.456.789-00',
+        name: 'Paciente Titular',
+        confirmation_token: 'tok_personal_123',
+        step: 'confirming'
+    };
+    await db.sessions.setDraft(testPhone, draftPersonalInit, clinicId);
+
+    await conversationController.handleIncomingMessage(testPhone, 'é pra minha filha', true, clinicId, '999888777');
+    const draftAfterToFamily = await db.sessions.getDraft(testPhone, clinicId);
+
+    assert.strictEqual(draftAfterToFamily.is_family_booking, true, 'is_family_booking deve ser true');
+    assert.strictEqual(draftAfterToFamily.cpf, null, 'cpf deve ser resetado para null');
+    assert.strictEqual(draftAfterToFamily.name, null, 'name deve ser resetado para null');
+    assert.strictEqual(draftAfterToFamily.dependentName, null, 'dependentName deve ser null inicialmente');
+    assert.strictEqual(draftAfterToFamily.dependentCpf, null, 'dependentCpf deve ser null');
+    assert.strictEqual(draftAfterToFamily.dependent_id, null, 'dependent_id deve ser null');
+    assert.strictEqual(draftAfterToFamily.confirmation_token, null, 'confirmation_token deve ser invalidado');
+    assert.strictEqual(draftAfterToFamily.step, 'collecting_dependent_name', 'step deve ser collecting_dependent_name');
+    assert.strictEqual(draftAfterToFamily.type, 'Limpeza', 'type deve ser preservado');
+    assert.strictEqual(draftAfterToFamily.date, '2026-09-10', 'date deve ser preservada');
+    assert.strictEqual(draftAfterToFamily.time, '14:00', 'time deve ser preservado');
+    console.log('   ✅ 5.1: Transição Pessoal -> Familiar resetou dados de titular/token e preservou agenda');
+
+    // Sub-teste 5.2: Familiar -> Pessoal ("na verdade é pra mim mesmo")
+    await db.sessions.set(testPhone, [
+        { role: 'user', parts: [{ text: 'Quero agendar para o meu filho Lucas da Silva' }] },
+        { role: 'model', parts: [{ text: 'Perfeito! Para finalizarmos o agendamento de *Lucas da Silva*, por favor informe o CPF do dependente:' }] }
+    ], clinicId);
+    const draftFamilyInit = {
+        is_family_booking: true,
+        type: 'Limpeza',
+        date: '2026-09-10',
+        time: '14:00',
+        dependentName: 'Lucas da Silva',
+        dependentCpf: '987.654.321-99',
+        dependent_id: 'dep-uuid-999',
+        cpf: '987.654.321-99',
+        name: 'Lucas da Silva',
+        confirmation_token: 'tok_family_999',
+        step: 'collecting_dependent_cpf'
+    };
+    await db.sessions.setDraft(testPhone, draftFamilyInit, clinicId);
+
+    await conversationController.handleIncomingMessage(testPhone, 'na verdade é pra mim mesmo', true, clinicId, '999888777');
+    const draftAfterToPersonal = await db.sessions.getDraft(testPhone, clinicId);
+
+    assert.strictEqual(draftAfterToPersonal.is_family_booking, false, 'is_family_booking deve ser resetado para false');
+    assert.strictEqual(draftAfterToPersonal.dependentName, null, 'dependentName deve ser null');
+    assert.strictEqual(draftAfterToPersonal.dependentCpf, null, 'dependentCpf deve ser null');
+    assert.strictEqual(draftAfterToPersonal.dependent_id, null, 'dependent_id deve ser null');
+    assert.strictEqual(draftAfterToPersonal.cpf, null, 'cpf deve ser null');
+    assert.strictEqual(draftAfterToPersonal.name, null, 'name deve ser null');
+    assert.strictEqual(draftAfterToPersonal.confirmation_token, null, 'confirmation_token anterior deve ser invalidado');
+    assert.strictEqual(draftAfterToPersonal.step, null, 'step deve ser resetado para null');
+    assert.strictEqual(draftAfterToPersonal.type, 'Limpeza', 'type deve ser preservado');
+    assert.strictEqual(draftAfterToPersonal.date, '2026-09-10', 'date deve ser preservada');
+    assert.strictEqual(draftAfterToPersonal.time, '14:00', 'time deve ser preservado');
+    console.log('   ✅ 5.2: Transição Familiar -> Pessoal resetou dados de dependente/token e preservou agenda');
+
     console.log('\n================================================================');
-    console.log('🎉 TODOS OS 4 TESTES DE CORREÇÃO DOS LOGS PASSARAM COM SUCESSO (100% PASS)!');
+    console.log('🎉 TODOS OS 5 TESTES DE CORREÇÃO DOS LOGS PASSARAM COM SUCESSO (100% PASS)!');
     console.log('================================================================\n');
 }
 
