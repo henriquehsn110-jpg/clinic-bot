@@ -3,7 +3,6 @@ const whatsappService   = require('../services/whatsappService');
 const db                = require('../services/databaseService');
 const calendarService   = require('../services/calendarService');
 const logger            = require('../services/logger');
-const ponytailPruner    = require('../services/ponytailPruner');
 const crypto            = require('crypto');
 
 /**
@@ -2531,11 +2530,7 @@ class ConversationController {
                 };
             } else {
                 try {
-                    const { prunedHistory, wasPruned, tokensSavedEstimate } = ponytailPruner.pruneHistory(history, draft);
-                    if (wasPruned) {
-                        logger.info('PONYTAIL_PRUNER', `[${phone}] Histórico podado com sucesso. Economia estimada: ~${tokensSavedEstimate} tokens.`);
-                    }
-                    aiResponse = await aiService.generateResponse(textForAI, prunedHistory, clinicSettings);
+                    aiResponse = await aiService.generateResponse(textForAI, history, clinicSettings);
                 } catch (aiErr) {
                     logger.warn('AI_FALLBACK', `Falha ao chamar Gemini (${aiErr.message}). Usando resposta padrão.`);
                     aiResponse = {
@@ -2893,11 +2888,7 @@ class ConversationController {
             const textForHistory = stateTag ? `${responseText}\n${stateTag}` : responseText;
             history.push({ role: 'model', parts: [{ text: textForHistory }] });
 
-            // Otimização Ponytail para persistência compacta na sessão
-            if (history.length > 14) {
-                const { prunedHistory } = ponytailPruner.pruneHistory(history, draft, 8);
-                history = prunedHistory;
-            } else if (history.length > 20) {
+            if (history.length > 20) {
                 history = history.slice(-20);
             }
 
