@@ -41,6 +41,10 @@
 
 29. **Confirmação Específica de Execução Manual de DDL:** Ao solicitar que o usuário execute um DDL manualmente no SQL Editor e aguardar confirmação antes de prosseguir, o agente NUNCA deve aceitar uma mensagem genérica de sucesso do editor (ex: 'Success. No rows returned') como prova suficiente de qual objeto foi criado — essa mensagem é idêntica para qualquer comando bem-sucedido, incluindo comandos de sessões anteriores não relacionados. O agente DEVE pedir que o usuário cole de volta uma query de confirmação específica que nomeie o objeto criado (ex: SELECT proname FROM pg_proc WHERE proname = 'nome_da_funcao', ou equivalente para índices/tabelas), e só prosseguir após ver esse nome específico no retorno do usuário.
 
+## Notas de Design (Design Notes)
+
+- **Assimetria no comando "Agendar Consulta":** "Agendar Consulta" durante fluxo familiar completo avança para confirmação em vez de reiniciar; durante fluxo pessoal completo, reinicia do zero. Assimetria conhecida, não corrigida nesta rodada.
+
 ## Skills (`.agents/skills/`)
 
 - 🧪 `clinica-bot-qa` — 24 testes + stress 100 req
