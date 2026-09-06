@@ -3,6 +3,7 @@ const whatsappService   = require('../services/whatsappService');
 const db                = require('../services/databaseService');
 const calendarService   = require('../services/calendarService');
 const logger            = require('../services/logger');
+const ponytailPruner    = require('../services/ponytailPruner');
 const crypto            = require('crypto');
 
 /**
@@ -892,14 +893,17 @@ class ConversationController {
                                              /^(agendar consulta|agendar|quero agendar|quero agendar consulta|quero agendar uma consulta)$/i.test(sanitizedText.trim()) ||
                                              (!familyKeywords.test(sanitizedText) && personalKeywords.test(sanitizedText));
 
-            if (isPersonalBookingShortcut && !familyKeywords.test(sanitizedText)) {
+            if (isPersonalBookingShortcut && !familyKeywords.test(sanitizedText) && !(draft.is_family_booking && draft.type)) {
                 // Extrai o nome caso o usuário tenha informado junto (ex: "É para mim mesmo, Henrique Silva do Nascimento")
                 const extractedPersonalName = extractCleanName(sanitizedText);
 
                 draft.is_family_booking = false;
                 draft.dependentName = null;
                 draft.dependentCpf = null;
+                draft.dependent_id = null;
                 draft.cpf = null;
+                draft.confirmation_token = null;
+                draft.step = null;
                 draft.name = extractedPersonalName || null;
                 draft.type = null;
                 draft.date = null;
@@ -1793,12 +1797,28 @@ class ConversationController {
 
             // Detecção de agendamento para terceiro/familiar vs Pessoal
             if (familyKeywords.test(sanitizedText)) {
-                draft.is_family_booking = true;
+                if (!draft.is_family_booking) {
+                    draft.is_family_booking = true;
+                    draft.name = null;
+                    draft.dependentName = null;
+                    draft.dependentCpf = null;
+                    draft.dependent_id = null;
+                    draft.cpf = null;
+                    draft.confirmation_token = null;
+                    draft.step = 'collecting_dependent_name';
+                }
                 await db.sessions.setDraft(phone, draft, clinicId);
             } else if (personalKeywords.test(sanitizedText)) {
-                draft.is_family_booking = false;
-                draft.dependentName = null;
-                draft.dependentCpf = null;
+                if (draft.is_family_booking) {
+                    draft.is_family_booking = false;
+                    draft.name = null;
+                    draft.dependentName = null;
+                    draft.dependentCpf = null;
+                    draft.dependent_id = null;
+                    draft.cpf = null;
+                    draft.confirmation_token = null;
+                    draft.step = null;
+                }
                 await db.sessions.setDraft(phone, draft, clinicId);
             }
 
@@ -1820,7 +1840,10 @@ class ConversationController {
                     draft.is_family_booking = false;
                     draft.dependentName = null;
                     draft.dependentCpf = null;
+                    draft.dependent_id = null;
                     draft.cpf = null;
+                    draft.confirmation_token = null;
+                    draft.step = null;
                     draft.name = extractedPersonalName || null;
                     draft.pending_cancel_selection = false;
                     draft.ambiguous_procedures = null;
@@ -2508,7 +2531,11 @@ class ConversationController {
                 };
             } else {
                 try {
-                    aiResponse = await aiService.generateResponse(textForAI, history, clinicSettings);
+                    const { prunedHistory, wasPruned, tokensSavedEstimate } = ponytailPruner.pruneHistory(history, draft);
+                    if (wasPruned) {
+                        logger.info('PONYTAIL_PRUNER', `[${phone}] Histórico podado com sucesso. Economia estimada: ~${tokensSavedEstimate} tokens.`);
+                    }
+                    aiResponse = await aiService.generateResponse(textForAI, prunedHistory, clinicSettings);
                 } catch (aiErr) {
                     logger.warn('AI_FALLBACK', `Falha ao chamar Gemini (${aiErr.message}). Usando resposta padrão.`);
                     aiResponse = {
@@ -2866,7 +2893,11 @@ class ConversationController {
             const textForHistory = stateTag ? `${responseText}\n${stateTag}` : responseText;
             history.push({ role: 'model', parts: [{ text: textForHistory }] });
 
-            if (history.length > 20) {
+            // Otimização Ponytail para persistência compacta na sessão
+            if (history.length > 14) {
+                const { prunedHistory } = ponytailPruner.pruneHistory(history, draft, 8);
+                history = prunedHistory;
+            } else if (history.length > 20) {
                 history = history.slice(-20);
             }
 
