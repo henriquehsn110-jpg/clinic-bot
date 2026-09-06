@@ -3,9 +3,9 @@
  * Exporta integralmente todas as tabelas públicas via SDK do Supabase (Service Role),
  * com paginação segura (chunks de 1000 linhas), cálculo de checksum SHA-256 e compactação GZIP.
  */
-require('dotenv').config();
-const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
+const fs = require('fs');
 const zlib = require('zlib');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
@@ -88,11 +88,12 @@ async function runBackup() {
     console.log('🛡️ [BACKUP] INICIANDO ROTINA DE BACKUP AUTOMATIZADO DE PRODUÇÃO');
     console.log('================================================================\n');
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+    const supabaseUrl = process.env.SUPABASE_URL || 'https://vqnhtejriorlegqvtivq.supabase.co';
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_STAGING_SERVICE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-        console.error('❌ ERRO CRÍTICO: SUPABASE_URL ou SUPABASE_SERVICE_KEY não configurados!');
+        console.error('❌ ERRO CRÍTICO: SUPABASE_URL ou SUPABASE_SERVICE_KEY não configurados nas variáveis de ambiente!');
+        console.error('ℹ️ Dica: Configure o segredo SUPABASE_SERVICE_KEY no repositório GitHub (Settings > Secrets and variables > Actions).');
         process.exit(1);
     }
 

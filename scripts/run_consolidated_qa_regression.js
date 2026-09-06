@@ -20,11 +20,14 @@ const testSuites = [
     { name: '6. Fase 1: Integridade de Draft (Data Alterada + Dependente)', script: 'tests/test_draft_integrity_family_reschedule.js' },
     { name: '7. Fase 1: Guardas de Confirmação & Invalidação de Token', script: 'tests/test_confirmation_state_guards.js' },
     { name: '8. Fase 2: Validação de CPF, UI e Segurança LGPD', script: 'tests/test_cpf_collection_ui_and_validation.js' },
-    { name: '9. Fase 3: Intenção Natural & Desambiguação de Múltiplos Procedimentos', script: 'tests/test_natural_intent_disambiguation.js' }
+    { name: '9. Fase 3: Intenção Natural & Desambiguação de Múltiplos Procedimentos', script: 'tests/test_natural_intent_disambiguation.js' },
+
+    // 1 Nova: Correções de Bugs dos Logs Reais de Conversas (02/09/2026)
+    { name: '10. Correções de Causa Raiz dos Logs Reais (Gemini SDK, Substring Match, CPF Móvel & Passo 4)', script: 'tests/test_conversation_log_bugfixes.js' }
 ];
 
 console.log('================================================================');
-console.log('🧪 EXECUTANDO SUÍTE CONSOLIDADA DE REGRESSÃO (9 SUÍTES EM STAGING)');
+console.log('🧪 EXECUTANDO SUÍTE CONSOLIDADA DE REGRESSÃO (10 SUÍTES EM STAGING)');
 console.log(`📁 Ambiente: ${envPath}`);
 console.log('================================================================\n');
 

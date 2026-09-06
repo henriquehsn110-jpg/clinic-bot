@@ -104,6 +104,9 @@ function matchProcedureFromText(userText, proceduresList) {
         'na', 'verdade', 'prefiro'
     ]);
 
+    // Modificadores genéricos de contexto que não devem disparar match cruzado isolado
+    const genericModifiers = new Set(['dental', 'odonto', 'odontologico', 'medico', 'clinico', 'geral', 'simples', 'completo']);
+
     // Extrai palavras chave do usuário (filtrando stopwords e termos curtos)
     const userWords = normUser.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
     if (userWords.length === 0) {
@@ -117,91 +120,30 @@ function matchProcedureFromText(userText, proceduresList) {
 
     const normUserClean = userWords.join(' ');
 
-    // Filtra procedimentos que coincidem com as palavras/substrings do usuário
-    const matchedItems = dedupedProcedures.filter(p => {
+    // 1. MATCH EXATO DIRETO (Prioridade Máxima)
+    const exactMatches = dedupedProcedures.filter(p => {
         const normP = normalizeTextForMatch(p);
 
         // Guardrail anti-falso-positivo: "Outro" só é procedimento se digitado estritamente como opção de catálogo
-        // Frases como "outro dia", "outra data", "outro horário", "outra pessoa", "prefiro outro dia" NÃO são procedimentos
         if (normP === 'outro') {
             const isStrictOther = /^(outro|outros|outro procedimento|outros procedimentos|opcao outro|opção outro|6)$/i.test(userText.trim());
             if (!isStrictOther) return false;
         }
 
-        // Guardrail anti-falso-positivo: "Consulta" não deve capturar frases genéricas como "marcar consulta de limpeza"
+        // Guardrail anti-falso-positivo: "Consulta" não deve capturar frases genéricas
         if (normP === 'consulta') {
             const isGenericQuery = /\b(consulta\s+de|consulta\s+para|marcar\s+consulta|agendar\s+consulta|minha\s+consulta)\b/i.test(userText);
             if (isGenericQuery && normUser !== 'consulta' && normUser !== 'consulta geral') return false;
         }
 
-        // Se o nome exato do procedimento normalizado é igual à frase ou termos limpos do usuário
-        if (normP === normUser || normP === normUserClean) return true;
-
-        // Se o nome do procedimento (normalizado) está contido na frase do usuário
-        if (normUser.includes(normP)) return true;
-
-        // Se o procedimento contém alguma das palavras chave fornecidas pelo usuário
-        const procWords = normP.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
-        const hasMatchingWord = procWords.some(pw => userWords.some(uw => uw === pw || (uw.length > 4 && pw.includes(uw)) || (pw.length > 4 && uw.includes(pw))));
-
-        return hasMatchingWord;
+        return normP === normUser || (normUserClean && normP === normUserClean);
     });
 
-    if (matchedItems.length === 0) {
-        return { match: null, ambiguousMatches: [] };
-    }
-
-    if (matchedItems.length === 1) {
-        return { match: matchedItems[0], ambiguousMatches: matchedItems };
-    }
-
-    // REGRA DE MULTIPLOS PROCEDIMENTOS SOLICITADOS NA MESMA FRASE:
-    // Se o usuário mencionou termos de 2 ou mais procedimentos distintos (ex: "Limpeza e Clareamento", "Implante e Aparelho"),
-    // o bot DEVE solicitar desambiguação e NUNCA selecionar silenciosamente apenas o primeiro.
-    if (matchedItems.length > 1) {
-        const procToUserWords = new Map();
-        for (const p of matchedItems) {
-            const normP = normalizeTextForMatch(p);
-            const procWords = normP.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
-            const matchedUWs = userWords.filter(uw => procWords.some(pw => uw === pw || (uw.length > 4 && pw.includes(uw)) || (pw.length > 4 && uw.includes(pw))));
-            procToUserWords.set(p, matchedUWs);
-        }
-
-        const procs = Array.from(procToUserWords.keys());
-        let hasDistinctMultiple = false;
-        for (let i = 0; i < procs.length; i++) {
-            for (let j = i + 1; j < procs.length; j++) {
-                const wordsI = procToUserWords.get(procs[i]) || [];
-                const wordsJ = procToUserWords.get(procs[j]) || [];
-                const hasIOnly = wordsI.some(w => !wordsJ.includes(w));
-                const hasJOnly = wordsJ.some(w => !wordsI.includes(w));
-                if (hasIOnly && hasJOnly) {
-                    hasDistinctMultiple = true;
-                    break;
-                }
-            }
-            if (hasDistinctMultiple) break;
-        }
-
-        if (hasDistinctMultiple) {
-            return { match: null, ambiguousMatches: matchedItems };
-        }
-    }
-
-    // REGRA DE SEGURANÇA DETERMINÍSTICA (SEM REGEX HARDCODED):
-    // 1. Verifica se o usuário digitou exatamente o nome completo de 1 dos itens (ex: "limpeza simples" quando há "Limpeza" e "Limpeza Simples")
-    const exactFullMatches = matchedItems.filter(p => {
-        const normP = normalizeTextForMatch(p);
-        return normP === normUserClean || normP === normUser;
-    });
-
-    if (exactFullMatches.length >= 1) {
-        const firstExact = exactFullMatches[0];
-        const genericTerm = normalizeTextForMatch(firstExact);
-        
-        // Se o match exato é um termo raiz/genérico (ex: "Limpeza") e existem 2 ou mais especializações (ex: "Limpeza Simples" e "Limpeza Profunda"),
-        // o termo raiz é ambíguo em relação às especializações!
-        const specializations = matchedItems.filter(p => {
+    if (exactMatches.length >= 1) {
+        // Se o match exato é um termo raiz/genérico (ex: "Limpeza") e existem 2 ou mais especializações filhas no catálogo (ex: "Limpeza Simples" e "Limpeza Profunda"),
+        // o termo raiz isolado é ambíguo!
+        const genericTerm = normalizeTextForMatch(exactMatches[0]);
+        const specializations = dedupedProcedures.filter(p => {
             const normP = normalizeTextForMatch(p);
             return normP !== genericTerm && normP.includes(genericTerm);
         });
@@ -210,34 +152,83 @@ function matchProcedureFromText(userText, proceduresList) {
             return { match: null, ambiguousMatches: specializations };
         }
 
-        return { match: firstExact, ambiguousMatches: [firstExact] };
+        return { match: exactMatches[0], ambiguousMatches: [exactMatches[0]] };
     }
 
-    // 2. Correspondência por Substring Completa de Frase (normUser contém literalmente o nome normalizado do procedimento)
-    // Ex: "Quero agendar um implante dental" contém "implante dental", mas NÃO contém "implantes"
-    const fullSubstringMatches = matchedItems.filter(p => {
+    // 2. CORRESPONDÊNCIA POR SUBSTRING COMPLETA
+    const fullSubstringMatches = dedupedProcedures.filter(p => {
         const normP = normalizeTextForMatch(p);
+
+        // Guardrail anti-falso-positivo: "Outro" só é procedimento se digitado estritamente como opção de catálogo
+        if (normP === 'outro') {
+            const isStrictOther = /^(outro|outros|outro procedimento|outros procedimentos|opcao outro|opção outro|6)$/i.test(userText.trim());
+            if (!isStrictOther) return false;
+        }
+
+        // Guardrail anti-falso-positivo: "Consulta" não deve capturar frases genéricas
+        if (normP === 'consulta') {
+            const isGenericQuery = /\b(consulta\s+de|consulta\s+para|marcar\s+consulta|agendar\s+consulta|minha\s+consulta)\b/i.test(userText);
+            if (isGenericQuery && normUser !== 'consulta' && normUser !== 'consulta geral') return false;
+        }
+
         return normUser.includes(normP);
     });
 
     if (fullSubstringMatches.length === 1) {
-        return { match: fullSubstringMatches[0], ambiguousMatches: fullSubstringMatches };
+        const singleMatchNorm = normalizeTextForMatch(fullSubstringMatches[0]);
+        // Verifica se o usuário mencionou outras palavras além desse procedimento (ex: 'limpeza e clareamento' onde 'limpeza' é full match mas 'clareamento' também foi dito)
+        const matchWords = new Set(singleMatchNorm.split(/\s+/));
+        const otherStrongWords = userWords.filter(w => !matchWords.has(w) && !genericModifiers.has(w));
+        
+        // Se há outras palavras fortes, verifica se elas casam com outro procedimento
+        const otherProcMatches = dedupedProcedures.filter(p => {
+            if (p === fullSubstringMatches[0]) return false;
+            const normP = normalizeTextForMatch(p);
+            return otherStrongWords.some(ow => normP.includes(ow));
+        });
+
+        if (otherProcMatches.length === 0) {
+            return { match: fullSubstringMatches[0], ambiguousMatches: fullSubstringMatches };
+        } else {
+            // Múltiplos procedimentos detectados (ex: 'Limpeza' e 'Clareamento Dental')
+            const allMatched = [fullSubstringMatches[0], ...otherProcMatches];
+            return { match: null, ambiguousMatches: allMatched };
+        }
     }
 
     if (fullSubstringMatches.length > 1) {
-        // Ordena por tamanho decrescente para selecionar o procedimento mais específico (ex: "Limpeza Simples" > "Limpeza")
         fullSubstringMatches.sort((a, b) => normalizeTextForMatch(b).length - normalizeTextForMatch(a).length);
+        
+        // Verifica se são especializações (ex: 'implante dental' e 'implante')
         const longestNorm = normalizeTextForMatch(fullSubstringMatches[0]);
-        const secondLongestNorm = normalizeTextForMatch(fullSubstringMatches[1]);
-        if (longestNorm.includes(secondLongestNorm) && longestNorm.length > secondLongestNorm.length) {
+        const allEncompassed = fullSubstringMatches.slice(1).every(p => longestNorm.includes(normalizeTextForMatch(p)));
+        if (allEncompassed) {
             return { match: fullSubstringMatches[0], ambiguousMatches: [fullSubstringMatches[0]] };
         }
+
+        // Se houver 2 ou mais procedimentos distintos não relacionados (ex: 'Limpeza' e 'Clareamento')
         return { match: null, ambiguousMatches: fullSubstringMatches };
     }
 
-    // 3. Se houver 2 ou mais correspondências e NENHUMA for match exato único ou substring completa:
-    // Retorna NULO para o match e a lista completa de procedimentos ambíguos. NUNCA escolhe sozinho!
-    return { match: null, ambiguousMatches: matchedItems };
+    // 3. CORRESPONDÊNCIA POR PALAVRAS-CHAVE (FUZZY / TERMOS ISOLADOS)
+    const nonGenericUserWords = userWords.filter(w => !genericModifiers.has(w));
+    const wordsToMatch = nonGenericUserWords.length > 0 ? nonGenericUserWords : userWords;
+
+    const matchedItems = dedupedProcedures.filter(p => {
+        const normP = normalizeTextForMatch(p);
+        if (normP === 'outro' || normP === 'consulta') return false;
+        const procWords = normP.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w) && !genericModifiers.has(w));
+        return procWords.some(pw => wordsToMatch.some(uw => uw === pw || (uw.length > 4 && pw.includes(uw)) || (pw.length > 4 && uw.includes(pw))));
+    });
+
+    if (matchedItems.length === 1) {
+        return { match: matchedItems[0], ambiguousMatches: matchedItems };
+    }
+    if (matchedItems.length > 1) {
+        return { match: null, ambiguousMatches: matchedItems };
+    }
+
+    return { match: null, ambiguousMatches: [] };
 }
 
 function formatDoctorNameForAppointment(appt) {
@@ -325,20 +316,26 @@ function isUpcomingAppt(dateStr, timeStr) {
     return true;
 }
 
-// Função auxiliar para extrair e normalizar CPF (aceita com ou sem prefixo, formatado ou cru de 11 dígitos)
+// Função auxiliar para extrair e normalizar CPF (aceita com ou sem prefixo, formatado com . - / espaços ou cru de 11 dígitos)
 function extractAndNormalizeCpf(text) {
-    // Captura padrão formatado ou sequência bruta de 11 dígitos numéricos com bordas
-    const regex = /(?:Selecionei o CPF:\s*)?(\b(?:\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})\b)/i;
-    const match = text.match(regex);
-    if (!match) return null;
+    if (!text || typeof text !== 'string') return null;
     
-    const matchedStr = match[1];
-    const clean = matchedStr.replace(/\D/g, '');
+    // 1. Busca por padrões de 11 dígitos estruturados com delimitadores comuns (. - / espaços)
+    const matches = text.match(/\b\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[\.\s\-\/]?\d{2}\b/g) || text.match(/\d{11}/g) || [];
+    for (const m of matches) {
+        const clean = m.replace(/\D/g, '');
+        if (clean.length === 11 && validateCpfChecksum(clean)) {
+            return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`;
+        }
+    }
     
-    // Filtro matemático contra colisões (ex: número de celular de 11 dígitos)
-    if (!validateCpfChecksum(clean)) return null;
+    // 2. Fallback: Se o usuário enviou texto com prefixo ("meu cpf é 12861792892")
+    const allDigits = text.replace(/\D/g, '');
+    if (allDigits.length === 11 && validateCpfChecksum(allDigits)) {
+        return `${allDigits.slice(0, 3)}.${allDigits.slice(3, 6)}.${allDigits.slice(6, 9)}-${allDigits.slice(9, 11)}`;
+    }
     
-    return `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`;
+    return null;
 }
 
 function maskCpf(cpf) {
@@ -2566,11 +2563,18 @@ class ConversationController {
                     const targetPatientName = draft.is_family_booking ? (draft.dependentName || 'seu dependente') : (draft.name || patient?.name || 'você');
                     aiResponse.text = `Perfeito! Confirmando o seu agendamento:\n\n📋 Procedimento: *${draft.type}*\n👩‍⚕️ Profissional: *${doctorDisplayName}*\n📅 Data: *${dateFmt}*\n⏰ Horário: *${draft.time.substring(0, 5)}*\n👤 Paciente: *${targetPatientName}*\n\nEstá tudo correto? Clique em *Confirmar* abaixo para garantir o seu horário! 😊`;
                 } else if (draft.type && draft.date && draft.time && !hasCpf) {
-                    // Passo 4: Falta CPF -> Solicita CPF
+                    // Passo 4: Falta CPF -> Solicita CPF de forma determinística
                     aiResponse.requireCpf = true;
+                    aiResponse.buttons = [];
                     aiResponse.showCalendar = false;
                     aiResponse.showTimeSlots = false;
                     aiResponse.showProceduresList = false;
+                    aiResponse.showDoctorList = false;
+                    if (draft.is_family_booking) {
+                        aiResponse.text = `Perfeito! Para finalizarmos o agendamento de *${draft.dependentName || 'seu dependente'}*, por favor informe o CPF do dependente (ou do responsável legal):`;
+                    } else {
+                        aiResponse.text = "Perfeito! Para prosseguirmos com o seu agendamento, por favor informe o seu CPF (11 dígitos):";
+                    }
                 } else if (draft.type && draft.date && !draft.time) {
                     // Passo 3: Data escolhida -> Exibe horários daquele dia
                     aiResponse.showTimeSlots = true;

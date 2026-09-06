@@ -323,6 +323,49 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
         return text;
     }
 
+    /**
+     * Sanitiza e alinha o histórico de conversas para conformidade estrita com o SDK do Gemini:
+     * 1. Garante que o histórico comece com 'user' e termine com 'model'.
+     * 2. Funde turnos adjacentes do mesmo papel para evitar erros de alternância.
+     * 3. Remove a mensagem final do usuário (já que ela é enviada via chat.sendMessage).
+     */
+    sanitizeHistoryForGemini(conversationHistory = [], maxMessages = 10) {
+        if (!Array.isArray(conversationHistory) || conversationHistory.length === 0) {
+            return [];
+        }
+
+        const validEntries = [];
+        for (const item of conversationHistory) {
+            if (!item || !item.role || !Array.isArray(item.parts)) continue;
+            const role = item.role === 'user' ? 'user' : 'model';
+            const text = (item.parts[0]?.text || '').trim();
+            if (!text) continue;
+            validEntries.push({ role, parts: [{ text }] });
+        }
+
+        if (validEntries.length === 0) return [];
+
+        const merged = [];
+        for (const entry of validEntries) {
+            if (merged.length > 0 && merged[merged.length - 1].role === entry.role) {
+                merged[merged.length - 1].parts[0].text += `\n${entry.parts[0].text}`;
+            } else {
+                merged.push({ role: entry.role, parts: [{ text: entry.parts[0].text }] });
+            }
+        }
+
+        if (merged.length > 0 && merged[merged.length - 1].role === 'user') {
+            merged.pop();
+        }
+
+        let sliced = merged.slice(-maxMessages);
+        while (sliced.length > 0 && sliced[0].role !== 'user') {
+            sliced.shift();
+        }
+
+        return sliced;
+    }
+
     async generateResponse(userMessage, conversationHistory = [], clinicSettings = {}) {
         // P2: Verifica rate limit antes de chamar a API (com buffer de espera graciosa de 800ms)
         if (!this._checkRateLimit()) {
@@ -341,8 +384,8 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
         for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
                 const systemInstruction = this.buildCustomPrompt(clinicSettings);
-                // Trunca o histórico para as últimas 10 mensagens para economizar tokens de entrada
-                const cappedHistory = (conversationHistory || []).slice(-10);
+                // Sanitiza e alinha o histórico estritamente com o protocolo do Gemini
+                const cappedHistory = this.sanitizeHistoryForGemini(conversationHistory, 10);
                 const chat = this.model.startChat({
                     history: cappedHistory,
                     systemInstruction: {
