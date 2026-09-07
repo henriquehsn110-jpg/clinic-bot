@@ -435,12 +435,12 @@ app.get('/health', async (req, res) => {
 
 // ── ENDPOINT DIAGNÓSTICO TEMPORÁRIO ─────────────────────────────────────────
 // Testa se o processo em RUNTIME consegue descriptografar CPFs de pacientes
-// específicos. Autenticado via nonce único descartável. Retorna apenas
-// true/false, NUNCA o CPF real. REMOVER IMEDIATAMENTE após investigação.
-const DIAG_NONCE = 'b7f3a2e1-9c04-4d8b-a6f5-e8c12d34f567';
+// específicos. Autenticado via APP_SECRET. Retorna apenas true/false, NUNCA
+// o CPF real. REMOVER após investigação concluída.
 app.get('/diag/decrypt-test', async (req, res) => {
-    const token = req.query.nonce || '';
-    if (token !== DIAG_NONCE) {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token || token !== process.env.APP_SECRET) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
