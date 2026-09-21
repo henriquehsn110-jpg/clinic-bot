@@ -12,6 +12,16 @@ const assert = require('assert');
 const conversationController = require('../controllers/conversationController');
 const db = require('../services/databaseService');
 
+function generateValidCpf() {
+    const rnd = () => Math.floor(Math.random() * 9);
+    const n = Array.from({ length: 9 }, rnd);
+    let d1 = n.reduce((total, num, i) => total + num * (10 - i), 0) % 11;
+    d1 = d1 < 2 ? 0 : 11 - d1;
+    let d2 = [...n, d1].reduce((total, num, i) => total + num * (11 - i), 0) % 11;
+    d2 = d2 < 2 ? 0 : 11 - d2;
+    return `${n.slice(0,3).join('')}.${n.slice(3,6).join('')}.${n.slice(6,9).join('')}-${d1}${d2}`;
+}
+
 async function run() {
     console.log('🧪 [TEST_FAMILY_BOOKING_FIXES] Iniciando testes de regressão dos bugs de agendamento familiar e CPF...');
 
@@ -49,11 +59,12 @@ async function run() {
     console.log('  ✅ PASS: Recusa de nome cancela agendamento familiar, reseta rascunho e retorna botões de escape!');
 
 
-    // ── TESTE 2: Aceitação de CPF do Responsável Legal no Agendamento Familiar ─────────────
-    console.log('\n[Cenário 2/3] Testando aceitação do CPF do responsável legal no agendamento de dependente...');
+    // ── TESTE 2: Rejeição Estrita do CPF do Titular e Aceitação de CPF Próprio do Dependente ──
+    console.log('\n[Cenário 2/3] Testando rejeição do CPF do titular no agendamento de dependente...');
     const phoneTitular = '5511999990088';
     const titularCpf = '266.390.128-80';
 
+    await db.patients.findOrCreate(phoneTitular, clinicId);
     await db.sessions.set(phoneTitular, [], clinicId).catch(() => {});
     await db.sessions.setDraft(phoneTitular, null, clinicId).catch(() => {});
     await db.patients.updateCpf(phoneTitular, titularCpf, clinicId).catch(() => {});
@@ -66,7 +77,7 @@ async function run() {
         isSimulation: true
     });
 
-    // Envia o CPF do responsável legal (266.390.128-80) para o filho Lucas Amaral
+    // Envia o CPF do titular (266.390.128-80) para o filho Lucas Amaral -> DEVE SER REJEITADO
     const respSameCpf = await conversationController.handleIncomingMessage({
         phone: phoneTitular,
         messageText: '26639012880',
@@ -74,17 +85,33 @@ async function run() {
         isSimulation: true
     });
 
-    const draftAfterCpf = await db.sessions.getDraft(phoneTitular, clinicId);
-    assert.strictEqual(Boolean(draftAfterCpf?.dependentCpf), true, 'FALHA: Deveria registrar o CPF do responsável legal no draft.dependentCpf');
-    assert.strictEqual(draftAfterCpf.is_family_booking, true, 'is_family_booking deve permanecer ativo');
-    console.log('  ✅ PASS: CPF do responsável legal é aceito para o dependente com vínculo familiar!');
+    const draftAfterRejectedCpf = await db.sessions.getDraft(phoneTitular, clinicId);
+    assert.strictEqual(Boolean(draftAfterRejectedCpf?.dependentCpf), false, 'FALHA: Não deveria aceitar o CPF do titular no dependentCpf');
+    assert.strictEqual(respSameCpf.text.includes('Identifiquei que este é o seu próprio CPF de titular'), true, 'FALHA: Deveria informar que o CPF é do titular');
+    assert.strictEqual(respSameCpf.buttons.includes('Agendar para mim'), true, 'FALHA: Deveria oferecer botões de escape');
+    console.log('  ✅ PASS: CPF do titular é rejeitado no agendamento do dependente!');
+
+    // Agora envia um CPF exclusivo e válido para o dependente
+    const uniqueDepCpf = '529.982.247-25';
+    const respUniqueCpf = await conversationController.handleIncomingMessage({
+        phone: phoneTitular,
+        messageText: uniqueDepCpf,
+        phoneNumberId: '5511979992719',
+        isSimulation: true
+    });
+
+    const draftAfterUniqueCpf = await db.sessions.getDraft(phoneTitular, clinicId);
+    assert.strictEqual(Boolean(draftAfterUniqueCpf?.dependentCpf), true, 'FALHA: Deveria registrar o CPF único no draft.dependentCpf');
+    assert.strictEqual(respUniqueCpf.showProceduresList, true, 'FALHA: Deveria disparar a lista interativa de procedimentos');
+    assert.strictEqual(draftAfterUniqueCpf.step, null, 'FALHA: draft.step deveria ser null');
+    console.log('  ✅ PASS: CPF exclusivo do dependente é aceito e aciona a lista interativa de procedimentos!');
 
 
     // ── TESTE 3: Detecção de Conflito de CPF com Outro Telefone (LGPD) ─────────────────────
     console.log('\n[Cenário 3/3] Testando conflito de CPF cadastrado com outro telefone...');
     const phoneA = '5511988880001';
     const phoneB = '5511988880002';
-    const conflictCpf = '403.324.218-05';
+    const conflictCpf = generateValidCpf();
 
     await db.patients.findOrCreate(phoneA, clinicId);
     await db.sessions.set(phoneA, [], clinicId).catch(() => {});

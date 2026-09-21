@@ -956,7 +956,10 @@ class ConversationController {
 
                 // Busca dependentes já vinculados ao titular
                 const savedDependents = (patient && patient.id)
-                    ? await db.patients.findDependentsByGuardian(patient.id, clinicId).catch(() => [])
+                    ? await db.patients.findDependentsByGuardian(patient.id, clinicId).catch(err => {
+                        logger.error('FAMILY_BOOKING', `Erro ao buscar dependentes: ${err.message}`);
+                        return [];
+                    })
                     : [];
 
                 if (savedDependents && savedDependents.length > 0) {
@@ -1011,7 +1014,7 @@ class ConversationController {
 
             // 3b. Interceptador de Seleção de Dependente Salvo
             if (draft && draft.is_family_booking && !draft.dependent_id && !draft.type && patient && patient.id) {
-                const savedDependents = await db.patients.findDependentsByGuardian(patient.id, clinicId).catch(() => []);
+                const savedDependents = await db.patients.findDependentsByGuardian(patient.id, clinicId).catch(err => { logger.error('DB_ERROR', err.message); return []; });
                 const matchedDep = (savedDependents || []).find(d => d.name && d.name.trim().toLowerCase() === sanitizedText.trim().toLowerCase());
                 
                 if (matchedDep) {
@@ -1822,12 +1825,19 @@ class ConversationController {
             }
 
             // ── EXTRAÇÃO ANTECIPADA DE CPF DO DEPENDENTE ──
-            if (draft.is_family_booking) {
+            // Se o nome do dependente já é conhecido, a validação e atribuição pertencem exclusivamente ao Gate 2
+            if (draft.is_family_booking && !draft.dependentName) {
                 const earlyCpf = rawCpf || extractAndNormalizeCpf(sanitizedText);
                 if (earlyCpf && !draft.dependentCpf) {
-                    draft.dependentCpf = earlyCpf;
-                    draft.cpf = earlyCpf;
-                    await db.sessions.setDraft(phone, draft, clinicId);
+                    const titularCpfRaw = patient?.cpf ? db.decryptData(patient.cpf, 'cpf') : null;
+                    const cleanTitularCpf = titularCpfRaw ? titularCpfRaw.replace(/\D/g, '') : null;
+                    const cleanEarlyCpf = earlyCpf.replace(/\D/g, '');
+
+                    if (!cleanTitularCpf || cleanEarlyCpf !== cleanTitularCpf) {
+                        draft.dependentCpf = earlyCpf;
+                        draft.cpf = earlyCpf;
+                        await db.sessions.setDraft(phone, draft, clinicId);
+                    }
                 }
             }
 
@@ -2006,10 +2016,76 @@ class ConversationController {
 
                 const earlyCpf = extractAndNormalizeCpf(sanitizedText);
                 if (earlyCpf) {
+                    // ── REGRA 17: BLOQUEIO ESTRITO DO CPF DO TITULAR PARA DEPENDENTE ──
+                    const titularCpfRaw = patient?.cpf ? db.decryptData(patient.cpf, 'cpf') : null;
+                    const cleanTitularCpf = titularCpfRaw ? titularCpfRaw.replace(/\D/g, '') : null;
+                    const cleanEarlyCpf = earlyCpf.replace(/\D/g, '');
+
+                    if (cleanTitularCpf && cleanEarlyCpf === cleanTitularCpf) {
+                        logger.warn('FAMILY_BOOKING_TITULAR_CPF_REJECTED', `[${phone}] Tentativa de usar o CPF do próprio titular [${maskCpf(earlyCpf)}] no dependente [${draft.dependentName}]. Rejeitando.`);
+                        const rejectTitularCpfText = `Identifiquei que este é o seu próprio CPF de titular. Para o atendimento de ${draft.dependentName}, precisamos do CPF próprio do paciente. Por favor, digite o CPF de ${draft.dependentName}:`;
+                        const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+
+                        history.push({ role: 'user', parts: [{ text: processedText }] });
+                        history.push({ role: 'model', parts: [{ text: `${rejectTitularCpfText}\n[SISTEMA: CPF do titular rejeitado para dependente, aguardando CPF do dependente]` }] });
+                        if (history.length > 20) history = history.slice(-20);
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendButtonMessage(phone, rejectTitularCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, rejectTitularCpfText, phoneId, clinicToken);
+                            });
+                        }
+
+                        return {
+                            text:               rejectTitularCpfText,
+                            buttons:            escapeButtons,
+                            showCalendar:       false,
+                            showTimeSlots:      false,
+                            showProceduresList: false,
+                            requireCpf:         true,
+                            procedures:         null,
+                            availableSlots:     null,
+                            transferToHuman:    false
+                        };
+                    }
+
                     draft.dependentCpf = earlyCpf;
                     draft.cpf = earlyCpf;
+                    draft.step = null;
                     await db.sessions.setDraft(phone, draft, clinicId);
                     logger.info('FAMILY_BOOKING_CPF_ACCEPTED', `CPF [${maskCpf(earlyCpf)}] registrado para o dependente [${draft.dependentName}] no telefone [${phone}].`);
+
+                    // Se ainda não selecionou procedimento, forçar exibição imediata da lista de procedimentos
+                    if (!draft.type) {
+                        const procText = `CPF de ${draft.dependentName} registrado com sucesso! 😊 Por favor, escolha qual procedimento você gostaria de agendar para ${draft.dependentName}:`;
+                        history.push({ role: 'user', parts: [{ text: processedText }] });
+                        history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
+                        if (history.length > 20) history = history.slice(-20);
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            const sections = [{
+                                title: "Tratamentos",
+                                rows: PROCEDURES_RICH
+                            }];
+                            await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, procText, phoneId, clinicToken);
+                            });
+                        }
+
+                        return {
+                            text:               procText,
+                            buttons:            [],
+                            showCalendar:       false,
+                            showTimeSlots:      false,
+                            showProceduresList: true,
+                            requireCpf:         false,
+                            procedures:         PROCEDURES_LIST,
+                            availableSlots:     null,
+                            transferToHuman:    false
+                        };
+                    }
                 } else {
                     // Preservation de dados selecionados pelo usuário (data, hora, procedimento)
                     if (normalizedDate && !draft.date) draft.date = normalizedDate;
