@@ -930,6 +930,16 @@
 
             // Verifica se o usuário já possui token de sessão no localStorage
             if (token) {
+                const savedUserStr = localStorage.getItem('clinicabot_user');
+                if (savedUserStr) {
+                    try {
+                        const savedUser = JSON.parse(savedUserStr);
+                        if (savedUser && savedUser.clinicName) {
+                            const roleLabel = savedUser.role ? ` (${esc(savedUser.role)})` : '';
+                            document.getElementById('user-display-name').innerText = `${esc(savedUser.clinicName)}${roleLabel}`;
+                        }
+                    } catch(e) {}
+                }
                 closeModal('modal-login');
                 fetchLiveDashboardData();
             } else {
@@ -1072,6 +1082,16 @@
                 renderDoctorsCards(allDoctors);
                 populatePatientDropdown(allPatients);
                 populateSettingsForm(data);
+
+                const userElem = document.getElementById('user-display-name');
+                if (userElem && data.clinicName) {
+                    let userRole = 'Recepção';
+                    try {
+                        const savedUser = JSON.parse(localStorage.getItem('clinicabot_user') || '{}');
+                        if (savedUser.role) userRole = savedUser.role;
+                    } catch(e) {}
+                    userElem.innerText = `${esc(data.clinicName)} (${esc(userRole)})`;
+                }
 
                 if (indicator) {
                     indicator.classList.remove('offline');
