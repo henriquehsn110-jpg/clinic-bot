@@ -799,10 +799,32 @@ class ConversationController {
             // 0e. Interceptador Direto para Resposta a Lembretes ("CONFIRMAR", "CONFIRMO", "CONFIRMAR PRESENÇA")
             const isReminderConfirmIntent = /^\s*(confirmar|confirmo|confirmado|confirmada|sim,\s*confirmar|confirmar\s+presença|confirmar\s+presenca|estou\s+confirmando)\s*$/i.test(sanitizedText.trim());
 
-            if (isReminderConfirmIntent && patient && patient.id && (!draft || !draft.type || !draft.date || !draft.time)) {
-                const appts = await db.appointments.findByPatient(patient.id, clinicId).catch(err => { logger.error('REMINDER_CONFIRM_FIND_ERR', err.message); return []; });
-                const pendingAppts = (appts || []).filter(a => a.status === 'pending');
+            if (isReminderConfirmIntent && (!draft || !draft.type || !draft.date || !draft.time)) {
+                // Busca todos os pacientes vinculados a este telefone (titular e dependentes)
+                const { data: pRows } = await db.supabase
+                    .from('patients')
+                    .select('id, name')
+                    .eq('phone', phone)
+                    .eq('clinic_id', clinicId);
+                const patientIds = (pRows || []).map(p => p.id);
+                if (patient && patient.id && !patientIds.includes(patient.id)) {
+                    patientIds.push(patient.id);
+                }
 
+                let allAppts = [];
+                if (patientIds.length > 0) {
+                    const { data: aList } = await db.supabase
+                        .from('appointments')
+                        .select('*, patients(name)')
+                        .in('patient_id', patientIds)
+                        .eq('clinic_id', clinicId)
+                        .is('deleted_at', null)
+                        .order('appointment_date', { ascending: true })
+                        .order('appointment_time', { ascending: true });
+                    allAppts = aList || [];
+                }
+
+                const pendingAppts = allAppts.filter(a => a.status === 'pending');
                 if (pendingAppts.length > 0) {
                     const targetAppt = pendingAppts[0];
                     await db.appointments.updateStatus(targetAppt.id, 'confirmed', clinicId);
@@ -810,7 +832,8 @@ class ConversationController {
 
                     const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
                     const timeFmt = targetAppt.appointment_time ? targetAppt.appointment_time.substring(0, 5) : '';
-                    const confirmText = `Sua presença na consulta de *${targetAppt.type || 'avaliação'}* no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+                    const pName = targetAppt.patients?.name ? ` para *${targetAppt.patients.name}*` : '';
+                    const confirmText = `Sua presença na consulta de *${targetAppt.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
 
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                     history.push({ role: 'model', parts: [{ text: confirmText }] });
@@ -832,6 +855,63 @@ class ConversationController {
                         transferToHuman: false
                     };
                 }
+
+                // Se já estiver confirmada (consulta ativa hoje ou futura)
+                const nowBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+                const todayStr = `${nowBRT.getFullYear()}-${String(nowBRT.getMonth() + 1).padStart(2, '0')}-${String(nowBRT.getDate()).padStart(2, '0')}`;
+                const confirmedAppts = allAppts.filter(a => a.status === 'confirmed' && a.appointment_date >= todayStr);
+
+                if (confirmedAppts.length > 0) {
+                    const targetAppt = confirmedAppts[0];
+                    const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
+                    const timeFmt = targetAppt.appointment_time ? targetAppt.appointment_time.substring(0, 5) : '';
+                    const pName = targetAppt.patients?.name ? ` para *${targetAppt.patients.name}*` : '';
+                    const alreadyText = `Sua presença na consulta de *${targetAppt.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* já está confirmada! Te aguardamos na clínica! 😊`;
+
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: alreadyText }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendTextMessage(phone, alreadyText, phoneId, clinicToken).catch(() => {});
+                    }
+
+                    return {
+                        text: alreadyText,
+                        buttons: [],
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: false
+                    };
+                }
+
+                // Se não houver consulta ativa para confirmação
+                const noApptText = `Não localizamos nenhuma consulta pendente para confirmação de presença no momento. Se você deseja agendar uma nova consulta, escolha uma das opções abaixo:`;
+                const noApptButtons = ["Agendar Consulta", "Outras Dúvidas"];
+
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: noApptText }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendButtonMessage(phone, noApptText, noApptButtons, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: noApptText,
+                    buttons: noApptButtons,
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
             }
 
             // 0d. Atualização automática de rascunho se um procedimento for mencionado explicitamente
