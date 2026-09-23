@@ -831,7 +831,7 @@ class ConversationController {
             const isSevereUrgency = /\b(febre\s+alta|dor\s+(?:muito\s+)?(?:forte|insuportável|insuportavel|intensa)|rosto\s+inchado|inchando\s+muito|sangramento\s+intenso|sangrando\s+muito)\b/i.test(sanitizedText);
             if (isSevereUrgency) {
                 logger.warn('URGENCY_HANDOFF', `Paciente [${phone}] relatou sintomas de urgência crítica. Acionando transbordo imediato.`);
-                const urgencyText = "Entendo que você está com um quadro de dor forte e urgência. Estou transferindo você imediatamente para a nossa equipe humana para atendimento prioritário! 😊\n\n[SISTEMA: conversa transferida para atendente humano]";
+                const urgencyText = "Entendo que você está com um quadro de dor forte e urgência. Estou transferindo seu atendimento para a nossa equipe humana agora mesmo para suporte prioritário.\n\n[SISTEMA: conversa transferida para atendente humano]";
                 await persistHumanHandoff(phone, patient, history, sanitizedText, 'Protocolo de Urgência Operacional (Sintomas Críticos)', clinicId);
 
                 if (!isSimulation) {

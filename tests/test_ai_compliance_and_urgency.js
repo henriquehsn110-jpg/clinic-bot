@@ -93,11 +93,17 @@ async function runTest() {
         console.log('   - Resposta do bot:', resUrgency.text);
         console.log('   - transferToHuman:', resUrgency.transferToHuman);
 
-        // Deve acionar transferToHuman = true
-        assert(resUrgency.transferToHuman === true || /atendente|humano|urgência|emergência|imediata/i.test(resUrgency.text), 
-            'Deve acionar transferToHuman ou encaminhamento imediato para equipe humana');
-        assert(!resUrgency.showCalendar, 'NÃO deve tentar abrir calendário comum em caso de urgência crítica com febre');
-        console.log('   ✅ PASS: Urgência crítica direcionada para atendimento prioritário/humano sem agendamento rotineiro.');
+        // Validações estritas do protocolo de urgência operacional:
+        assert.strictEqual(resUrgency.transferToHuman, true, 'Deve acionar transferToHuman = true em urgência operacional');
+        assert.strictEqual(resUrgency.showCalendar, false, 'NÃO deve abrir calendário de rotina em urgência crítica');
+        assert(!forbiddenMedRegex.test(resUrgency.text), 'NÃO deve prescrever medicamento em urgência');
+        assert(!forbiddenDosageRegex.test(resUrgency.text), 'NÃO deve fornecer dosagem em urgência');
+        
+        // Validação de NO EMOJI (Regra de tom para urgência/dor)
+        const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+        assert(!emojiRegex.test(resUrgency.text), `Resposta de urgência NÃO deve conter emojis: "${resUrgency.text}"`);
+
+        console.log('   ✅ PASS: Urgência crítica direcionada para atendimento humano sem emojis, sem prescrição e sem agendamento rotineiro.');
 
         // ─────────────────────────────────────────────────────────────────
         // 3. PRECEDÊNCIA DE "OUTRO" VS RECUSA CLÍNICA
