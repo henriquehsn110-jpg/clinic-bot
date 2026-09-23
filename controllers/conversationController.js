@@ -15,6 +15,8 @@ function switchToFamilyBooking(draft = {}) {
     draft.dependentName = null;
     draft.dependentCpf = null;
     draft.dependent_id = null;
+    draft.is_minor_without_cpf = false;
+    draft.guardian_cpf = null;
     draft.cpf = null;
     // Invalida token de confirmação anterior pois novo paciente exige validação
     draft.confirmation_token = null;
@@ -547,9 +549,9 @@ function extractCleanName(text) {
     const nonNameWordsRegex = /\b(oi|olá|ola|hey|hi|hello|boa|bom|noite|tarde|dia|tudo|bem|quero|quando|quanto|quais|qual|como|onde|porque|por que|porquê|saber|falar|falarei|conversar|atender|atendimento|dentista|médico|medico|doutor|doutora|dra|dr|consulta|valor|preço|preco|convênio|convenio|plano|horário|horario|vaga|vagas|endereço|endereco|local|dúvida|duvida|ajuda|informação|informacao|gostaria|preciso|tenho|queria|posso|pode|podia|deve|deveria|decide|decida|decidir|escolhe|escolha|escolher|veja|vê|olha|olhar|diz|dizer|fala|mostra|mostrar|acha|acho|pensa|penso|sabe|sei|faz|fazer|faço|coloca|bota|manda|envia|passa|pega|tira|deixa|fica|vai|ir|você|voce|vocês|voces|tu|ele|ela|nós|nos|mim|me|te|lhe|si|comigo|contigo|consigo|isso|isto|aquilo|esse|essa|este|esta|aquele|aquela|qualquer|quem|assim|então|entao|agora|depois|antes|sempre|nunca|jamais|já|ja|hoje|amanhã|amanha|ontem|aqui|ali|lá|la|cá|ca|muito|pouco|mais|menos|mal|ruim|melhor|pior|mole|duro|certo|errado|cara|véi|vei|mano|parça|parca|irmão|irmao|amigo|amiga|moço|moco|moça|moca|atendente|humano|secretária|secretaria|tanto|faz|beleza|valeu|obrigado|obrigada|tchau|sim|não|nao|ok)\b/i;
     if (nonNameWordsRegex.test(clean)) return null;
 
-    // Quantidade de palavras (um nome brasileiro válido tem de 1 a 5 palavras)
+    // Quantidade de palavras (um nome brasileiro válido tem de 1 a 6 palavras)
     const rawWords = clean.split(/\s+/);
-    if (rawWords.length < 1 || rawWords.length > 5) return null;
+    if (rawWords.length < 1 || rawWords.length > 6) return null;
 
     // Cada palavra do nome deve ter pelo menos 2 caracteres e conter apenas letras válidas
     for (const w of rawWords) {
@@ -799,7 +801,51 @@ class ConversationController {
             // 0e. Interceptador Direto para Resposta a Lembretes ("CONFIRMAR", "CONFIRMO", "CONFIRMAR PRESENÇA")
             const isReminderConfirmIntent = /^\s*(confirmar|confirmo|confirmado|confirmada|sim,\s*confirmar|confirmar\s+presença|confirmar\s+presenca|estou\s+confirmando)\s*$/i.test(sanitizedText.trim());
 
+            // Trata escolha de consulta numerada após desambiguação prévia de lembretes
+            if (draft?.pending_reminder_appts && draft.pending_reminder_appts.length > 0) {
+                const choiceMatch = sanitizedText.match(/^(?:consulta\s*)?([1-3])$/i);
+                if (choiceMatch) {
+                    const choiceIdx = parseInt(choiceMatch[1], 10) - 1;
+                    const chosenApptId = draft.pending_reminder_appts[choiceIdx];
+                    if (chosenApptId) {
+                        await db.appointments.updateStatus(chosenApptId, 'confirmed', clinicId);
+                        const { data: apptRow } = await db.supabase.from('appointments').select('*, patients(name)').eq('id', chosenApptId).single();
+
+                        draft.pending_reminder_appts = null;
+                        await db.sessions.setDraft(phone, draft, clinicId);
+
+                        const dateFmt = apptRow?.appointment_date ? apptRow.appointment_date.split('-').reverse().join('/') : '';
+                        const timeFmt = apptRow?.appointment_time ? apptRow.appointment_time.substring(0, 5) : '';
+                        const pName = apptRow?.patients?.name ? ` para *${apptRow.patients.name}*` : '';
+                        const confirmText = `Sua presença na consulta de *${apptRow?.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+
+                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                        history.push({ role: 'model', parts: [{ text: confirmText }] });
+                        await db.sessions.set(phone, history, clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text: confirmText,
+                            buttons: [],
+                            showCalendar: false,
+                            showTimeSlots: false,
+                            showProceduresList: false,
+                            requireCpf: false,
+                            procedures: null,
+                            availableSlots: null,
+                            transferToHuman: false
+                        };
+                    }
+                }
+            }
+
             if (isReminderConfirmIntent && (!draft || !draft.type || !draft.date || !draft.time)) {
+                const nowBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+                const todayStr = `${nowBRT.getFullYear()}-${String(nowBRT.getMonth() + 1).padStart(2, '0')}-${String(nowBRT.getDate()).padStart(2, '0')}`;
+
                 // Busca todos os pacientes vinculados a este telefone (titular e dependentes)
                 const { data: pRows } = await db.supabase
                     .from('patients')
@@ -824,8 +870,8 @@ class ConversationController {
                     allAppts = aList || [];
                 }
 
-                const pendingAppts = allAppts.filter(a => a.status === 'pending');
-                if (pendingAppts.length > 0) {
+                const pendingAppts = allAppts.filter(a => a.status === 'pending' && a.appointment_date >= todayStr);
+                if (pendingAppts.length === 1) {
                     const targetAppt = pendingAppts[0];
                     await db.appointments.updateStatus(targetAppt.id, 'confirmed', clinicId);
                     logger.info('REMINDER_CONFIRMED_VIA_CHAT', `Consulta ${targetAppt.id} do paciente [${phone}] confirmada com sucesso via WhatsApp.`);
@@ -854,11 +900,45 @@ class ConversationController {
                         availableSlots: null,
                         transferToHuman: false
                     };
+                } else if (pendingAppts.length > 1) {
+                    // Múltiplas consultas pendentes: DESAMBIGUAÇÃO OBRIGATÓRIA (não escolhe [0] arbitrariamente)
+                    const listStr = pendingAppts.map((a, idx) => {
+                        const dFmt = a.appointment_date ? a.appointment_date.split('-').reverse().join('/') : '';
+                        const tFmt = a.appointment_time ? a.appointment_time.substring(0, 5) : '';
+                        const pName = a.patients?.name ? ` para ${a.patients.name}` : '';
+                        return `${idx + 1}️⃣ *${a.type || 'Consulta'}*${pName} em ${dFmt} às ${tFmt}`;
+                    }).join('\n');
+
+                    const disambiguateText = `Localizei mais de uma consulta pendente para o seu número:\n\n${listStr}\n\nPor favor, selecione qual consulta você deseja confirmar presença:`;
+                    const disambiguateButtons = pendingAppts.slice(0, 3).map((a, idx) => `Consulta ${idx + 1}`);
+
+                    draft.pending_reminder_appts = pendingAppts.map(a => a.id);
+                    await db.sessions.setDraft(phone, draft, clinicId);
+
+                    history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                    history.push({ role: 'model', parts: [{ text: disambiguateText }] });
+                    await db.sessions.set(phone, history, clinicId);
+
+                    if (!isSimulation) {
+                        await whatsappService.sendButtonMessage(phone, disambiguateText, disambiguateButtons, phoneId, clinicToken).catch(() => {
+                            return whatsappService.sendTextMessage(phone, disambiguateText, phoneId, clinicToken);
+                        });
+                    }
+
+                    return {
+                        text: disambiguateText,
+                        buttons: disambiguateButtons,
+                        showCalendar: false,
+                        showTimeSlots: false,
+                        showProceduresList: false,
+                        requireCpf: false,
+                        procedures: null,
+                        availableSlots: null,
+                        transferToHuman: false
+                    };
                 }
 
                 // Se já estiver confirmada (consulta ativa hoje ou futura)
-                const nowBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-                const todayStr = `${nowBRT.getFullYear()}-${String(nowBRT.getMonth() + 1).padStart(2, '0')}-${String(nowBRT.getDate()).padStart(2, '0')}`;
                 const confirmedAppts = allAppts.filter(a => a.status === 'confirmed' && a.appointment_date >= todayStr);
 
                 if (confirmedAppts.length > 0) {
@@ -980,6 +1060,8 @@ class ConversationController {
                 draft.dependentName = null;
                 draft.dependentCpf = null;
                 draft.dependent_id = null;
+                draft.is_minor_without_cpf = false;
+                draft.guardian_cpf = null;
                 draft.cpf = null;
                 draft.confirmation_token = null;
                 draft.step = null;
@@ -1669,6 +1751,8 @@ class ConversationController {
                             dependentName: draft.dependentName || null,
                             dependentCpf: draft.dependentCpf || null,
                             dependent_id: draft.dependent_id || null,
+                            is_minor_without_cpf: draft.is_minor_without_cpf || false,
+                            guardian_cpf: draft.guardian_cpf || null,
                             date: draft.date,
                             time: draft.time,
                             type: draft.type,
@@ -1695,6 +1779,12 @@ class ConversationController {
                         draft.time = null;
                         draft.name = null;
                         draft.notes = null;
+                        draft.is_family_booking = false;
+                        draft.dependentName = null;
+                        draft.dependentCpf = null;
+                        draft.dependent_id = null;
+                        draft.is_minor_without_cpf = false;
+                        draft.guardian_cpf = null;
                         draft.confirmation_token = null;
                         draft.confirmed_appointment_id = newApptId;
                         await db.sessions.setDraft(phone, null, clinicId);
@@ -1885,6 +1975,8 @@ class ConversationController {
                     draft.dependentName = null;
                     draft.dependentCpf = null;
                     draft.dependent_id = null;
+                    draft.is_minor_without_cpf = false;
+                    draft.guardian_cpf = null;
                     draft.cpf = null;
                     draft.confirmation_token = null;
                     draft.step = 'collecting_dependent_name';
@@ -1897,6 +1989,8 @@ class ConversationController {
                     draft.dependentName = null;
                     draft.dependentCpf = null;
                     draft.dependent_id = null;
+                    draft.is_minor_without_cpf = false;
+                    draft.guardian_cpf = null;
                     draft.cpf = null;
                     draft.confirmation_token = null;
                     draft.step = null;
@@ -2094,31 +2188,78 @@ class ConversationController {
                     };
                 }
 
-                const earlyCpf = extractAndNormalizeCpf(sanitizedText);
-                if (earlyCpf) {
-                    // ── REGRA 17: BLOQUEIO ESTRITO DO CPF DO TITULAR PARA DEPENDENTE ──
-                    const titularCpfRaw = patient?.cpf ? db.decryptData(patient.cpf, 'cpf') : null;
-                    const cleanTitularCpf = titularCpfRaw ? titularCpfRaw.replace(/\D/g, '') : null;
-                    const cleanEarlyCpf = earlyCpf.replace(/\D/g, '');
+                const titularCpfRaw = patient?.cpf ? db.decryptData(patient.cpf, 'cpf') : null;
+                const cleanTitularCpf = titularCpfRaw ? titularCpfRaw.replace(/\D/g, '') : null;
 
-                    if (cleanTitularCpf && cleanEarlyCpf === cleanTitularCpf) {
-                        logger.warn('FAMILY_BOOKING_TITULAR_CPF_REJECTED', `[${phone}] Tentativa de usar o CPF do próprio titular [${maskCpf(earlyCpf)}] no dependente [${draft.dependentName}]. Rejeitando.`);
-                        const rejectTitularCpfText = `Identifiquei que este é o seu próprio CPF de titular. Para o atendimento de ${draft.dependentName}, precisamos do CPF próprio do paciente. Por favor, digite o CPF de ${draft.dependentName}:`;
+                const isMinorWithoutCpf = /menor\s+sem\s+cpf|n[aã]o\s+tem\s+cpf|sem\s+cpf|respons[aá]vel\s+legal|sou\s+o\s+respons[aá]vel|sou\s+a\s+respons[aá]vel|menor\s+de\s+idade|n[aã]o\s+possui\s+cpf|crian[çc]a\s+sem\s+cpf|beb[eê]\s+sem\s+cpf/i.test(sanitizedText);
+
+                const earlyCpf = extractAndNormalizeCpf(sanitizedText);
+                const cleanEarlyCpf = earlyCpf ? earlyCpf.replace(/\D/g, '') : null;
+
+                // Caso 1: Paciente declara expressamente que o dependente é menor sem CPF
+                if (isMinorWithoutCpf) {
+                    if (cleanTitularCpf || cleanEarlyCpf) {
+                        const guardianCpf = cleanTitularCpf || cleanEarlyCpf;
+                        if (!cleanTitularCpf && cleanEarlyCpf) {
+                            await db.patients.updateCpf(phone, earlyCpf, clinicId).catch(() => {});
+                        }
+                        draft.is_minor_without_cpf = true;
+                        draft.guardian_cpf = guardianCpf;
+                        draft.dependentCpf = guardianCpf;
+                        draft.cpf = guardianCpf;
+                        draft.step = null;
+                        await db.sessions.setDraft(phone, draft, clinicId);
+                        logger.info('FAMILY_BOOKING_MINOR_ACCEPTED', `[${phone}] Dependente [${draft.dependentName}] registrado como menor sob responsabilidade legal [${maskCpf(guardianCpf)}].`);
+
+                        if (!draft.type) {
+                            const procText = `Perfeito! Registramos ${draft.dependentName} como menor sob sua responsabilidade legal. 😊 Por favor, escolha qual procedimento você gostaria de agendar para ${draft.dependentName}:`;
+                            history.push({ role: 'user', parts: [{ text: processedText }] });
+                            history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
+                            if (history.length > 20) history = history.slice(-20);
+                            await db.sessions.set(phone, history, clinicId);
+
+                            if (!isSimulation) {
+                                const sections = [{
+                                    title: "Tratamentos",
+                                    rows: PROCEDURES_RICH
+                                }];
+                                await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {
+                                    return whatsappService.sendTextMessage(phone, procText, phoneId, clinicToken);
+                                });
+                            }
+
+                            return {
+                                text:               procText,
+                                buttons:            [],
+                                showCalendar:       false,
+                                showTimeSlots:      false,
+                                showProceduresList: true,
+                                requireCpf:         false,
+                                procedures:         PROCEDURES_LIST,
+                                availableSlots:     null,
+                                transferToHuman:    false
+                            };
+                        }
+                    } else {
+                        // Menor sem CPF e titular ainda não possui CPF cadastrado -> solicita CPF do responsável
+                        draft.is_minor_without_cpf = true;
+                        await db.sessions.setDraft(phone, draft, clinicId);
+                        const askGuardianCpfText = `Entendido! Como ${draft.dependentName} é menor e não possui CPF próprio, por favor me informe o CPF do responsável legal para prosseguirmos:`;
                         const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
 
                         history.push({ role: 'user', parts: [{ text: processedText }] });
-                        history.push({ role: 'model', parts: [{ text: `${rejectTitularCpfText}\n[SISTEMA: CPF do titular rejeitado para dependente, aguardando CPF do dependente]` }] });
+                        history.push({ role: 'model', parts: [{ text: `${askGuardianCpfText}\n[SISTEMA: CPF do responsável legal solicitado]` }] });
                         if (history.length > 20) history = history.slice(-20);
                         await db.sessions.set(phone, history, clinicId);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, rejectTitularCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, rejectTitularCpfText, phoneId, clinicToken);
+                            await whatsappService.sendButtonMessage(phone, askGuardianCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, askGuardianCpfText, phoneId, clinicToken);
                             });
                         }
 
                         return {
-                            text:               rejectTitularCpfText,
+                            text:               askGuardianCpfText,
                             buttons:            escapeButtons,
                             showCalendar:       false,
                             showTimeSlots:      false,
@@ -2129,12 +2270,53 @@ class ConversationController {
                             transferToHuman:    false
                         };
                     }
+                }
 
-                    draft.dependentCpf = earlyCpf;
-                    draft.cpf = earlyCpf;
-                    draft.step = null;
-                    await db.sessions.setDraft(phone, draft, clinicId);
-                    logger.info('FAMILY_BOOKING_CPF_ACCEPTED', `CPF [${maskCpf(earlyCpf)}] registrado para o dependente [${draft.dependentName}] no telefone [${phone}].`);
+                // Caso 2: Paciente enviou um CPF válido
+                if (earlyCpf) {
+                    // ── REGRA 17: BLOQUEIO ESTRITO DO CPF DO TITULAR PARA DEPENDENTE (COM ESCAPE P/ MENOR) ──
+                    if (cleanTitularCpf && cleanEarlyCpf === cleanTitularCpf) {
+                        if (draft.is_minor_without_cpf) {
+                            draft.guardian_cpf = cleanEarlyCpf;
+                            draft.dependentCpf = cleanEarlyCpf;
+                            draft.cpf = cleanEarlyCpf;
+                            draft.step = null;
+                            await db.sessions.setDraft(phone, draft, clinicId);
+                        } else {
+                            logger.warn('FAMILY_BOOKING_TITULAR_CPF_REJECTED', `[${phone}] Tentativa de usar o CPF do próprio titular [${maskCpf(earlyCpf)}] no dependente [${draft.dependentName}]. Rejeitando.`);
+                            const rejectTitularCpfText = `Identifiquei que este é o seu próprio CPF de titular. Para o atendimento de ${draft.dependentName}, precisamos do CPF próprio do paciente. Caso ele(a) seja menor e não possua CPF, selecione "Menor sem CPF" abaixo. Por favor, digite o CPF de ${draft.dependentName}:`;
+                            const escapeButtons = ["Menor sem CPF", "Agendar para mim", "Falar com atendente"];
+
+                            history.push({ role: 'user', parts: [{ text: processedText }] });
+                            history.push({ role: 'model', parts: [{ text: `${rejectTitularCpfText}\n[SISTEMA: CPF do titular rejeitado para dependente, aguardando CPF do dependente]` }] });
+                            if (history.length > 20) history = history.slice(-20);
+                            await db.sessions.set(phone, history, clinicId);
+
+                            if (!isSimulation) {
+                                await whatsappService.sendButtonMessage(phone, rejectTitularCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
+                                    return whatsappService.sendTextMessage(phone, rejectTitularCpfText, phoneId, clinicToken);
+                                });
+                            }
+
+                            return {
+                                text:               rejectTitularCpfText,
+                                buttons:            escapeButtons,
+                                showCalendar:       false,
+                                showTimeSlots:      false,
+                                showProceduresList: false,
+                                requireCpf:         true,
+                                procedures:         null,
+                                availableSlots:     null,
+                                transferToHuman:    false
+                            };
+                        }
+                    } else {
+                        draft.dependentCpf = earlyCpf;
+                        draft.cpf = earlyCpf;
+                        draft.step = null;
+                        await db.sessions.setDraft(phone, draft, clinicId);
+                        logger.info('FAMILY_BOOKING_CPF_ACCEPTED', `CPF [${maskCpf(earlyCpf)}] registrado para o dependente [${draft.dependentName}] no telefone [${phone}].`);
+                    }
 
                     // Se ainda não selecionou procedimento, forçar exibição imediata da lista de procedimentos
                     if (!draft.type) {
@@ -2192,9 +2374,9 @@ class ConversationController {
                         const isInitialCpfPrompt = sanitizedText.toLowerCase().includes(draft.dependentName.toLowerCase()) ||
                                                    (extractCleanName(sanitizedText) && extractCleanName(sanitizedText).toLowerCase() === draft.dependentName.toLowerCase());
                         const askDependentCpfText = isInitialCpfPrompt
-                            ? "Perfeito! O agendamento ficará no nome de " + draft.dependentName + ". Agora, por favor, me informe o CPF do dependente (ou do responsável legal):"
-                            : "O CPF informado parece inválido. Por favor, me informe um CPF válido com 11 dígitos para o agendamento de " + draft.dependentName + " (ex: 123.456.789-00):";
-                        const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
+                            ? "Perfeito! O agendamento ficará no nome de " + draft.dependentName + ". Agora, por favor, me informe o CPF do dependente (ou selecione 'Menor sem CPF' abaixo):"
+                            : "O CPF informado parece inválido. Por favor, me informe um CPF válido com 11 dígitos para o agendamento de " + draft.dependentName + " (ou selecione 'Menor sem CPF' abaixo):";
+                        const escapeButtons = ["Menor sem CPF", "Agendar para mim", "Falar com atendente"];
 
                         history.push({ role: 'user', parts: [{ text: processedText }] });
                         history.push({ role: 'model', parts: [{ text: `${askDependentCpfText}\n[SISTEMA: CPF solicitado, aguardando CPF]` }] });

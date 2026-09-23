@@ -192,11 +192,13 @@ class CalendarService {
 
             if (patientData.is_family_booking || patientData.dependentName || patientData.dependentCpf || patientData.dependent_id || patientData.dependentId) {
                 // Cria ou recupera a entidade do dependente vinculada ao titular (guardian_id)
+                // Se for menor sem CPF, não passa CPF do titular como CPF do dependente para evitar conflito na constraint única idx_patients_cpf_clinic
+                const dependentCpfToSave = patientData.is_minor_without_cpf ? null : (patientData.dependentCpf || patientData.cpf || null);
                 appointmentPatient = await db.patients.findOrCreateDependent({
                     guardianId: titular.id,
                     clinicId: targetClinicId,
                     name: patientData.dependentName || patientData.name || null,
-                    cpf: patientData.dependentCpf || patientData.cpf || null,
+                    cpf: dependentCpfToSave,
                     phone: patientData.phone,
                     dependentId: patientData.dependent_id || patientData.dependentId || null
                 });
@@ -235,6 +237,11 @@ class CalendarService {
                 throw conflictErr;
             }
 
+            const notesContent = patientData.notes || 
+                (patientData.is_minor_without_cpf 
+                    ? `Menor sem CPF - Resp: ${titular.name || 'Titular'} (CPF: ${patientData.guardian_cpf || titular.cpf || 'Cadastrado'})` 
+                    : null);
+
             return await db.appointments.create({
                 patient_id:       appointmentPatient.id,
                 clinic_id:        targetClinicId,
@@ -242,7 +249,7 @@ class CalendarService {
                 appointment_date: patientData.date,
                 appointment_time: patientData.time,
                 type:             patientData.type,
-                notes:            patientData.notes || null
+                notes:            notesContent
             });
         } catch (error) {
             throw error;
