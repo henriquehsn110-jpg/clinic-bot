@@ -1,6 +1,7 @@
 // CLINICABOT SAAS PRO — SERVIDOR EXPRESS (v1.0.1)
 const Sentry = require('./instrument');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '.env') });
 const express = require('express');
 
 
@@ -14,7 +15,6 @@ if (process.env.NODE_ENV === 'production' && !process.env.APP_SECRET) {
     process.exit(1);
 }
 const crypto = require('crypto');
-const path = require('path');
 const conversationController = require('./controllers/conversationController');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const reminderService = require('./services/reminderService');
@@ -169,7 +169,12 @@ if (process.env.NODE_ENV !== 'production') {
         const { phone, text } = req.body;
         console.log(`[SIMULATOR] Received message from ${phone}: "${text}"`);
         try {
-            const response = await conversationController.handleIncomingMessage(phone, text, true);
+            const response = await conversationController.handleIncomingMessage({
+                messageId: `sim_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+                phone,
+                text,
+                isSimulation: true
+            });
             console.log(`[SIMULATOR] Response sent: "${response.text}"`);
             res.json(response);
         } catch (e) {
@@ -352,6 +357,7 @@ const processWebhookInbox = async () => {
 
                                             console.log(`📩 [WEBHOOK] Mensagem de [${phone}]: "${text}" (buttonId: ${buttonId}) para Clínica [${clinicId}]`);
                                             await conversationController.handleIncomingMessage({
+                                                messageId,
                                                 phone,
                                                 text,
                                                 buttonId,
