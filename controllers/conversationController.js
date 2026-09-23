@@ -827,6 +827,30 @@ class ConversationController {
                 };
             }
 
+            // 0d. Protocolo de Urgência Operacional Imediata (Dor Aguda / Febre / Inchaço Crítico)
+            const isSevereUrgency = /\b(febre\s+alta|dor\s+(?:muito\s+)?(?:forte|insuportável|insuportavel|intensa)|rosto\s+inchado|inchando\s+muito|sangramento\s+intenso|sangrando\s+muito)\b/i.test(sanitizedText);
+            if (isSevereUrgency) {
+                logger.warn('URGENCY_HANDOFF', `Paciente [${phone}] relatou sintomas de urgência crítica. Acionando transbordo imediato.`);
+                const urgencyText = "Entendo que você está com um quadro de dor forte e urgência. Estou transferindo você imediatamente para a nossa equipe humana para atendimento prioritário! 😊\n\n[SISTEMA: conversa transferida para atendente humano]";
+                await persistHumanHandoff(phone, patient, history, sanitizedText, 'Protocolo de Urgência Operacional (Sintomas Críticos)', clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, urgencyText, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: urgencyText,
+                    buttons: [buildAiReturnButtonLabel(personaName)],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: true
+                };
+            }
+
             // 0b. Atalho Direto para Insultos/Profanidades (Transbordo Polido Silencioso — 0 Tokens Gemini)
             const profanityRegex = /\b(vai\s+se\s+lascar|se\s+lascar|porra|caralho|merda|cacete|filho\s+da\s+puta|fdp|tomar\s+no|vsf|tnj|vtnc|puta|corno|desgraça|desgraca|arrombado)\b/i;
             if (profanityRegex.test(sanitizedText)) {
@@ -1294,7 +1318,7 @@ class ConversationController {
             }
 
             // 1. Mensagem de Boas-Vindas Inicial (Primeiro contato genérico)
-            const hasDirectIntent = explicitProcMatch || /agend|remarc|cancela|consult|limpza|limpeza/i.test(sanitizedText);
+            const hasDirectIntent = explicitProcMatch || /agend|remarc|cancela|consult|limpza|limpeza|dor|urgênc|urgenc|emergênc|emergenc|febre|inchaço|inchaco|sangr|socorro|remédio|remedio|medicamento/i.test(sanitizedText);
             if (history.length === 0 && !sanitizedText.toLowerCase().includes('confirmar') && !hasDirectIntent) {
                 const welcomeText = `Olá! Sou a ${personaName}, da ${clinicName} 😊 Antes de começarmos: seus dados (nome e telefone) são usados apenas para agendamento e contato da clínica. Como posso ajudar você hoje?`;
                 const welcomeButtons = ["Agendar Consulta", "Remarcar/Cancelar", "Outras Dúvidas"];
