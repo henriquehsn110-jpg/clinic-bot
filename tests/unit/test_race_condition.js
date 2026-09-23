@@ -1,10 +1,9 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../../.env') });
 const axios = require('axios');
 const crypto = require('crypto');
 const db = require('../../services/databaseService');
-
-const { createClient } = require('@supabase/supabase-js');
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+const sb = db.supabase;
 
 const runId = `qa_${Date.now()}_${crypto.randomUUID().slice(0,8)}`;
 const phone1 = `5511900000010`;

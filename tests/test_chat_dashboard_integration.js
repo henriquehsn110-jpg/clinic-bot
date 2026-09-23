@@ -1,6 +1,6 @@
-require('dotenv').config();
-const http = require('http');
 const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
+const http = require('http');
 const { spawn, execSync } = require('child_process');
 const db = require('../services/databaseService');
 
@@ -12,7 +12,7 @@ let serverProcess = null;
 async function ensureServerRunning() {
     try {
         if (process.platform === 'win32') {
-            execSync('cmd /c "for /f "tokens=5" %a in (\'netstat -aon ^| findstr :3000 ^| findstr LISTENING\') do taskkill /f /pid %a"', { stdio: 'ignore' });
+            execSync('cmd.exe /c "npx --yes kill-port 3000"', { stdio: 'ignore' });
         } else {
             execSync('fuser -k 3000/tcp || true', { stdio: 'ignore' });
         }
@@ -22,8 +22,11 @@ async function ensureServerRunning() {
     console.log("  🚀 Auto-iniciando server.js na porta 3000...");
     serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
         cwd: path.join(__dirname, '..'),
-        stdio: 'ignore'
+        stdio: 'pipe',
+        shell: true,
+        env: process.env
     });
+    serverProcess.stderr.on('data', d => console.error(`[SERVER_ERR] ${d.toString()}`));
 
     for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 500));
@@ -117,9 +120,13 @@ async function runIntegrationTest() {
         // Garante que o slot anterior não existe para o teste ser limpo
         await db.supabase.from('appointments').delete().eq('patient_id', testPatientId).eq('clinic_id', testClinicId);
 
+        const doctors = await db.doctors.findByClinic(testClinicId);
+        const testDoctorId = doctors && doctors.length > 0 ? doctors[0].id : null;
+
         const appt = await db.appointments.create({
             patient_id: testPatientId,
             clinic_id: testClinicId,
+            doctor_id: testDoctorId,
             appointment_date: testDate,
             appointment_time: testTime,
             type: 'Consulta geral',

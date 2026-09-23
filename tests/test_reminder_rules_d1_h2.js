@@ -53,6 +53,9 @@ async function runReminderTestSuite() {
         patient = await db.patients.updateCpf(testPhone, testCpf, clinic.id);
         console.log(`👤 Paciente de teste: ${patient.name} (${patient.phone})\n`);
 
+        const doctorsList = await db.doctors.findByClinic(clinic.id);
+        const testDoctorId = doctorsList && doctorsList.length > 0 ? doctorsList[0].id : null;
+
         // ================================================================
         // TESTE 1: Lembrete D-1 (1 dia antes / Véspera)
         // ================================================================
@@ -64,6 +67,7 @@ async function runReminderTestSuite() {
         apptD1 = await db.appointments.create({
             patient_id: patient.id,
             clinic_id: clinic.id,
+            doctor_id: testDoctorId,
             appointment_date: tomorrowStr,
             appointment_time: '14:30:00',
             type: 'Limpeza Dental',
@@ -115,6 +119,7 @@ async function runReminderTestSuite() {
         apptH2 = await db.appointments.create({
             patient_id: patient.id,
             clinic_id: clinic.id,
+            doctor_id: testDoctorId,
             appointment_date: todayStr,
             appointment_time: h2TimeStr,
             type: 'Avaliação Geral',
@@ -125,6 +130,7 @@ async function runReminderTestSuite() {
         apptFar = await db.appointments.create({
             patient_id: patient.id,
             clinic_id: clinic.id,
+            doctor_id: testDoctorId,
             appointment_date: todayStr,
             appointment_time: farTimeStr,
             type: 'Ortodontia',
