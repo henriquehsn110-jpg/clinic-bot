@@ -114,13 +114,17 @@ async function withRetry(operation, retries = 3, delay = 200) {
             if (
                 error.code === '23505' ||
                 error.code === 'SLOT_OCCUPIED' ||
+                error.code === 'SESSION_LOCK_LOST' ||
+                error.code === 'SESSION_LOCK_TIMEOUT' ||
                 error.code === '23503' || // foreign key violation
                 error.code === '23502' || // not null violation
                 (error.message && (
                     error.message.includes('23505') ||
                     error.message.includes('duplicate key') ||
                     error.message.includes('violates unique constraint') ||
-                    error.message.includes('SLOT_OCCUPIED')
+                    error.message.includes('SLOT_OCCUPIED') ||
+                    error.message.includes('SESSION_LOCK_LOST') ||
+                    error.message.includes('SESSION_LOCK_TIMEOUT')
                 ))
             ) {
                 throw error;
@@ -867,20 +871,127 @@ const doctors = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SESSIONS
-// Substitui o Map em memória. Mesma interface — o controller não precisa mudar.
+// SESSION LOCKS (V19)
 // ═══════════════════════════════════════════════════════════════════════════════
-// Configuração de TTL de sessão: Padrão de 24 horas (1440 min) para permitir que pacientes
-// que demorem a responder durante o dia concluam seu agendamento sem reinício de conversa.
+const sessionLocks = {
+    async acquire(phone, clinicId, lockId, ttlSeconds = 30) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em sessionLocks.acquire');
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('acquire_session_lock', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`sessionLocks.acquire: ${error.message}`);
+            return data === true;
+        });
+    },
+
+    async renew(phone, clinicId, lockId, ttlSeconds = 30) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em sessionLocks.renew');
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('renew_session_lock', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`sessionLocks.renew: ${error.message}`);
+            return data === true;
+        });
+    },
+
+    async release(phone, clinicId, lockId) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em sessionLocks.release');
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('release_session_lock', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId
+            });
+            if (error) throw new Error(`sessionLocks.release: ${error.message}`);
+            return data === true;
+        });
+    },
+
+    async withSessionLock(phone, clinicId, actionFn, { lockId, ttlSeconds = 30, maxWaitMs = 15000 } = {}) {
+        const crypto = require('crypto');
+        const activeLockId = lockId || crypto.randomUUID();
+        const startTime = Date.now();
+        let acquired = false;
+        
+        let delay = 150; // base backoff
+        
+        // 1. Adquirir lock (com backoff + jitter)
+        while (Date.now() - startTime < maxWaitMs) {
+            acquired = await this.acquire(phone, clinicId, activeLockId, ttlSeconds);
+            if (acquired) break;
+            
+            const jitter = Math.floor(Math.random() * 100) - 50; // ±50ms
+            const waitTime = Math.min(delay, 800) + jitter;
+            await new Promise(r => setTimeout(r, waitTime > 0 ? waitTime : 100));
+            delay *= 1.5;
+        }
+
+        if (!acquired) {
+            const err = new Error('SESSION_LOCK_TIMEOUT: Não foi possível adquirir o lock para o telefone ' + phone);
+            err.code = 'SESSION_LOCK_TIMEOUT';
+            throw err;
+        }
+
+        // 2. Heartbeat e monitoramento de Ownership
+        let lockLostSignal = false;
+        let heartbeatTimer = null;
+        
+        const heartbeatFn = async () => {
+            if (lockLostSignal) return;
+            try {
+                const renewed = await this.renew(phone, clinicId, activeLockId, ttlSeconds);
+                if (!renewed) {
+                    lockLostSignal = true;
+                    logger.warn('SESSION_LOCK_LOST', `Perda de ownership detectada (phone: ${phone})`);
+                } else {
+                    heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+                }
+            } catch (err) {
+                logger.error('SESSION_LOCK_RENEW_ERROR', err.message);
+                heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+            }
+        };
+        
+        heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+
+        const lockContext = {
+            lockId: activeLockId,
+            isLockValid: () => !lockLostSignal,
+            assertLockValid: () => {
+                if (lockLostSignal) {
+                    const err = new Error('SESSION_LOCK_LOST: O worker atual perdeu a posse do lock.');
+                    err.code = 'SESSION_LOCK_LOST';
+                    throw err;
+                }
+            }
+        };
+
+        try {
+            // 3. Executar o core action (handleIncomingMessageUnlocked)
+            return await actionFn(lockContext);
+        } finally {
+            clearTimeout(heartbeatTimer);
+            if (!lockLostSignal) {
+                await this.release(phone, clinicId, activeLockId).catch(() => {});
+            }
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SESSIONS (V19 - Atômico)
+// ═══════════════════════════════════════════════════════════════════════════════
 const SESSION_TTL_MINUTES = parseInt(process.env.SESSION_TTL_MINUTES) || 1440;
 
-// KNOWN LIMITATION: FSM session writes assume serialized processing per phone/clinic.
-// As sessões persistem histórico e draft no Supabase assumindo processamento sequencial por número de telefone.
 const sessions = {
-
-    /**
-     * Retorna o histórico da sessão ou [] se expirada/inexistente.
-     */
     async get(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.get');
         const data = await withRetry(async () => {
@@ -889,91 +1000,19 @@ const sessions = {
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
                 .maybeSingle();
-
             if (error) throw new Error(`sessions.get: ${error.message}`);
             return data;
         });
 
-        // Log de Debug (exibido apenas em ambiente de desenvolvimento)
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`🔍 [SESSION_DEBUG] get(${phone}, ${clinicId}) => found: ${!!data}, histLen: ${data?.history?.length || 0}`);
-        }
-
         if (!data) return [];
-
-        // Verifica TTL manualmente (o cron limpa, mas aqui garantimos consistência)
         const diffMs = Date.now() - new Date(data.last_activity).getTime();
         if (diffMs > SESSION_TTL_MINUTES * 60 * 1000) {
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`🔍 [SESSION_DEBUG] TTL expirado (${Math.round(diffMs/60000)} min). Deletando sessão.`);
-            }
-            await sessions.delete(phone, clinicId);
+            await this.delete(phone, clinicId);
             return [];
         }
-
         return data.history || [];
     },
 
-    /**
-     * Salva ou atualiza o histórico e renova o last_activity.
-     */
-    async set(phone, history, clinicId) {
-        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.set');
-        return withRetry(async () => {
-            const last_activity = new Date().toISOString();
-            
-            // 1. Tenta atualizar a sessão existente
-            const { data, error: updateErr } = await supabase
-                .from('sessions')
-                .update({ history, last_activity, deleted_at: null })
-                .eq('phone', phone)
-                .eq('clinic_id', clinicId)
-                .select()
-                .maybeSingle();
-
-            if (updateErr) {
-                console.error(`🔍 [SESSION_DEBUG] set UPDATE error: ${updateErr.message}`);
-                throw new Error(`sessions.set (update): ${updateErr.message}`);
-            }
-
-            // 2. Se a sessão já existia e foi atualizada, retorna
-            if (data) {
-                if (process.env.NODE_ENV !== 'production') {
-                    console.log(`🔍 [SESSION_DEBUG] set(${phone}) => UPDATE OK, histLen: ${history.length}`);
-                }
-                return data;
-            }
-
-            // 3. Se não existia, insere uma nova sessão
-            const { data: insertData, error: insertErr } = await supabase
-                .from('sessions')
-                .insert({ phone, clinic_id: clinicId, history, last_activity })
-                .select('id')
-                .single();
-
-            if (insertErr) {
-                console.error(`🔍 [SESSION_DEBUG] set INSERT error: code=${insertErr.code} msg=${insertErr.message}`);
-                // Se houve conflito de concorrência (23505), tenta update de novo
-                if (insertErr.code === '23505') {
-                    const { error: retryErr } = await supabase
-                        .from('sessions')
-                        .update({ history, last_activity, deleted_at: null })
-                        .eq('phone', phone)
-                        .eq('clinic_id', clinicId);
-                    if (!retryErr) return;
-                }
-                throw new Error(`sessions.set (insert): ${insertErr.message}`);
-            }
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`🔍 [SESSION_DEBUG] set(${phone}) => INSERT OK, id: ${insertData?.id}, histLen: ${history.length}`);
-            }
-        });
-    },
-
-    /**
-     * Retorna o rascunho de agendamento estruturado associado à sessão.
-     * Descriptografa automaticamente campos sensíveis (como cpf e dependentCpf).
-     */
     async getDraft(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.getDraft');
         return withRetry(async () => {
@@ -982,57 +1021,54 @@ const sessions = {
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
                 .maybeSingle();
-
             if (error) throw new Error(`sessions.getDraft: ${error.message}`);
             return (data && data.draft) ? decryptDraftFields(data.draft) : {};
         });
     },
 
-    /**
-     * Atualiza o rascunho de forma atômica no Supabase.
-     * Criptografa automaticamente campos sensíveis (como cpf e dependentCpf) via AES-256-GCM.
-     */
-    async setDraft(phone, draftPatch, clinicId) {
-        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.setDraft');
+    async persistStateIfOwned(phone, clinicId, lockId, history, draftPatch) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em persistStateIfOwned');
         return withRetry(async () => {
-            if (draftPatch === null) {
-                // Se null, reseta o rascunho via update direto
-                const { error } = await supabase
-                    .from('sessions')
-                    .update({ draft: null, last_activity: new Date().toISOString() })
-                    .eq('phone', phone)
-                    .eq('clinic_id', clinicId);
-                if (error) throw new Error(`sessions.setDraft (reset): ${error.message}`);
-                return;
+            let encryptedDraft = null;
+            if (draftPatch !== null) {
+                encryptedDraft = encryptDraftFields(draftPatch);
             }
 
-            const encryptedDraft = encryptDraftFields(draftPatch);
+            const { data, error } = await supabase.rpc('persist_session_state_if_lock_owned', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId,
+                p_history: history || [],
+                p_draft: encryptedDraft
+            });
 
-            const { data: existing } = await supabase
-                .from('sessions')
-                .select('id')
-                .eq('phone', phone)
-                .eq('clinic_id', clinicId)
-                .maybeSingle();
-
-            if (!existing) {
-                const { error: insErr } = await supabase
-                    .from('sessions')
-                    .insert({ phone, clinic_id: clinicId, history: [], draft: encryptedDraft, last_activity: new Date().toISOString() });
-                if (insErr) throw new Error(`sessions.setDraft (insert new): ${insErr.message}`);
-            } else {
-                const { error } = await supabase
-                    .from('sessions')
-                    .update({ draft: encryptedDraft, last_activity: new Date().toISOString() })
-                    .eq('id', existing.id);
-                if (error) throw new Error(`sessions.setDraft (update): ${error.message}`);
+            if (error) throw new Error(`persistStateIfOwned: ${error.message}`);
+            
+            if (data === false) {
+                const err = new Error('SESSION_LOCK_LOST: Falha ao persistir pois o ownership foi perdido.');
+                err.code = 'SESSION_LOCK_LOST';
+                throw err;
             }
+            return true;
         });
     },
 
-    /**
-     * Remove a sessão (logout / nova conversa forçada).
-     */
+    async set(phone, history, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.set');
+        return sessionLocks.withSessionLock(phone, clinicId, async ({ lockId }) => {
+            const currentDraft = await sessions.getDraft(phone, clinicId);
+            return sessions.persistStateIfOwned(phone, clinicId, lockId, history, currentDraft);
+        });
+    },
+
+    async setDraft(phone, draftPatch, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.setDraft');
+        return sessionLocks.withSessionLock(phone, clinicId, async ({ lockId }) => {
+            const currentHistory = await sessions.get(phone, clinicId);
+            return sessions.persistStateIfOwned(phone, clinicId, lockId, currentHistory, draftPatch);
+        });
+    },
+
     async delete(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.delete');
         return withRetry(async () => {
@@ -1041,7 +1077,6 @@ const sessions = {
                 .delete()
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId);
-
             if (error) throw new Error(`sessions.delete: ${error.message}`);
         });
     }
@@ -1049,8 +1084,6 @@ const sessions = {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONVERSATIONS
-// Log auditável de cada mensagem. Usado para análise e relatórios futuros.
-// ═══════════════════════════════════════════════════════════════════════════════
 const conversations = {
 
     /**
@@ -1093,14 +1126,73 @@ const conversations = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WEBHOOKS
-// Controle de idempotência de Webhook logs para evitar duplicações
+// WEBHOOKS (V19)
 // ═══════════════════════════════════════════════════════════════════════════════
 const webhooks = {
-    /**
-     * Tenta processar o ID (Idempotência - C12)
-     * Agora lança exceção em caso de falha de infraestrutura para forçar 500 HTTP.
-     */
+    async claim(messageId, clinicId, phone, processingToken, maxRetries = 3, ttlSeconds = 30) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('claim_webhook_message', {
+                p_message_id: messageId,
+                p_clinic_id: clinicId,
+                p_phone: phone || null,
+                p_processing_token: processingToken,
+                p_max_retries: maxRetries,
+                p_processing_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`webhooks.claim: ${error.message}`);
+            return data; // { status: 'CLAIMED' | 'ALREADY_COMPLETED' | 'ALREADY_FAILED' | ... }
+        });
+    },
+    
+    async renew(messageId, processingToken, ttlSeconds = 30) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('renew_webhook_claim', {
+                p_message_id: messageId,
+                p_processing_token: processingToken,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`webhooks.renew: ${error.message}`);
+            return data; // boolean
+        });
+    },
+
+    async complete(messageId, processingToken) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('complete_webhook_message', {
+                p_message_id: messageId,
+                p_processing_token: processingToken
+            });
+            if (error) throw new Error(`webhooks.complete: ${error.message}`);
+            return data;
+        });
+    },
+
+    async defer(messageId, processingToken, errorLog, backoffSeconds = 5) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('defer_webhook_message', {
+                p_message_id: messageId,
+                p_processing_token: processingToken,
+                p_error_log: errorLog,
+                p_backoff_seconds: backoffSeconds
+            });
+            if (error) throw new Error(`webhooks.defer: ${error.message}`);
+            return data;
+        });
+    },
+
+    async fail(messageId, processingToken, errorLog) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('fail_webhook_message', {
+                p_message_id: messageId,
+                p_processing_token: processingToken,
+                p_error_log: errorLog
+            });
+            if (error) throw new Error(`webhooks.fail: ${error.message}`);
+            return data;
+        });
+    },
+    
+    // Antigo / Idempotência legada e compatibilidade
     async attemptProcessing(messageId) {
         const { error } = await supabase
             .from('webhook_logs')
@@ -1114,76 +1206,105 @@ const webhooks = {
         }
         return true; // Primeira vez
     },
-
-    /**
-     * Salva payload bruto no Inbox Durável (C7)
-     */
     async addToInbox(payload) {
-        const { error } = await supabase
-            .from('webhook_inbox')
-            .insert({ payload });
-        
-        if (error) {
-            throw new Error(`Falha ao inserir no webhook_inbox: ${error.message}`);
-        }
+        const { error } = await supabase.from('webhook_inbox').insert({ payload });
+        if (error) throw new Error(`Falha ao inserir no webhook_inbox: ${error.message}`);
     },
-
-    /**
-     * Busca os próximos itens pendentes na fila (C7) de forma atômica
-     */
     async fetchPending(limit = 10) {
         try {
             const { data, error } = await supabase.rpc('claim_webhook_inbox', { p_limit: limit });
-            if (error) {
-                logger.error('DATABASE', `Falha ao tentar usar atomic claim_webhook_inbox (Erro Supabase): ${error.message}`);
-                return [];
-            }
+            if (error) return [];
             return data || [];
         } catch (err) {
-            logger.error('DATABASE', `Falha de rede ao tentar usar atomic claim_webhook_inbox (Exception): ${err.message}`);
             return [];
         }
     },
-
-    /**
-     * Atualiza o status de um item no Inbox (C7)
-     */
     async updateInboxStatus(id, status, errorLog = null) {
         const payload = { status };
-        if (status === 'completed' || status === 'failed') {
-            payload.processed_at = new Date().toISOString();
-        }
-        if (errorLog) {
-            payload.error_log = errorLog;
-        }
-
-        const { error } = await supabase
-            .from('webhook_inbox')
-            .update(payload)
-            .eq('id', id);
-            
-        if (error) {
-            logger.error('DATABASE_WEBHOOKS', `Falha ao atualizar status do inbox ${id}: ${error.message}`);
-        }
+        if (status === 'completed' || status === 'failed') payload.processed_at = new Date().toISOString();
+        if (errorLog) payload.error_log = errorLog;
+        await supabase.from('webhook_inbox').update(payload).eq('id', id);
     },
-
-    /**
-     * Persiste o status de entrega de mensagens (Status da Meta)
-     */
     async logMessageStatus(messageId, recipientId, status, timestampStr) {
         let ts = timestampStr ? new Date(parseInt(timestampStr) * 1000).toISOString() : new Date().toISOString();
-        const { error } = await supabase
-            .from('message_statuses')
-            .insert({
-                message_id: messageId,
-                recipient_id: recipientId,
-                status: status,
-                timestamp: ts
+        await supabase.from('message_statuses').insert({ message_id: messageId, recipient_id: recipientId, status: status, timestamp: ts }).catch(()=>{});
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EFFECTS (V19)
+// ═══════════════════════════════════════════════════════════════════════════════
+const effects = {
+    async claim(messageId, effectType, effectKey, effectToken, ttlSeconds = 30, maxRetries = 3, payload = null) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('claim_message_effect', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_ttl_seconds: ttlSeconds,
+                p_max_retries: maxRetries,
+                p_payload: payload
             });
-        
-        if (error) {
-            logger.warn('DATABASE_WEBHOOKS', `Erro ao registrar status da mensagem [${messageId}]: ${error.message}`);
-        }
+            if (error) throw new Error(`effects.claim: ${error.message}`);
+            return data;
+        });
+    },
+
+    async renew(messageId, effectType, effectKey, effectToken, ttlSeconds = 30) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('renew_message_effect_claim', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`effects.renew: ${error.message}`);
+            return data;
+        });
+    },
+
+    async markExecuted(messageId, effectType, effectKey, effectToken) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('mark_effect_executed', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken
+            });
+            if (error) throw new Error(`effects.markExecuted: ${error.message}`);
+            return data;
+        });
+    },
+
+    async defer(messageId, effectType, effectKey, effectToken, errorLog, backoffSeconds = 5) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('defer_effect', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_error_log: errorLog,
+                p_backoff_seconds: backoffSeconds
+            });
+            if (error) throw new Error(`effects.defer: ${error.message}`);
+            return data;
+        });
+    },
+
+    async fail(messageId, effectType, effectKey, effectToken, errorLog) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('fail_effect', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_error_log: errorLog
+            });
+            if (error) throw new Error(`effects.fail: ${error.message}`);
+            return data;
+        });
     }
 };
 
@@ -1241,4 +1362,4 @@ function parseClinicSettings(cData) {
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, clinics, patients, appointments, doctors, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings, decryptData, encryptData, hashForSearch };
+module.exports = { supabase, clinics, patients, appointments, doctors, sessionLocks, sessions, conversations, webhooks, effects, cleanEnvVar, parseClinicSettings, decryptData, encryptData, hashForSearch };
