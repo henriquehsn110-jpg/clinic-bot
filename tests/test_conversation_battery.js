@@ -309,22 +309,25 @@ async function runBatteryTests() {
         await db.patients.updateCpf(phone, cpf, clinicId).catch(() => {});
         await db.patients.updateName(phone, "Teste Slot", clinicId).catch(() => {});
 
+        const testDocId = 'be0fbdfa-49d2-4a64-84ba-ab57e205f89e';
         await db.sessions.set(phone, [], clinicId);
-        await db.sessions.setDraft(phone, { type: 'Limpeza', date: testDateStr, time: targetSlot, cpf, name: 'Teste Slot' }, clinicId);
+        await db.sessions.setDraft(phone, { type: 'Limpeza', date: testDateStr, time: targetSlot, cpf, name: 'Teste Slot', doctor_id: testDocId }, clinicId);
 
         // 1. Criar agendamento às 14:30
         await conversationController.handleIncomingMessage(phone, "Confirmar", true, clinicId); await sleep(100);
 
         // 2. Verificar se horário 14:30 foi ocupado
-        const slotsBefore = await calendarService.getAvailableSlots(testDateStr, clinicId);
+        const slotsBefore = await calendarService.getAvailableSlots(testDateStr, clinicId, testDocId);
         const slotOccupied = !slotsBefore.includes(targetSlot);
 
         // 3. Cancelar agendamento
-        await conversationController.handleIncomingMessage(phone, "Quero cancelar", true, clinicId); await sleep(100);
-        await conversationController.handleIncomingMessage(phone, "Sim, cancelar", true, clinicId); await sleep(100);
+        const cancelPrompt = await conversationController.handleIncomingMessage(phone, "Quero cancelar", true, clinicId); await sleep(100);
+        const cancelBtn = cancelPrompt.buttons?.find(b => typeof b === 'object' && b.id?.startsWith('cancel:'));
+        const buttonId = cancelBtn ? cancelBtn.id : null;
+        await conversationController.handleIncomingMessage({ phone, text: "Sim, cancelar", buttonId, isSimulation: true, clinicId }); await sleep(100);
 
         // 4. Verificar se horário 14:30 foi liberado
-        const slotsAfter = await calendarService.getAvailableSlots(testDateStr, clinicId);
+        const slotsAfter = await calendarService.getAvailableSlots(testDateStr, clinicId, testDocId);
         const slotFreed = slotsAfter.includes(targetSlot);
 
         recordResult(11, "Cancelamento & Liberação de Slots", slotOccupied && slotFreed, `Slot ${targetSlot} ocupado no agendamento (${slotOccupied}) e liberado no cancelamento (${slotFreed}).`);

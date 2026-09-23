@@ -71,7 +71,8 @@ class WhatsAppService {
     }
 
     async sendButtonMessage(to, bodyText, buttons, phoneId, token) {
-        logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Botões): "${bodyText}" | Botões: [${(buttons || []).join(', ')}]`);
+        const buttonTitles = (buttons || []).map(b => typeof b === 'object' ? `${b.title} (${b.id})` : b);
+        logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Botões): "${bodyText}" | Botões: [${buttonTitles.join(', ')}]`);
         const { url, headers } = this._buildRequest(phoneId, token);
         const validButtons = (buttons || []).slice(0, 3);
         const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
@@ -88,13 +89,18 @@ class WhatsAppService {
                             type: 'button',
                             body: { text: safeBodyText },
                             action: {
-                                buttons: validButtons.map((btn, i) => ({
-                                    type: 'reply',
-                                    reply: {
-                                        id:    `btn_${i}`,
-                                        title: btn.length > 20 ? btn.substring(0, 20) : btn
-                                    }
-                                }))
+                                buttons: validButtons.map((btn, i) => {
+                                    const btnId = (typeof btn === 'object' && btn?.id) ? String(btn.id) : `btn_${i}`;
+                                    const rawTitle = (typeof btn === 'object' && btn?.title) ? String(btn.title) : String(btn);
+                                    const safeTitle = rawTitle.length > 20 ? rawTitle.substring(0, 20) : rawTitle;
+                                    return {
+                                        type: 'reply',
+                                        reply: {
+                                            id: btnId,
+                                            title: safeTitle
+                                        }
+                                    };
+                                })
                             }
                         }
                     }, { headers, timeout: 10000 });

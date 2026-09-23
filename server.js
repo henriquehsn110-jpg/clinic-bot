@@ -319,20 +319,29 @@ const processWebhookInbox = async () => {
 
                                         const phone = message.from;
                                         let text = '';
+                                        let buttonId = null;
+                                        let buttonTitle = null;
+
                                         if (message.interactive?.list_reply) {
                                             const listReply = message.interactive.list_reply;
-                                            if (listReply.id && listReply.id.startsWith('date_')) {
-                                                text = `Selecionei a data: ${listReply.id.replace('date_', '')}`;
-                                            } else if (listReply.id === 'btn_more_dates') {
+                                            buttonId = listReply.id || null;
+                                            buttonTitle = listReply.title || null;
+                                            if (buttonId && buttonId.startsWith('date_')) {
+                                                text = `Selecionei a data: ${buttonId.replace('date_', '')}`;
+                                            } else if (buttonId === 'btn_more_dates') {
                                                 text = 'Outras datas...';
                                             } else {
                                                 text = listReply.title;
                                             }
+                                        } else if (message.interactive?.button_reply) {
+                                            buttonId = message.interactive.button_reply.id || null;
+                                            buttonTitle = message.interactive.button_reply.title || null;
+                                            text = message.interactive.button_reply.title || '';
                                         } else {
-                                            text = message.text?.body || message.interactive?.button_reply?.title || '';
+                                            text = message.text?.body || '';
                                         }
 
-                                        if (text) {
+                                        if (text || buttonId) {
                                             // Enforcamento de Assinatura & Cotas SaaS (Billing Check)
                                             const access = await billingService.checkClinicAccess(clinicId);
                                             if (!access.allowed) {
@@ -341,8 +350,16 @@ const processWebhookInbox = async () => {
                                                 continue;
                                             }
 
-                                            console.log(`📩 [WEBHOOK] Mensagem de [${phone}]: "${text}" para Clínica [${clinicId}]`);
-                                            await conversationController.handleIncomingMessage(phone, text, false, clinicId, phoneNumberId);
+                                            console.log(`📩 [WEBHOOK] Mensagem de [${phone}]: "${text}" (buttonId: ${buttonId}) para Clínica [${clinicId}]`);
+                                            await conversationController.handleIncomingMessage({
+                                                phone,
+                                                text,
+                                                buttonId,
+                                                buttonTitle,
+                                                clinicId,
+                                                phoneNumberId,
+                                                isSimulation: false
+                                            });
                                             await billingService.incrementMonthlyBooking(clinicId);
                                         } else {
                                             console.log(`📩 [WEBHOOK] Mensagem com formato não suportado recebida de [${phone}]`);
