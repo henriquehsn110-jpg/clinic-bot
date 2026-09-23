@@ -1,3 +1,5 @@
+// KNOWN LIMITATION: FSM session writes assume serialized processing per phone/clinic.
+// Em produção, a serialização de mensagens por telefone é garantida pela fila/canal do WhatsApp (Meta Webhook delivery por chat).
 const aiService        = require('../services/aiService');
 const whatsappService   = require('../services/whatsappService');
 const db                = require('../services/databaseService');

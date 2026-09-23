@@ -874,6 +874,8 @@ const doctors = {
 // que demorem a responder durante o dia concluam seu agendamento sem reinício de conversa.
 const SESSION_TTL_MINUTES = parseInt(process.env.SESSION_TTL_MINUTES) || 1440;
 
+// KNOWN LIMITATION: FSM session writes assume serialized processing per phone/clinic.
+// As sessões persistem histórico e draft no Supabase assumindo processamento sequencial por número de telefone.
 const sessions = {
 
     /**
