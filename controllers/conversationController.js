@@ -951,16 +951,59 @@ class ConversationController {
             }
 
             if (chosenReminderApptId) {
-                await db.appointments.updateStatus(chosenReminderApptId, 'confirmed', clinicId);
-                const { data: apptRow } = await db.supabase.from('appointments').select('*, patients(name)').eq('id', chosenReminderApptId).single();
-
                 draft.pending_reminder_appts = null;
                 await db.sessions.setDraft(phone, draft, clinicId);
 
-                const dateFmt = apptRow?.appointment_date ? apptRow.appointment_date.split('-').reverse().join('/') : '';
-                const timeFmt = apptRow?.appointment_time ? apptRow.appointment_time.substring(0, 5) : '';
-                const pName = apptRow?.patients?.name ? ` para *${apptRow.patients.name}*` : '';
-                const confirmText = `Sua presença na consulta de *${apptRow?.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+                // 1. Busca estado atual da consulta antes de tentar confirmar
+                const { data: currentAppt } = await db.supabase
+                    .from('appointments')
+                    .select('*, patients(name)')
+                    .eq('id', chosenReminderApptId)
+                    .eq('clinic_id', clinicId)
+                    .maybeSingle();
+
+                let confirmText = '';
+
+                if (!currentAppt || currentAppt.deleted_at) {
+                    confirmText = 'Esta consulta não foi localizada ou já foi removida do sistema. Se precisar de um novo agendamento, estou à disposição! 😊';
+                } else if (currentAppt.status === 'confirmed') {
+                    const dFmt = currentAppt.appointment_date ? currentAppt.appointment_date.split('-').reverse().join('/') : '';
+                    const tFmt = currentAppt.appointment_time ? currentAppt.appointment_time.substring(0, 5) : '';
+                    const pName = currentAppt.patients?.name ? ` para *${currentAppt.patients.name}*` : '';
+                    confirmText = `Esta consulta de *${currentAppt.type || 'avaliação'}*${pName} no dia *${dFmt}* às *${tFmt}* já está confirmada! Te aguardamos na clínica! 😊`;
+                } else if (currentAppt.status === 'cancelled') {
+                    confirmText = 'Esta consulta consta como cancelada em nosso sistema. Se desejar, posso te ajudar a agendar um novo horário! 😊';
+                } else if (!calendarService.isAppointmentStillConfirmable(currentAppt.appointment_date, currentAppt.appointment_time)) {
+                    confirmText = 'Esta consulta não pôde ser confirmada pois o horário agendado já passou. Deseja agendar um novo horário? 😊';
+                } else {
+                    // Tenta o update atômico condicional (status = pending, deleted_at IS NULL)
+                    const updatedAppt = await db.appointments.confirmPendingAppointment(chosenReminderApptId, clinicId);
+                    if (!updatedAppt) {
+                        // 0 rows afetadas -> recarrega estado real
+                        const { data: refreshed } = await db.supabase
+                            .from('appointments')
+                            .select('*, patients(name)')
+                            .eq('id', chosenReminderApptId)
+                            .eq('clinic_id', clinicId)
+                            .maybeSingle();
+
+                        if (refreshed?.status === 'confirmed') {
+                            const dFmt = refreshed.appointment_date ? refreshed.appointment_date.split('-').reverse().join('/') : '';
+                            const tFmt = refreshed.appointment_time ? refreshed.appointment_time.substring(0, 5) : '';
+                            confirmText = `Esta consulta no dia *${dFmt}* às *${tFmt}* já foi confirmada anteriormente! Te aguardamos na clínica! 😊`;
+                        } else if (refreshed?.status === 'cancelled' || refreshed?.deleted_at) {
+                            confirmText = 'Não foi possível confirmar: esta consulta já consta como cancelada no sistema. Deseja agendar um novo horário? 😊';
+                        } else {
+                            confirmText = 'Não foi possível confirmar esta consulta no momento. Ela pode ter sido alterada recentemente. Deseja verificar seus agendamentos? 😊';
+                        }
+                    } else {
+                        logger.info('REMINDER_CONFIRMED_VIA_CHAT', `Consulta ${updatedAppt.id} do paciente [${phone}] confirmada com sucesso via WhatsApp.`);
+                        const dateFmt = updatedAppt.appointment_date ? updatedAppt.appointment_date.split('-').reverse().join('/') : '';
+                        const timeFmt = updatedAppt.appointment_time ? updatedAppt.appointment_time.substring(0, 5) : '';
+                        const pName = updatedAppt.patients?.name ? ` para *${updatedAppt.patients.name}*` : '';
+                        confirmText = `Sua presença na consulta de *${updatedAppt.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+                    }
+                }
 
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: confirmText }] });
@@ -1011,16 +1054,40 @@ class ConversationController {
                     allAppts = aList || [];
                 }
 
-                const pendingAppts = allAppts.filter(a => a.status === 'pending' && a.appointment_date >= todayStr);
+                const pendingAppts = allAppts.filter(a => 
+                    a.status === 'pending' && 
+                    calendarService.isAppointmentStillConfirmable(a.appointment_date, a.appointment_time)
+                );
                 if (pendingAppts.length === 1) {
                     const targetAppt = pendingAppts[0];
-                    await db.appointments.updateStatus(targetAppt.id, 'confirmed', clinicId);
-                    logger.info('REMINDER_CONFIRMED_VIA_CHAT', `Consulta ${targetAppt.id} do paciente [${phone}] confirmada com sucesso via WhatsApp.`);
+                    const updatedAppt = await db.appointments.confirmPendingAppointment(targetAppt.id, clinicId);
 
-                    const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
-                    const timeFmt = targetAppt.appointment_time ? targetAppt.appointment_time.substring(0, 5) : '';
-                    const pName = targetAppt.patients?.name ? ` para *${targetAppt.patients.name}*` : '';
-                    const confirmText = `Sua presença na consulta de *${targetAppt.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+                    let confirmText = '';
+                    if (!updatedAppt) {
+                        // 0 rows afetadas: recarrega estado real
+                        const { data: refreshed } = await db.supabase
+                            .from('appointments')
+                            .select('*, patients(name)')
+                            .eq('id', targetAppt.id)
+                            .eq('clinic_id', clinicId)
+                            .maybeSingle();
+
+                        if (refreshed?.status === 'confirmed') {
+                            const dFmt = refreshed.appointment_date ? refreshed.appointment_date.split('-').reverse().join('/') : '';
+                            const tFmt = refreshed.appointment_time ? refreshed.appointment_time.substring(0, 5) : '';
+                            confirmText = `Esta consulta no dia *${dFmt}* às *${tFmt}* já foi confirmada anteriormente! Te aguardamos na clínica! 😊`;
+                        } else if (refreshed?.status === 'cancelled' || refreshed?.deleted_at) {
+                            confirmText = 'Não foi possível confirmar: esta consulta já consta como cancelada no sistema. Deseja agendar um novo horário? 😊';
+                        } else {
+                            confirmText = 'Não foi possível confirmar esta consulta no momento. Ela pode ter sido alterada recentemente. Deseja verificar seus agendamentos? 😊';
+                        }
+                    } else {
+                        logger.info('REMINDER_CONFIRMED_VIA_CHAT', `Consulta ${updatedAppt.id} do paciente [${phone}] confirmada com sucesso via WhatsApp.`);
+                        const dateFmt = updatedAppt.appointment_date ? updatedAppt.appointment_date.split('-').reverse().join('/') : '';
+                        const timeFmt = updatedAppt.appointment_time ? updatedAppt.appointment_time.substring(0, 5) : '';
+                        const pName = updatedAppt.patients?.name ? ` para *${updatedAppt.patients.name}*` : '';
+                        confirmText = `Sua presença na consulta de *${updatedAppt.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+                    }
 
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                     history.push({ role: 'model', parts: [{ text: confirmText }] });
@@ -1139,8 +1206,11 @@ class ConversationController {
                     }
                 }
 
-                // Se já estiver confirmada (consulta ativa hoje ou futura)
-                const confirmedAppts = allAppts.filter(a => a.status === 'confirmed' && a.appointment_date >= todayStr);
+                // Se já estiver confirmada (consulta ativa hoje ou futura confirmável)
+                const confirmedAppts = allAppts.filter(a => 
+                    a.status === 'confirmed' && 
+                    calendarService.isAppointmentStillConfirmable(a.appointment_date, a.appointment_time)
+                );
 
                 if (confirmedAppts.length > 0) {
                     const targetAppt = confirmedAppts[0];

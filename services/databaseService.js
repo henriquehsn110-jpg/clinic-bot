@@ -751,6 +751,38 @@ const appointments = {
     },
 
     /**
+     * Confirmação condicional atômica de agendamento de lembrete:
+     * Atualiza para 'confirmed' SOMENTE se:
+     * - id == appointmentId
+     * - clinic_id == clinicId
+     * - status == 'pending'
+     * - deleted_at IS NULL
+     * Retorna o registro atualizado com dados do paciente, ou null se 0 rows foram afetadas.
+     */
+    async confirmPendingAppointment(appointmentId, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em appointments.confirmPendingAppointment');
+        return withRetry(async () => {
+            const { data, error } = await supabase
+                .from('appointments')
+                .update({ status: 'confirmed' })
+                .eq('id', appointmentId)
+                .eq('clinic_id', clinicId)
+                .eq('status', 'pending')
+                .is('deleted_at', null)
+                .select('*, patients(name)')
+                .maybeSingle();
+
+            if (error) throw new Error(`appointments.confirmPendingAppointment: ${error.message}`);
+
+            if (data) {
+                await auditLog('UPDATE', 'APPOINTMENT', appointmentId, clinicId, { status: 'confirmed' });
+            }
+
+            return data;
+        });
+    },
+
+    /**
      * Próximo agendamento ativo de um paciente (para remarcações).
      */
     async findNextByPatient(patientId, clinicId) {

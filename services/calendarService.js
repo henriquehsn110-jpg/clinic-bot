@@ -338,6 +338,28 @@ class CalendarService {
             throw error;
         }
     }
+
+    /**
+     * Verifica se uma consulta ainda é confirmável com base no fuso BRT.
+     * Deve possuir data e hora válidas e o horário de início não pode ter passado.
+     *
+     * @param {string} appointmentDate - YYYY-MM-DD
+     * @param {string} appointmentTime - HH:mm ou HH:mm:ss
+     * @returns {boolean}
+     */
+    isAppointmentStillConfirmable(appointmentDate, appointmentTime) {
+        if (!appointmentDate || !appointmentTime) return false;
+        try {
+            const brtNowStr = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+            const nowBRT = new Date(brtNowStr);
+            const [year, month, day] = appointmentDate.split('-').map(Number);
+            const [hour, minute] = appointmentTime.substring(0, 5).split(':').map(Number);
+            const apptDate = new Date(year, month - 1, day, hour, minute, 0);
+            return apptDate.getTime() >= nowBRT.getTime();
+        } catch (e) {
+            return false;
+        }
+    }
 }
 
 module.exports = new CalendarService();
