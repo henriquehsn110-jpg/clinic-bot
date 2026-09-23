@@ -1361,5 +1361,203 @@ function parseClinicSettings(cData) {
     return settings;
 }
 
+// ── Sanitização e Resiliência de Efeitos (V19) ──────────────────────────────
+/**
+ * Sanitiza o payload do efeito removendo dados pessoais sensíveis (PII/PHI)
+ * antes de persistir em message_effects.
+ */
+function sanitizeEffectPayload(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    try {
+        const copy = JSON.parse(JSON.stringify(payload));
+        const sanitizeVal = (val) => {
+            if (typeof val === 'string') {
+                return val
+                    .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, m => `${m.slice(0, 3)}.***.***-${m.slice(11)}`)
+                    .replace(/\b(?<!\d)\d{11}(?!\d)\b/g, m => `${m.slice(0, 3)}******${m.slice(9)}`);
+            }
+            if (typeof val === 'object' && val !== null) {
+                for (const k of Object.keys(val)) {
+                    val[k] = sanitizeVal(val[k]);
+                }
+            }
+            return val;
+        };
+        return sanitizeVal(copy);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Identifica se um erro de transporte/API externa é transitório (retryable)
+ * ou se é um erro terminal de negócio/formatação.
+ */
+function isRetryableTransportError(err) {
+    if (!err) return false;
+    if (err.isRetryable) return true;
+    const code = err.code || err.name;
+    if (['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'AbortError'].includes(code)) {
+        return true;
+    }
+    const status = err.response?.status || err.status;
+    if (status === 429 || (typeof status === 'number' && status >= 500 && status < 600)) {
+        return true;
+    }
+    const msg = String(err.message || '').toLowerCase();
+    if (msg.includes('timeout') || msg.includes('network') || msg.includes('econnreset') || msg.includes('rate limit')) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Executa um efeito externo com garantia de deduplicação semântica e tolerância a falhas (V19).
+ *
+ * PROTOCOLO DE CONCORRÊNCIA E IDEMPOTÊNCIA:
+ * 1. Verifica se a lease do webhook pai ainda é válida (checkLeaseValid). Se perdida, aborta imediatamente.
+ * 2. Faz o claim na tabela message_effects usando uma chave semântica estável (ex: 'whatsapp:welcome', 'whatsapp:ask_cpf').
+ *    - Se ALREADY_EXECUTED: efeito já foi concretizado com sucesso; retorna como sucesso seguro (safe skip) sem reenviar.
+ *    - Se ALREADY_PROCESSING ou RETRY_NOT_READY: outro worker está executando ou em backoff; lança erro retryable para adiar o webhook.
+ *    - Se ALREADY_FAILED ou DEAD_LETTER: erro terminal registrado; não reexecuta.
+ *    - Se CLAIMED: obtém o token de lease do efeito.
+ * 3. Sanitiza o payload (remove PII/PHI como CPF desmascarado) antes de registrar no banco.
+ * 4. Executa a função do efeito (executeFn).
+ * 5. Se sucesso: chama markExecuted(messageId, effectType, effectKey, effectToken).
+ * 6. Se falha:
+ *    - Se transitório (rede/timeout/429/5xx): chama defer(messageId, effectType, effectKey, effectToken, err.message, backoffSeconds)
+ *      e lança erro com isRetryable = true para que o webhook pai também dê defer.
+ *    - Se terminal (4xx cliente, payload inválido, etc.): chama fail(messageId, effectType, effectKey, effectToken, err.message)
+ *      e lança o erro.
+ *
+ * NOTA DE DESIGN (JANELA AT-LEAST-ONCE):
+ * Caso o side effect externo (ex: Meta WhatsApp API) tenha sucesso, mas o processo Node.js caia
+ * ou a conexão com o Supabase falhe antes de markExecuted ser concluído, o claim expirará após ttlSeconds.
+ * Uma retentativa subsequente poderá reenviar a mensagem. Esta janela de at-least-once é inerente a sistemas
+ * distribuídos sem 2PC (Two-Phase Commit) com APIs de terceiros.
+ */
+async function executeGuardedEffect({
+    messageId,
+    effectType = 'whatsapp_message',
+    effectKey,
+    payload = null,
+    ttlSeconds = 30,
+    maxRetries = 3,
+    checkLeaseValid = null,
+    executeFn
+}) {
+    if (!executeFn || typeof executeFn !== 'function') {
+        throw new Error('executeGuardedEffect: executeFn é obrigatório');
+    }
+
+    // Se não há messageId (ex: simulação/testes CLI sem webhook), executa diretamente
+    if (!messageId) {
+        return await executeFn();
+    }
+
+    if (!effectKey) {
+        throw new Error('executeGuardedEffect: effectKey semântica é obrigatória quando messageId é fornecido');
+    }
+
+    // 1. Checagem prévia de ownership da lease do webhook pai (se fornecida)
+    if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
+        const leaseLostErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou ou foi perdida. Efeito abortado antes do claim.');
+        leaseLostErr.code = 'WEBHOOK_LEASE_LOST';
+        throw leaseLostErr;
+    }
+
+    const sanitizedPayload = sanitizeEffectPayload(payload);
+    const effectToken = crypto.randomUUID();
+
+    // 2. Claim do efeito
+    const claimResult = await effects.claim(
+        messageId,
+        effectType,
+        effectKey,
+        effectToken,
+        ttlSeconds,
+        maxRetries,
+        sanitizedPayload
+    );
+
+    const claimStatus = claimResult?.status;
+
+    if (claimStatus === 'ALREADY_EXECUTED') {
+        return { status: 'ALREADY_EXECUTED', skipped: true };
+    }
+
+    if (claimStatus === 'ALREADY_PROCESSING' || claimStatus === 'RETRY_NOT_READY') {
+        const retryErr = new Error(`EFFECT_${claimStatus}: Efeito [${effectKey}] já está em processamento ou aguardando backoff.`);
+        retryErr.code = `EFFECT_${claimStatus}`;
+        retryErr.isRetryable = true;
+        throw retryErr;
+    }
+
+    if (claimStatus === 'ALREADY_FAILED' || claimStatus === 'DEAD_LETTER') {
+        const deadErr = new Error(`EFFECT_${claimStatus}: Efeito [${effectKey}] marcado como falha terminal ou dead letter.`);
+        deadErr.code = `EFFECT_${claimStatus}`;
+        deadErr.isTerminal = true;
+        throw deadErr;
+    }
+
+    if (claimStatus !== 'CLAIMED') {
+        throw new Error(`executeGuardedEffect: Status inesperado de claim [${claimStatus}]`);
+    }
+
+    // 3. Checagem novamente de lease do webhook pai antes de chamar serviço externo
+    if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
+        await effects.defer(messageId, effectType, effectKey, effectToken, 'Parent webhook lease lost before execution', 5).catch(() => {});
+        const leaseLostErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou durante o claim. Efeito cancelado.');
+        leaseLostErr.code = 'WEBHOOK_LEASE_LOST';
+        throw leaseLostErr;
+    }
+
+    // 4. Executa a função do efeito
+    let result;
+    try {
+        result = await executeFn();
+    } catch (execErr) {
+        const isRetryable = isRetryableTransportError(execErr);
+        if (isRetryable) {
+            await effects.defer(messageId, effectType, effectKey, effectToken, execErr.message || 'Transient transport error', 5).catch(() => {});
+            const retryErr = new Error(`EFFECT_TRANSPORT_ERROR: ${execErr.message}`);
+            retryErr.code = 'EFFECT_TRANSPORT_ERROR';
+            retryErr.isRetryable = true;
+            retryErr.originalError = execErr;
+            throw retryErr;
+        } else {
+            await effects.fail(messageId, effectType, effectKey, effectToken, execErr.message || 'Terminal error').catch(() => {});
+            throw execErr;
+        }
+    }
+
+    // 5. Marca como executado com sucesso
+    const marked = await effects.markExecuted(messageId, effectType, effectKey, effectToken);
+    if (!marked) {
+        logger.warn('EFFECT_LEASE_LOST', `Lease do efeito [${effectKey}] para mensagem [${messageId}] expirou antes de ser concluído.`);
+    }
+
+    return { status: 'EXECUTED', result, marked };
+}
+
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, clinics, patients, appointments, doctors, sessionLocks, sessions, conversations, webhooks, effects, cleanEnvVar, parseClinicSettings, decryptData, encryptData, hashForSearch };
+module.exports = {
+    supabase,
+    clinics,
+    patients,
+    appointments,
+    doctors,
+    sessionLocks,
+    sessions,
+    conversations,
+    webhooks,
+    effects,
+    cleanEnvVar,
+    parseClinicSettings,
+    decryptData,
+    encryptData,
+    hashForSearch,
+    executeGuardedEffect,
+    sanitizeEffectPayload,
+    isRetryableTransportError
+};
