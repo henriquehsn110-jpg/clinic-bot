@@ -350,7 +350,7 @@ function maskCpf(cpf) {
 }
 
 // Auxiliar para persistir o Handoff Humano no histórico da sessão com a última fala do usuário
-async function persistHumanHandoff(phone, patient, history, userText, extraNote = '', clinicId) {
+async function persistHumanHandoff(phone, patient, history, userText, extraNote = '', clinicId, lockContext) {
     const marker = `[SISTEMA: conversa transferida para atendente humano]${extraNote ? ' ' + extraNote : ''}`;
     const updatedHistory = [
         ...history,
@@ -358,14 +358,17 @@ async function persistHumanHandoff(phone, patient, history, userText, extraNote 
         { role: 'model', parts: [{ text: marker }] }
     ].slice(-20);
 
-    try {
-        await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, updatedHistory, draft);
+    if (lockContext?.lockId) {
+        // Grava via persistStateIfOwned(..., updatedHistory, null) em transação única
+        // Se a lock foi perdida, lança SESSION_LOCK_LOST (NÃO engolir o erro aqui!)
+        await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, updatedHistory, null);
+    } else {
+        await db.sessions.set(phone, updatedHistory, clinicId);
         await db.sessions.setDraft(phone, null, clinicId).catch(() => {});
-        if (patient?.id) {
-            await db.conversations.log(patient.id, 'assistant', '[Transferido para atendimento humano]');
-        }
-    } catch (persistErr) {
-        logger.error('PERSIST_HANDOFF', `Falha ao persistir handoff humano: ${persistErr.message}`, persistErr.stack);
+    }
+
+    if (patient?.id) {
+        await db.conversations.log(patient.id, 'assistant', '[Transferido para atendimento humano]').catch(() => {});
     }
 }
 
@@ -596,6 +599,7 @@ class ConversationController {
         let buttonId = typeof phoneOrObj === 'object' ? (phoneOrObj.buttonId || null) : null;
         let buttonTitle = typeof phoneOrObj === 'object' ? (phoneOrObj.buttonTitle || null) : null;
         let messageId = typeof phoneOrObj === 'object' ? (phoneOrObj.messageId || null) : null;
+        let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseValid : null;
 
         if (!clinicId) {
             const defaultClinic = await db.clinics.findBySlug('clinica-modelo') || (await db.clinics.getAll())[0];
@@ -846,7 +850,7 @@ class ConversationController {
             if (isSevereUrgency) {
                 logger.warn('URGENCY_HANDOFF', `Paciente [${phone}] relatou sintomas de urgência crítica. Acionando transbordo imediato.`);
                 const urgencyText = "Entendo que você está com um quadro de dor forte e urgência. Estou transferindo seu atendimento para a nossa equipe humana agora mesmo para suporte prioritário.\n\n[SISTEMA: conversa transferida para atendente humano]";
-                await persistHumanHandoff(phone, patient, history, sanitizedText, 'Protocolo de Urgência Operacional (Sintomas Críticos)', clinicId);
+                await persistHumanHandoff(phone, patient, history, sanitizedText, 'Protocolo de Urgência Operacional (Sintomas Críticos)', clinicId, lockContext);
 
                 if (!isSimulation) {
                     await whatsappService.sendTextMessage(phone, urgencyText, phoneId, clinicToken).catch(() => {});
@@ -870,7 +874,7 @@ class ConversationController {
             if (profanityRegex.test(sanitizedText)) {
                 logger.warn('PROFANITY_HANDOFF', `Paciente [${phone}] enviou termo de baixo calão. Efetuando transbordo humano polido silencioso.`);
                 const handoffMsg = "Entendo. Vou transferir você para um de nossos atendentes para te ajudar melhor. Um momento, por favor.";
-                await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
+                await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
 
                 if (!isSimulation) {
                     await whatsappService.sendTextMessage(phone, handoffMsg, phoneId, clinicToken).catch(() => {});
@@ -901,7 +905,7 @@ class ConversationController {
 
                 const handoffText = "Peço desculpas pelo transtorno! Identifiquei que ocorreu um impasse no seu agendamento. Para garantir que nada fique errado, estou transferindo seu atendimento para a nossa equipe humana agora mesmo.";
 
-                await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente Guardião Anti-Looping: Impasse/Frustração detectada no chat', clinicId);
+                await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente Guardião Anti-Looping: Impasse/Frustração detectada no chat', clinicId, lockContext);
 
                 if (!isSimulation) {
                     await whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken).catch(() => {});
@@ -1154,7 +1158,7 @@ class ConversationController {
                     if (pendingAppts.length > 10) {
                         logger.warn('REMINDER_DISAMBIGUATION_OVERFLOW', `Paciente [${phone}] possui ${pendingAppts.length} consultas pendentes (>10). Transferindo para atendente humano.`);
                         const overflowText = `Localizei ${pendingAppts.length} consultas pendentes vinculadas ao seu número. Para confirmar com segurança e exatidão, estou transferindo seu atendimento para a nossa equipe humana agora mesmo. 😊\n\n[SISTEMA: conversa transferida para atendente humano]`;
-                        await persistHumanHandoff(phone, patient, history, sanitizedText, 'Desambiguação de lembretes: mais de 10 consultas pendentes', clinicId);
+                        await persistHumanHandoff(phone, patient, history, sanitizedText, 'Desambiguação de lembretes: mais de 10 consultas pendentes', clinicId, lockContext);
 
                         if (!isSimulation) {
                             await whatsappService.sendTextMessage(phone, overflowText, phoneId, clinicToken).catch(() => {});
@@ -2950,7 +2954,7 @@ class ConversationController {
 
                 if (invalidCount >= 2) {
                     logger.warn('CPF_RETRY_LIMIT', `Limite de 2 tentativas de CPF atingido para [${phone}]. Transferindo para atendimento humano.`);
-                    await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente CPF: Limite de tentativas de CPF inválido atingido', clinicId);
+                    await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente CPF: Limite de tentativas de CPF inválido atingido', clinicId, lockContext);
 
                     const handoffText = "Para a sua comodidade e segurança, estou transferindo seu atendimento para a nossa equipe humana confirmar seus dados.";
                     if (!isSimulation) {
@@ -3011,7 +3015,7 @@ class ConversationController {
                             logger.warn('SECURITY', `Tentativa de agendamento de terceiros/familiar para CPF [${maskCpf(rawCpf)}] por telefone [${phone}]. Transferindo para validação humana.`);
                             
                             // Persiste a marca de Handoff no banco para validação humana segura (LGPD)
-                            await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
+                            await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
 
                             const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                             if (!isSimulation) {
@@ -3049,7 +3053,7 @@ class ConversationController {
                 } catch (err) {
                     if (err.isCpfConflict || err.message.includes('CPF_CONFLICT') || err.message.includes('duplicate key')) {
                         logger.warn('SECURITY', `Conflito de CPF duplicado [${maskCpf(rawCpf)}] para o telefone [${phone}]. Transferindo para validação humana LGPD.`);
-                        await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
+                        await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
                         const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                         if (!isSimulation) {
                             await whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken).catch(() => {});
@@ -3070,7 +3074,7 @@ class ConversationController {
                     logger.error('DATABASE_COMMUNICATION', `Falha de comunicação com Supabase: ${err.message}`, err.stack);
 
                     // Persiste a falha técnica para evitar loop infinito
-                    await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId);
+                    await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
 
                     const failText = "Estamos com uma instabilidade técnica temporária. Vou te transferir para um de nossos atendentes continuar seu atendimento.";
                     if (!isSimulation) {
@@ -3534,6 +3538,9 @@ class ConversationController {
 
         } catch (error) {
             logger.error('CONTROLLER_ERROR', `Erro no controller [${phone}]: ${error.message}`, error.stack);
+            if (error.code === 'SESSION_LOCK_LOST' || error.code === 'WEBHOOK_LEASE_LOST' || error.isRetryable) {
+                throw error;
+            }
             const errText = 'Desculpe, ocorreu um erro interno.';
             if (!isSimulation) {
                 await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
@@ -3558,4 +3565,5 @@ controllerInstance.extractCleanName = extractCleanName;
 controllerInstance.formatDoctorNameForAppointment = formatDoctorNameForAppointment;
 controllerInstance.buildAiReturnButtonLabel = buildAiReturnButtonLabel;
 controllerInstance.buildDirectGoogleCalendarUrl = buildDirectGoogleCalendarUrl;
+controllerInstance.persistHumanHandoff = persistHumanHandoff;
 module.exports = controllerInstance;

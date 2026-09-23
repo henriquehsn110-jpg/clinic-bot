@@ -257,6 +257,7 @@ const processWebhookInbox = async () => {
         const pendingItems = await db.webhooks.fetchPending(10);
         for (const item of pendingItems) {
             await db.webhooks.updateInboxStatus(item.id, 'processing');
+            let needsInboxRequeue = false;
             
             try {
                 const body = item.payload;
@@ -305,24 +306,81 @@ const processWebhookInbox = async () => {
                                 }
                             }
 
-                            // Processa Mensagens Recebidas
+                            // Processa Mensagens Recebidas (Lifecycle V19)
                             if (value.messages && Array.isArray(value.messages)) {
                                 for (const message of value.messages) {
                                     const messageId = message.id;
+                                    const phone = message.from; // Extrai phone antes do claim
+                                    const processingToken = crypto.randomUUID();
 
-                                    // Isolamento por mensagem: uma falha aqui não pode abortar o
-                                    // processamento das demais mensagens do mesmo lote/item do inbox
-                                    // nem derrubar o item inteiro para 'failed' (o que impediria
-                                    // qualquer nova tentativa automática das mensagens seguintes).
+                                    // Claim da mensagem no webhook_logs com lock distribuído e TTL de 30s
+                                    let claimRes;
                                     try {
-                                        // C12: Idempotência garantida via banco de dados sem fallback
-                                        const processAttempt = await db.webhooks.attemptProcessing(messageId);
-                                        if (processAttempt === false) {
-                                            console.log(`ℹ️ [WEBHOOK] Mensagem duplicada ignorada: ${messageId}`);
-                                            continue;
-                                        }
+                                        claimRes = await db.webhooks.claim(messageId, clinicId, phone, processingToken, 3, 30);
+                                    } catch (claimErr) {
+                                        console.error(`❌ [WEBHOOK] Erro ao reivindicar mensagem ${messageId}:`, claimErr);
+                                        needsInboxRequeue = true;
+                                        continue;
+                                    }
 
-                                        const phone = message.from;
+                                    const claimStatus = claimRes?.status;
+
+                                    if (claimStatus === 'ALREADY_COMPLETED') {
+                                        console.log(`ℹ️ [WEBHOOK] Mensagem já completada anteriormente: ${messageId}`);
+                                        continue;
+                                    }
+
+                                    if (claimStatus === 'ALREADY_FAILED' || claimStatus === 'DEAD_LETTER') {
+                                        console.warn(`⚠️ [WEBHOOK] Mensagem em estado terminal (${claimStatus}): ${messageId}`);
+                                        continue;
+                                    }
+
+                                    if (claimStatus === 'ALREADY_PROCESSING' || claimStatus === 'RETRY_NOT_READY') {
+                                        console.log(`⏳ [WEBHOOK] Mensagem em processamento ou aguardando retry (${claimStatus}): ${messageId}`);
+                                        needsInboxRequeue = true;
+                                        continue;
+                                    }
+
+                                    if (claimStatus !== 'CLAIMED') {
+                                        console.warn(`⚠️ [WEBHOOK] Status de claim inesperado (${claimStatus}) para mensagem ${messageId}`);
+                                        continue;
+                                    }
+
+                                    // Configuração de lease e heartbeat recursivo serializado (nunca setInterval)
+                                    let isLeaseActive = true;
+                                    const checkLeaseValid = () => isLeaseActive;
+
+                                    let heartbeatTimer = null;
+                                    let heartbeatStopped = false;
+
+                                    const scheduleHeartbeat = () => {
+                                        if (heartbeatStopped) return;
+                                        heartbeatTimer = setTimeout(async () => {
+                                            if (heartbeatStopped) return;
+                                            try {
+                                                const renewed = await db.webhooks.renew(messageId, processingToken, 30);
+                                                if (!renewed) {
+                                                    console.warn(`⚠️ [WEBHOOK_HEARTBEAT] Perda de ownership da mensagem [${messageId}]`);
+                                                    isLeaseActive = false;
+                                                    heartbeatStopped = true;
+                                                    return;
+                                                }
+                                                if (!heartbeatStopped) scheduleHeartbeat();
+                                            } catch (hbErr) {
+                                                console.warn(`⚠️ [WEBHOOK_HEARTBEAT] Erro ao renovar lease da mensagem [${messageId}]: ${hbErr.message}`);
+                                                if (!heartbeatStopped) scheduleHeartbeat();
+                                            }
+                                        }, 10000);
+                                    };
+
+                                    scheduleHeartbeat();
+
+                                    const stopHeartbeat = () => {
+                                        heartbeatStopped = true;
+                                        if (heartbeatTimer) clearTimeout(heartbeatTimer);
+                                    };
+
+                                    try {
                                         let text = '';
                                         let buttonId = null;
                                         let buttonTitle = null;
@@ -351,7 +409,23 @@ const processWebhookInbox = async () => {
                                             const access = await billingService.checkClinicAccess(clinicId);
                                             if (!access.allowed) {
                                                 console.warn(`⛔ [BILLING] Mensagem ignorada de [${phone}] para Clínica [${clinicId}]: Status ${access.reason}`);
-                                                await whatsappService.sendTextMessage(phone, "Prezado paciente, o atendimento automático desta clínica está temporariamente suspenso. Por favor, entre em contato diretamente com a recepção da clínica.", phoneNumberId).catch(() => {});
+                                                await db.executeGuardedEffect({
+                                                    messageId,
+                                                    effectType: 'whatsapp_message',
+                                                    effectKey: 'whatsapp:billing_suspended',
+                                                    checkLeaseValid,
+                                                    executeFn: () => whatsappService.sendTextMessage(
+                                                        phone,
+                                                        "Prezado paciente, o atendimento automático desta clínica está temporariamente suspenso. Por favor, entre em contato diretamente com a recepção da clínica.",
+                                                        phoneNumberId
+                                                    )
+                                                }).catch((e) => console.warn(`[BILLING_EFFECT] Erro ao avisar suspensão: ${e.message}`));
+
+                                                stopHeartbeat();
+                                                if (checkLeaseValid()) {
+                                                    const completed = await db.webhooks.complete(messageId, processingToken);
+                                                    if (!completed) isLeaseActive = false;
+                                                }
                                                 continue;
                                             }
 
@@ -364,28 +438,79 @@ const processWebhookInbox = async () => {
                                                 buttonTitle,
                                                 clinicId,
                                                 phoneNumberId,
-                                                isSimulation: false
+                                                isSimulation: false,
+                                                checkLeaseValid
                                             });
                                             await billingService.incrementMonthlyBooking(clinicId);
+
+                                            stopHeartbeat();
+                                            if (checkLeaseValid()) {
+                                                const completed = await db.webhooks.complete(messageId, processingToken);
+                                                if (!completed) {
+                                                    console.warn(`⚠️ [WEBHOOK] complete retornou false para [${messageId}] (ownership perdido)`);
+                                                    isLeaseActive = false;
+                                                }
+                                            }
                                         } else {
                                             console.log(`📩 [WEBHOOK] Mensagem com formato não suportado recebida de [${phone}]`);
-                                            await whatsappService.sendTextMessage(phone, "Por enquanto, eu só consigo responder mensagens de texto e cliques em botões. Como posso te ajudar por texto?", phoneNumberId).catch(() => {});
+                                            await db.executeGuardedEffect({
+                                                messageId,
+                                                effectType: 'whatsapp_message',
+                                                effectKey: 'whatsapp:unsupported_format',
+                                                checkLeaseValid,
+                                                executeFn: () => whatsappService.sendTextMessage(
+                                                    phone,
+                                                    "Por enquanto, eu só consigo responder mensagens de texto e cliques em botões. Como posso te ajudar por texto?",
+                                                    phoneNumberId
+                                                )
+                                            }).catch((e) => console.warn(`[UNSUPPORTED_FORMAT_EFFECT] Erro ao avisar formato não suportado: ${e.message}`));
+
+                                            stopHeartbeat();
+                                            if (checkLeaseValid()) {
+                                                const completed = await db.webhooks.complete(messageId, processingToken);
+                                                if (!completed) {
+                                                    console.warn(`⚠️ [WEBHOOK] complete retornou false para [${messageId}] (ownership perdido)`);
+                                                    isLeaseActive = false;
+                                                }
+                                            }
                                         }
                                     } catch (messageErr) {
-                                        // ATENÇÃO: attemptProcessing já marcou messageId como processado
-                                        // em webhook_logs antes desta falha. Isso evita duplicidade, mas
-                                        // significa que essa mensagem específica NÃO será reprocessada
-                                        // automaticamente. Logamos com destaque para permitir intervenção manual.
-                                        console.error(`❌ [WEBHOOK] Falha ao processar mensagem individual ${messageId} de [${message.from}] — mensagem pode ter ficado sem resposta:`, messageErr);
-                                        logger.error('WEBHOOK_MESSAGE_LOST', `Mensagem ${messageId} de [${message.from}] falhou e não será reprocessada automaticamente: ${messageErr.message}`, messageErr.stack);
+                                        stopHeartbeat();
+                                        const isRetryable = messageErr.isRetryable || db.isRetryableTransportError(messageErr);
+                                        if (isRetryable) {
+                                            console.warn(`⏳ [WEBHOOK] Mensagem [${messageId}] falhou com erro transitório (${messageErr.message}). Deferindo...`);
+                                            if (checkLeaseValid()) {
+                                                const deferred = await db.webhooks.defer(messageId, processingToken, messageErr.message, 5);
+                                                if (!deferred) {
+                                                    console.warn(`⚠️ [WEBHOOK] defer retornou false para [${messageId}] (ownership perdido)`);
+                                                    isLeaseActive = false;
+                                                }
+                                            }
+                                            needsInboxRequeue = true;
+                                        } else {
+                                            console.error(`❌ [WEBHOOK] Falha terminal na mensagem [${messageId}]:`, messageErr);
+                                            logger.error('WEBHOOK_MESSAGE_LOST', `Mensagem ${messageId} falhou: ${messageErr.message}`, messageErr.stack);
+                                            if (checkLeaseValid()) {
+                                                const failed = await db.webhooks.fail(messageId, processingToken, messageErr.message);
+                                                if (!failed) {
+                                                    console.warn(`⚠️ [WEBHOOK] fail retornou false para [${messageId}] (ownership perdido)`);
+                                                    isLeaseActive = false;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                
-                await db.webhooks.updateInboxStatus(item.id, 'completed');
+
+                if (needsInboxRequeue) {
+                    console.log(`🔄 [WEBHOOK_INBOX] Reenfileirando item ${item.id} como 'pending' para reprocessamento.`);
+                    await db.webhooks.updateInboxStatus(item.id, 'pending', 'Mensagem diferida/em processamento, aguardando próximo ciclo.');
+                } else {
+                    await db.webhooks.updateInboxStatus(item.id, 'completed');
+                }
             } catch (processingErr) {
                 console.error(`❌ Erro ao processar inbox item ${item.id}:`, processingErr);
                 await db.webhooks.updateInboxStatus(item.id, 'failed', processingErr.message);
