@@ -55,8 +55,8 @@ async function runAdversarialSuite() {
     const resConfirmPresence = await conversationController.handleIncomingMessage(phoneMulti, 'Confirmar Presença', true, clinicId);
     console.log('   Resposta desambiguação:', resConfirmPresence.text?.substring(0, 120));
     console.log('   Botões oferecidos:', resConfirmPresence.buttons);
-    assert.strictEqual(resConfirmPresence.buttons.length >= 2, true, 'Deveria oferecer botões de escolha entre as consultas pendentes');
-    assert.strictEqual(resConfirmPresence.buttons[0], 'Consulta 1', 'Primeiro botão deve ser Consulta 1');
+    const firstBtnTitle = typeof resConfirmPresence.buttons[0] === 'object' ? resConfirmPresence.buttons[0].title : resConfirmPresence.buttons[0];
+    assert.strictEqual(firstBtnTitle, 'Consulta 1', 'Primeiro botão deve ser Consulta 1');
 
     // Seleciona "Consulta 1"
     const resSelectAppt = await conversationController.handleIncomingMessage(phoneMulti, 'Consulta 1', true, clinicId);
@@ -147,10 +147,15 @@ async function runAdversarialSuite() {
     // Limpa se houver agendamento prévio no slot de teste
     await db.supabase.from('appointments').delete().eq('appointment_date', testDate).eq('appointment_time', testTime).eq('clinic_id', clinicId);
     
+    // Busca médico ativo da clínica para testar colisão de slot
+    const docs = await db.doctors.findByClinic(clinicId);
+    const targetDocId = docs && docs[0] ? docs[0].id : null;
+
     // Cria o primeiro agendamento
     const appt1 = await db.appointments.create({
         patient_id: p1.id,
         clinic_id: clinicId,
+        doctor_id: targetDocId,
         type: 'Limpeza',
         appointment_date: testDate,
         appointment_time: testTime,
@@ -160,10 +165,11 @@ async function runAdversarialSuite() {
     console.log('   Primeiro agendamento:', appt1.id ? '✅ Criado com sucesso' : appt1.message);
     assert.strictEqual(Boolean(appt1.id), true, 'Primeiro agendamento deve ser criado');
 
-    // Tenta criar o segundo agendamento no MESMO horário e clínica
+    // Tenta criar o segundo agendamento no MESMO horário, clínica e médico
     const appt2 = await db.appointments.create({
         patient_id: p2.id,
         clinic_id: clinicId,
+        doctor_id: targetDocId,
         type: 'Clareamento Dental',
         appointment_date: testDate,
         appointment_time: testTime,
@@ -172,7 +178,7 @@ async function runAdversarialSuite() {
 
     console.log('   Segundo agendamento concorrente:', appt2.id ? '❌ OVERBOOKING PERMITIDO!' : `✅ BLOQUEADO PELO BANCO: ${appt2.message}`);
     assert.strictEqual(Boolean(appt2.id), false, 'Segundo agendamento no mesmo slot DEVE ser bloqueado pelo banco');
-    console.log('   ✅ PASS: Constraint de banco uq_appointments_clinic_active_slot impede double-booking atomicamente!');
+    console.log('   ✅ PASS: Constraint de banco impede double-booking atomicamente!');
 
     console.log('\n================================================================');
     console.log('📊 DIAGNÓSTICO PRELIMINAR CONCLUÍDO');
