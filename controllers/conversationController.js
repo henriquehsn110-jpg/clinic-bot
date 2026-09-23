@@ -929,45 +929,58 @@ class ConversationController {
             // 0e. Interceptador Direto para Resposta a Lembretes ("CONFIRMAR", "CONFIRMO", "CONFIRMAR PRESENÇA")
             const isReminderConfirmIntent = /^\s*(confirmar|confirmo|confirmado|confirmada|sim,\s*confirmar|confirmar\s+presença|confirmar\s+presenca|estou\s+confirmando)\s*$/i.test(sanitizedText.trim());
 
-            // Trata escolha de consulta numerada após desambiguação prévia de lembretes
-            if (draft?.pending_reminder_appts && draft.pending_reminder_appts.length > 0) {
-                const choiceMatch = sanitizedText.match(/^(?:consulta\s*)?([1-3])$/i);
+            // Trata escolha de consulta após desambiguação prévia de lembretes
+            let chosenReminderApptId = null;
+            if (buttonId && buttonId.startsWith('reminder_confirm:')) {
+                chosenReminderApptId = buttonId.replace('reminder_confirm:', '');
+            } else if (draft?.pending_reminder_appts) {
+                const choiceMatch = sanitizedText.match(/^(?:consulta\s*)?(\d+)$/i);
                 if (choiceMatch) {
-                    const choiceIdx = parseInt(choiceMatch[1], 10) - 1;
-                    const chosenApptId = draft.pending_reminder_appts[choiceIdx];
-                    if (chosenApptId) {
-                        await db.appointments.updateStatus(chosenApptId, 'confirmed', clinicId);
-                        const { data: apptRow } = await db.supabase.from('appointments').select('*, patients(name)').eq('id', chosenApptId).single();
-
-                        draft.pending_reminder_appts = null;
-                        await db.sessions.setDraft(phone, draft, clinicId);
-
-                        const dateFmt = apptRow?.appointment_date ? apptRow.appointment_date.split('-').reverse().join('/') : '';
-                        const timeFmt = apptRow?.appointment_time ? apptRow.appointment_time.substring(0, 5) : '';
-                        const pName = apptRow?.patients?.name ? ` para *${apptRow.patients.name}*` : '';
-                        const confirmText = `Sua presença na consulta de *${apptRow?.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
-
-                        history.push({ role: 'user', parts: [{ text: sanitizedText }] });
-                        history.push({ role: 'model', parts: [{ text: confirmText }] });
-                        await db.sessions.set(phone, history, clinicId);
-
-                        if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                    const choiceNum = parseInt(choiceMatch[1], 10);
+                    if (Array.isArray(draft.pending_reminder_appts)) {
+                        const found = draft.pending_reminder_appts.find(item => 
+                            (typeof item === 'object' ? item.index === choiceNum : false)
+                        );
+                        if (found) {
+                            chosenReminderApptId = found.id;
+                        } else if (typeof draft.pending_reminder_appts[choiceNum - 1] === 'string') {
+                            chosenReminderApptId = draft.pending_reminder_appts[choiceNum - 1];
                         }
-
-                        return {
-                            text: confirmText,
-                            buttons: [],
-                            showCalendar: false,
-                            showTimeSlots: false,
-                            showProceduresList: false,
-                            requireCpf: false,
-                            procedures: null,
-                            availableSlots: null,
-                            transferToHuman: false
-                        };
                     }
                 }
+            }
+
+            if (chosenReminderApptId) {
+                await db.appointments.updateStatus(chosenReminderApptId, 'confirmed', clinicId);
+                const { data: apptRow } = await db.supabase.from('appointments').select('*, patients(name)').eq('id', chosenReminderApptId).single();
+
+                draft.pending_reminder_appts = null;
+                await db.sessions.setDraft(phone, draft, clinicId);
+
+                const dateFmt = apptRow?.appointment_date ? apptRow.appointment_date.split('-').reverse().join('/') : '';
+                const timeFmt = apptRow?.appointment_time ? apptRow.appointment_time.substring(0, 5) : '';
+                const pName = apptRow?.patients?.name ? ` para *${apptRow.patients.name}*` : '';
+                const confirmText = `Sua presença na consulta de *${apptRow?.type || 'avaliação'}*${pName} no dia *${dateFmt}* às *${timeFmt}* foi confirmada com sucesso! Te aguardamos na clínica! 😊`;
+
+                history.push({ role: 'user', parts: [{ text: sanitizedText }] });
+                history.push({ role: 'model', parts: [{ text: confirmText }] });
+                await db.sessions.set(phone, history, clinicId);
+
+                if (!isSimulation) {
+                    await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                }
+
+                return {
+                    text: confirmText,
+                    buttons: [],
+                    showCalendar: false,
+                    showTimeSlots: false,
+                    showProceduresList: false,
+                    requireCpf: false,
+                    procedures: null,
+                    availableSlots: null,
+                    transferToHuman: false
+                };
             }
 
             if (isReminderConfirmIntent && (!draft || !draft.type || !draft.date || !draft.time)) {
@@ -1029,7 +1042,24 @@ class ConversationController {
                         transferToHuman: false
                     };
                 } else if (pendingAppts.length > 1) {
-                    // Múltiplas consultas pendentes: DESAMBIGUAÇÃO OBRIGATÓRIA (não escolhe [0] arbitrariamente)
+                    // Múltiplas consultas pendentes: DESAMBIGUAÇÃO OBRIGATÓRIA
+                    // Se houver mais de 10 consultas, transfere para atendente humano (sem truncamento silencioso)
+                    if (pendingAppts.length > 10) {
+                        logger.warn('REMINDER_DISAMBIGUATION_OVERFLOW', `Paciente [${phone}] possui ${pendingAppts.length} consultas pendentes (>10). Transferindo para atendente humano.`);
+                        const overflowText = `Localizei ${pendingAppts.length} consultas pendentes vinculadas ao seu número. Para confirmar com segurança e exatidão, estou transferindo seu atendimento para a nossa equipe humana agora mesmo. 😊\n\n[SISTEMA: conversa transferida para atendente humano]`;
+                        await persistHumanHandoff(phone, patient, history, sanitizedText, 'Desambiguação de lembretes: mais de 10 consultas pendentes', clinicId);
+
+                        if (!isSimulation) {
+                            await whatsappService.sendTextMessage(phone, overflowText, phoneId, clinicToken).catch(() => {});
+                        }
+
+                        return {
+                            text: overflowText,
+                            buttons: [buildAiReturnButtonLabel(personaName)],
+                            showCalendar: false, showTimeSlots: false, showProceduresList: false, requireCpf: false, procedures: null, availableSlots: null, transferToHuman: true
+                        };
+                    }
+
                     const listStr = pendingAppts.map((a, idx) => {
                         const dFmt = a.appointment_date ? a.appointment_date.split('-').reverse().join('/') : '';
                         const tFmt = a.appointment_time ? a.appointment_time.substring(0, 5) : '';
@@ -1038,32 +1068,75 @@ class ConversationController {
                     }).join('\n');
 
                     const disambiguateText = `Localizei mais de uma consulta pendente para o seu número:\n\n${listStr}\n\nPor favor, selecione qual consulta você deseja confirmar presença:`;
-                    const disambiguateButtons = pendingAppts.slice(0, 3).map((a, idx) => `Consulta ${idx + 1}`);
 
-                    draft.pending_reminder_appts = pendingAppts.map(a => a.id);
+                    // Armazena mapeamento de cada consulta com seu índice e ID
+                    draft.pending_reminder_appts = pendingAppts.map((a, idx) => ({ id: a.id, index: idx + 1 }));
                     await db.sessions.setDraft(phone, draft, clinicId);
 
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                     history.push({ role: 'model', parts: [{ text: disambiguateText }] });
                     await db.sessions.set(phone, history, clinicId);
 
-                    if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, disambiguateText, disambiguateButtons, phoneId, clinicToken).catch(() => {
-                            return whatsappService.sendTextMessage(phone, disambiguateText, phoneId, clinicToken);
-                        });
-                    }
+                    if (pendingAppts.length <= 3) {
+                        // Até 3 consultas: botões interativos
+                        const disambiguateButtons = pendingAppts.map((a, idx) => ({
+                            id: `reminder_confirm:${a.id}`,
+                            title: `Consulta ${idx + 1}`
+                        }));
 
-                    return {
-                        text: disambiguateText,
-                        buttons: disambiguateButtons,
-                        showCalendar: false,
-                        showTimeSlots: false,
-                        showProceduresList: false,
-                        requireCpf: false,
-                        procedures: null,
-                        availableSlots: null,
-                        transferToHuman: false
-                    };
+                        if (!isSimulation) {
+                            await whatsappService.sendButtonMessage(phone, disambiguateText, disambiguateButtons, phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, disambiguateText, phoneId, clinicToken);
+                            });
+                        }
+
+                        return {
+                            text: disambiguateText,
+                            buttons: disambiguateButtons,
+                            showCalendar: false,
+                            showTimeSlots: false,
+                            showProceduresList: false,
+                            requireCpf: false,
+                            procedures: null,
+                            availableSlots: null,
+                            transferToHuman: false
+                        };
+                    } else {
+                        // 4 a 10 consultas: Menu em Lista Interativa (sendListMessage)
+                        const listRows = pendingAppts.map((a, idx) => {
+                            const dFmt = a.appointment_date ? a.appointment_date.split('-').reverse().join('/') : '';
+                            const tFmt = a.appointment_time ? a.appointment_time.substring(0, 5) : '';
+                            const pName = a.patients?.name ? ` - ${a.patients.name}` : '';
+                            return {
+                                id: `reminder_confirm:${a.id}`,
+                                title: `Consulta ${idx + 1}`,
+                                description: `${a.type || 'Consulta'} ${dFmt} ${tFmt}${pName}`.substring(0, 72)
+                            };
+                        });
+
+                        const sections = [{
+                            title: "Consultas Pendentes",
+                            rows: listRows
+                        }];
+
+                        if (!isSimulation) {
+                            await whatsappService.sendListMessage(phone, disambiguateText, "Ver Consultas", sections, "Confirmação de Presença", phoneId, clinicToken).catch(() => {
+                                return whatsappService.sendTextMessage(phone, disambiguateText, phoneId, clinicToken);
+                            });
+                        }
+
+                        return {
+                            text: disambiguateText,
+                            buttons: listRows.map(r => r.title),
+                            showCalendar: false,
+                            showTimeSlots: false,
+                            showProceduresList: false,
+                            requireCpf: false,
+                            procedures: null,
+                            availableSlots: null,
+                            transferToHuman: false
+                        };
+                    }
                 }
 
                 // Se já estiver confirmada (consulta ativa hoje ou futura)
