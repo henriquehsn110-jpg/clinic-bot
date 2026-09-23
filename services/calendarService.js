@@ -86,7 +86,39 @@ class CalendarService {
                 .in('status', ['pending', 'confirmed'])
                 .is('deleted_at', null);
             
-            const occupied = (appts || []).map(a => a.appointment_time.substring(0, 5));
+            let occupied = [];
+            if (doctorId) {
+                // Se um médico específico foi solicitado, ocupa apenas os horários DELE (ou bloqueios sem doctor_id)
+                occupied = (appts || [])
+                    .filter(a => a.doctor_id === doctorId || a.doctor_id === null)
+                    .map(a => a.appointment_time.substring(0, 5));
+            } else {
+                // Se o paciente escolheu "Qualquer médico / Tanto faz", um horário só está ocupado
+                // se TODOS os médicos ativos da clínica estiverem ocupados naquele horário
+                let activeDoctors = [];
+                try {
+                    activeDoctors = await db.doctors.findByClinic(clinicId);
+                } catch (docErr) {
+                    logger.warn('CALENDAR', `Falha ao buscar médicos da clínica ${clinicId}: ${docErr.message}`);
+                }
+
+                if (activeDoctors && activeDoctors.length > 0) {
+                    const doctorCount = activeDoctors.length;
+                    const slotsCount = {};
+                    for (const a of (appts || [])) {
+                        const time = a.appointment_time.substring(0, 5);
+                        if (!a.doctor_id) {
+                            // Bloqueio geral da clínica (legado)
+                            slotsCount[time] = doctorCount;
+                        } else {
+                            slotsCount[time] = (slotsCount[time] || 0) + 1;
+                        }
+                    }
+                    occupied = Object.keys(slotsCount).filter(time => slotsCount[time] >= doctorCount);
+                } else {
+                    occupied = (appts || []).map(a => a.appointment_time.substring(0, 5));
+                }
+            }
 
             // 3. Tenta buscar a clínica para determinar o tempo do procedimento e horários de funcionamento
             let durationMinutes = 30;
@@ -221,12 +253,48 @@ class CalendarService {
                 return existing;
             }
 
-            // Revalidação de concorrência: verifica se o horário foi ocupado por outro paciente
+            let resolvedDoctorId = patientData.doctor_id || patientData.doctorId || null;
+
+            // Se nenhum médico foi especificado ("Tanto faz" / "Qualquer médico"),
+            // resolvemos um profissional concreto disponível antes do INSERT para garantir a constraint
+            if (!resolvedDoctorId) {
+                let clinicDoctors = [];
+                try {
+                    clinicDoctors = await db.doctors.findByClinic(targetClinicId);
+                } catch (docErr) {
+                    logger.warn('CALENDAR', `Falha ao buscar médicos para auto-atribuição na clínica ${targetClinicId}: ${docErr.message}`);
+                }
+
+                if (clinicDoctors && clinicDoctors.length > 0) {
+                    for (const doc of clinicDoctors) {
+                        const docOccupied = await db.appointments.isSlotOccupied(
+                            patientData.date,
+                            patientData.time,
+                            targetClinicId,
+                            doc.id,
+                            appointmentPatient.id
+                        );
+                        if (!docOccupied) {
+                            resolvedDoctorId = doc.id;
+                            break;
+                        }
+                    }
+                    if (!resolvedDoctorId) {
+                        // Todos os médicos da clínica estão ocupados neste horário
+                        logger.warn('CALENDAR_CONFLICT', `Todos os médicos ocupados em ${patientData.date} ${patientData.time} para clínica [${targetClinicId}]`);
+                        const conflictErr = new Error('SLOT_OCCUPIED');
+                        conflictErr.code = 'SLOT_OCCUPIED';
+                        throw conflictErr;
+                    }
+                }
+            }
+
+            // Revalidação de concorrência: verifica se o horário/médico foi ocupado por outro paciente
             const isOccupied = await db.appointments.isSlotOccupied(
                 patientData.date,
                 patientData.time,
                 targetClinicId,
-                patientData.doctor_id || patientData.doctorId || null,
+                resolvedDoctorId,
                 appointmentPatient.id
             );
 
@@ -245,7 +313,7 @@ class CalendarService {
             return await db.appointments.create({
                 patient_id:       appointmentPatient.id,
                 clinic_id:        targetClinicId,
-                doctor_id:        patientData.doctor_id || patientData.doctorId || null,
+                doctor_id:        resolvedDoctorId,
                 appointment_date: patientData.date,
                 appointment_time: patientData.time,
                 type:             patientData.type,

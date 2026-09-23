@@ -677,6 +677,10 @@ const appointments = {
                 .in('appointment_time', [fullTime, shortTime])
                 .in('status', ['pending', 'confirmed']);
 
+            if (doctorId) {
+                query = query.eq('doctor_id', doctorId);
+            }
+
             if (excludePatientId) {
                 query = query.neq('patient_id', excludePatientId);
             }
@@ -787,6 +791,44 @@ const appointments = {
                 .maybeSingle();
 
             if (error) throw new Error(`appointments.findActiveAppointment: ${error.message}`);
+            return data;
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCTORS
+// ═══════════════════════════════════════════════════════════════════════════════
+const doctors = {
+    /**
+     * Retorna todos os médicos ativos de uma clínica.
+     */
+    async findByClinic(clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em doctors.findByClinic');
+        return withRetry(async () => {
+            const { data, error } = await supabase
+                .from('doctors')
+                .select('id, name, specialties, is_active, clinic_id')
+                .eq('clinic_id', clinicId)
+                .eq('is_active', true);
+            if (error) throw new Error(`doctors.findByClinic: ${error.message}`);
+            return data || [];
+        });
+    },
+
+    /**
+     * Retorna um médico específico por ID.
+     */
+    async findById(doctorId, clinicId = null) {
+        if (!doctorId) return null;
+        return withRetry(async () => {
+            let query = supabase
+                .from('doctors')
+                .select('id, name, specialties, is_active, clinic_id')
+                .eq('id', doctorId);
+            if (clinicId) query = query.eq('clinic_id', clinicId);
+            const { data, error } = await query.maybeSingle();
+            if (error) throw new Error(`doctors.findById: ${error.message}`);
             return data;
         });
     }
@@ -1165,4 +1207,4 @@ function parseClinicSettings(cData) {
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, clinics, patients, appointments, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings, decryptData, encryptData, hashForSearch };
+module.exports = { supabase, clinics, patients, appointments, doctors, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings, decryptData, encryptData, hashForSearch };
