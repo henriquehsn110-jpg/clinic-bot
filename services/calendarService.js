@@ -239,7 +239,7 @@ class CalendarService {
 
             const notesContent = patientData.notes || 
                 (patientData.is_minor_without_cpf 
-                    ? `Menor sem CPF - Resp: ${titular.name || 'Titular'} (CPF: ${patientData.guardian_cpf || titular.cpf || 'Cadastrado'})` 
+                    ? 'Menor sob responsabilidade legal (guardian_id)' 
                     : null);
 
             return await db.appointments.create({
