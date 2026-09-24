@@ -2,6 +2,7 @@
 // Em produção, a serialização de mensagens por telefone é garantida pela fila/canal do WhatsApp (Meta Webhook delivery por chat).
 const aiService        = require('../services/aiService');
 const whatsappService   = require('../services/whatsappService');
+const billingService    = require('../services/billingService');
 const db                = require('../services/databaseService');
 const calendarService   = require('../services/calendarService');
 const logger            = require('../services/logger');
@@ -599,7 +600,24 @@ class ConversationController {
         let buttonId = typeof phoneOrObj === 'object' ? (phoneOrObj.buttonId || null) : null;
         let buttonTitle = typeof phoneOrObj === 'object' ? (phoneOrObj.buttonTitle || null) : null;
         let messageId = typeof phoneOrObj === 'object' ? (phoneOrObj.messageId || null) : null;
-        let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseValid : null;
+let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseValid : null;
+
+        // Helper para envio de WhatsApp com deduplicação semântica, ledger durável e validação de lease (V19)
+        const sendGuarded = async (effectKey, sendFn, payload = null) => {
+            if (!messageId) {
+                return await sendFn();
+            }
+            return await db.executeGuardedEffect({
+                messageId,
+                effectType: 'whatsapp_message',
+                effectKey,
+                payload,
+                ttlSeconds: 30,
+                maxRetries: 3,
+                checkLeaseValid,
+                executeFn: sendFn
+            });
+        };
 
         if (!clinicId) {
             const defaultClinic = await db.clinics.findBySlug('clinica-modelo') || (await db.clinics.getAll())[0];
@@ -660,7 +678,7 @@ class ConversationController {
                     const responseText = `Sua mensagem foi encaminhada para a nossa recepção e em breve um atendente irá responder! 😊\n\nSe preferir voltar ao atendimento automático com a ${personaName}, basta clicar no botão abaixo:`;
                     const btnLabel = buildAiReturnButtonLabel(personaName);
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, responseText, [btnLabel], phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:handoff_return_ai', () => whatsappService.sendButtonMessage(phone, responseText, [btnLabel], phoneId, clinicToken));
                     }
                     return {
                         text: responseText,
@@ -733,7 +751,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:cancel_success', () => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken));
                         }
 
                         return {
@@ -755,7 +773,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, keepText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:keep_appointment', () => whatsappService.sendTextMessage(phone, keepText, phoneId, clinicToken));
                     }
 
                     return {
@@ -789,7 +807,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, warnText, confirmButtons, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:cancel_interactive_required', () => whatsappService.sendButtonMessage(phone, warnText, confirmButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -829,7 +847,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, "Com certeza! Estou transferindo seu atendimento para a nossa recepção. Em breve um atendente irá responder você! 😊", phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:handoff_requested', () => whatsappService.sendTextMessage(phone, "Com certeza! Estou transferindo seu atendimento para a nossa recepção. Em breve um atendente irá responder você! 😊", phoneId, clinicToken));
                 }
 
                 return {
@@ -853,7 +871,7 @@ class ConversationController {
                 await persistHumanHandoff(phone, patient, history, sanitizedText, 'Protocolo de Urgência Operacional (Sintomas Críticos)', clinicId, lockContext);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, urgencyText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:urgency_handoff', () => whatsappService.sendTextMessage(phone, urgencyText, phoneId, clinicToken));
                 }
 
                 return {
@@ -877,7 +895,7 @@ class ConversationController {
                 await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, handoffMsg, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:profanity_handoff', () => whatsappService.sendTextMessage(phone, handoffMsg, phoneId, clinicToken));
                 }
 
                 return {
@@ -908,7 +926,7 @@ class ConversationController {
                 await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente Guardião Anti-Looping: Impasse/Frustração detectada no chat', clinicId, lockContext);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:frustration_handoff', () => whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken));
                 }
 
                 return {
@@ -953,7 +971,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:active_appointments_cta', () => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken));
                     }
 
                     return {
@@ -1054,7 +1072,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:reminder_confirm_specific', () => whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken));
                 }
 
                 return {
@@ -1138,7 +1156,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:reminder_confirm_single', () => whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken));
                     }
 
                     return {
@@ -1161,7 +1179,7 @@ class ConversationController {
                         await persistHumanHandoff(phone, patient, history, sanitizedText, 'Desambiguação de lembretes: mais de 10 consultas pendentes', clinicId, lockContext);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, overflowText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:reminder_overflow_handoff', () => whatsappService.sendTextMessage(phone, overflowText, phoneId, clinicToken));
                         }
 
                         return {
@@ -1196,9 +1214,7 @@ class ConversationController {
                         }));
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, disambiguateText, disambiguateButtons, phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, disambiguateText, phoneId, clinicToken);
-                            });
+                            await sendGuarded('whatsapp:reminder_disambiguate_buttons', () => whatsappService.sendButtonMessage(phone, disambiguateText, disambiguateButtons, phoneId, clinicToken));
                         }
 
                         return {
@@ -1231,9 +1247,7 @@ class ConversationController {
                         }];
 
                         if (!isSimulation) {
-                            await whatsappService.sendListMessage(phone, disambiguateText, "Ver Consultas", sections, "Confirmação de Presença", phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, disambiguateText, phoneId, clinicToken);
-                            });
+                            await sendGuarded('whatsapp:reminder_disambiguate_list', () => whatsappService.sendListMessage(phone, disambiguateText, "Ver Consultas", sections, "Confirmação de Presença", phoneId, clinicToken));
                         }
 
                         return {
@@ -1268,7 +1282,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, alreadyText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:reminder_already_confirmed', () => whatsappService.sendTextMessage(phone, alreadyText, phoneId, clinicToken));
                     }
 
                     return {
@@ -1293,7 +1307,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendButtonMessage(phone, noApptText, noApptButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:reminder_no_appointments', () => whatsappService.sendButtonMessage(phone, noApptText, noApptButtons, phoneId, clinicToken));
                 }
 
                 return {
@@ -1346,7 +1360,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendButtonMessage(phone, welcomeText, welcomeButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:welcome', () => whatsappService.sendButtonMessage(phone, welcomeText, welcomeButtons, phoneId, clinicToken));
                 }
 
                 return {
@@ -1411,7 +1425,7 @@ class ConversationController {
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:schedule_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                 }
 
                 return {
@@ -1450,7 +1464,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, promptText, depButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:family_existing_dependents', () => whatsappService.sendButtonMessage(phone, promptText, depButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -1474,7 +1488,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:family_ask_dependent_name', () => whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken));
                 }
 
                 return {
@@ -1510,7 +1524,7 @@ class ConversationController {
 
                     if (!isSimulation) {
                         const sections = [{ title: "Tratamentos", rows: PROCEDURES_RICH }];
-                        await whatsappService.sendListMessage(phone, selectProcText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:family_dependent_procedures', () => whatsappService.sendListMessage(phone, selectProcText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                     }
 
                     return {
@@ -1531,7 +1545,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:family_ask_another_name', () => whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken));
                     }
 
                     return {
@@ -1563,7 +1577,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendButtonMessage(phone, alterText, alterButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:alter_appointment_options', () => whatsappService.sendButtonMessage(phone, alterText, alterButtons, phoneId, clinicToken));
                 }
 
                 return {
@@ -1622,7 +1636,7 @@ class ConversationController {
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:alter_specialty_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                 }
 
                 return {
@@ -1692,7 +1706,7 @@ class ConversationController {
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                    await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:reschedule_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                 }
 
                 return {
@@ -1734,7 +1748,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendButtonMessage(phone, rcText, rcButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:reschedule_cancel_options', () => whatsappService.sendButtonMessage(phone, rcText, rcButtons, phoneId, clinicToken));
                 }
 
                 return {
@@ -1797,7 +1811,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:cancel_no_appointments', () => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -1834,7 +1848,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:cancel_single_confirm', () => whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -1896,7 +1910,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:cancel_chosen_confirm', () => whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -1928,7 +1942,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendButtonMessage(phone, selectText, selectButtons, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:cancel_select_options', () => whatsappService.sendButtonMessage(phone, selectText, selectButtons, phoneId, clinicToken));
                 }
 
                 return {
@@ -1952,9 +1966,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, noDraftText, noDraftButtons, phoneId, clinicToken).catch(() => {
-                            return whatsappService.sendTextMessage(phone, noDraftText, phoneId, clinicToken);
-                        });
+                        await sendGuarded('whatsapp:confirm_no_draft', () => whatsappService.sendButtonMessage(phone, noDraftText, noDraftButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -1984,7 +1996,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, askNameText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:confirm_ask_name', () => whatsappService.sendTextMessage(phone, askNameText, phoneId, clinicToken));
                     }
 
                     return {
@@ -2009,7 +2021,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, askCpfText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:confirm_ask_cpf', () => whatsappService.sendTextMessage(phone, askCpfText, phoneId, clinicToken));
                     }
 
                     return {
@@ -2050,6 +2062,12 @@ class ConversationController {
                             logger.info('SCHEDULING', `Agendamento confirmado com sucesso via Simulador para [${phone}] - ${draft.date} ${draft.time} (ID: ${newApptId})`);
                         }
 
+                        // Quota de billing SaaS: incremento idempotente derivado da consulta recém-criada
+                        if (newAppt && newAppt.id && newAppt.id !== draft.confirmed_appointment_id) {
+                            await billingService.incrementMonthlyBooking(clinicId, newAppt.id).catch(() => {});
+                        
+                        }
+
                         // Construção da mensagem de sucesso exclusivamente a partir do registro persistido (P0)
                         const savedType = newAppt.type || draft.type || 'Consulta';
                         const savedDate = newAppt.appointment_date || draft.date;
@@ -2084,7 +2102,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, [], draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:booking_confirmed_cta', () => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken));
                         }
 
                         return {
@@ -2157,7 +2175,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:booking_replay_cta', () => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken));
                         }
 
                         return {
@@ -2186,7 +2204,7 @@ class ConversationController {
                             title: "Tratamentos",
                             rows: PROCEDURES_RICH
                         }];
-                        await whatsappService.sendListMessage(phone, errText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:booking_corrupt_draft_procedures', () => whatsappService.sendListMessage(phone, errText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                     }
 
                     return {
@@ -2337,9 +2355,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, resumeText, resumeButtons, phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, resumeText, phoneId, clinicToken);
-                            });
+                            await sendGuarded('whatsapp:gate1_resume_personal', () => whatsappService.sendButtonMessage(phone, resumeText, resumeButtons, phoneId, clinicToken));
                         }
 
                         return {
@@ -2367,9 +2383,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
-                            return whatsappService.sendTextMessage(phone, cancelFamilyText, phoneId, clinicToken);
-                        });
+                            await sendGuarded('whatsapp:gate1_cancel_family', () => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -2418,9 +2432,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, askDependentNameText, escapeButtons, phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, askDependentNameText, phoneId, clinicToken);
-                            });
+                                    await sendGuarded('whatsapp:gate1_ask_dependent_name', () => whatsappService.sendButtonMessage(phone, askDependentNameText, escapeButtons, phoneId, clinicToken));
                         }
 
                         return {
@@ -2454,9 +2466,7 @@ class ConversationController {
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken).catch(() => {
-                            return whatsappService.sendTextMessage(phone, cancelFamilyText, phoneId, clinicToken);
-                        });
+                            await sendGuarded('whatsapp:gate2_cancel_family', () => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken));
                     }
 
                     return {
@@ -2507,9 +2517,7 @@ class ConversationController {
                                     title: "Tratamentos",
                                     rows: PROCEDURES_RICH
                                 }];
-                                await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {
-                                    return whatsappService.sendTextMessage(phone, procText, phoneId, clinicToken);
-                                });
+                                        await sendGuarded('whatsapp:gate2_minor_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                             }
 
                             return {
@@ -2537,9 +2545,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, askGuardianCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, askGuardianCpfText, phoneId, clinicToken);
-                            });
+                                        await sendGuarded('whatsapp:gate2_ask_guardian_cpf', () => whatsappService.sendButtonMessage(phone, askGuardianCpfText, escapeButtons, phoneId, clinicToken));
                         }
 
                         return {
@@ -2577,9 +2583,7 @@ class ConversationController {
                             await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                             if (!isSimulation) {
-                                await whatsappService.sendButtonMessage(phone, rejectTitularCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
-                                    return whatsappService.sendTextMessage(phone, rejectTitularCpfText, phoneId, clinicToken);
-                                });
+                                        await sendGuarded('whatsapp:gate2_reject_titular_cpf', () => whatsappService.sendButtonMessage(phone, rejectTitularCpfText, escapeButtons, phoneId, clinicToken));
                             }
 
                             return {
@@ -2615,9 +2619,7 @@ class ConversationController {
                                 title: "Tratamentos",
                                 rows: PROCEDURES_RICH
                             }];
-                            await whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, procText, phoneId, clinicToken);
-                            });
+                                            await sendGuarded('whatsapp:gate2_dependent_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                         }
 
                         return {
@@ -2668,9 +2670,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendButtonMessage(phone, askDependentCpfText, escapeButtons, phoneId, clinicToken).catch(() => {
-                                return whatsappService.sendTextMessage(phone, askDependentCpfText, phoneId, clinicToken);
-                            });
+                                        await sendGuarded('whatsapp:gate2_ask_dependent_cpf', () => whatsappService.sendButtonMessage(phone, askDependentCpfText, escapeButtons, phoneId, clinicToken));
                         }
 
                         return {
@@ -2838,7 +2838,7 @@ class ConversationController {
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, nameErrText, phoneId, clinicToken).catch(() => {});
+                        await sendGuarded('whatsapp:ask_titular_name_retry', () => whatsappService.sendTextMessage(phone, nameErrText, phoneId, clinicToken));
                         }
 
                         return {
@@ -2958,7 +2958,7 @@ class ConversationController {
 
                     const handoffText = "Para a sua comodidade e segurança, estou transferindo seu atendimento para a nossa equipe humana confirmar seus dados.";
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:cpf_max_retries_handoff', () => whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken));
                     }
 
                     return {
@@ -2983,7 +2983,7 @@ class ConversationController {
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:cpf_invalid_format_retry', () => whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken));
                 }
 
                 return {
@@ -3019,7 +3019,7 @@ class ConversationController {
 
                             const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                             if (!isSimulation) {
-                                await whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:lgpd_cpf_conflict_handoff', () => whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken));
                             }
 
                             return {
@@ -3056,7 +3056,7 @@ class ConversationController {
                         await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
                         const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                         if (!isSimulation) {
-                            await whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:lgpd_duplicate_cpf_handoff', () => whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken));
                         }
                         return {
                             text:            blockText,
@@ -3078,7 +3078,7 @@ class ConversationController {
 
                     const failText = "Estamos com uma instabilidade técnica temporária. Vou te transferir para um de nossos atendentes continuar seu atendimento.";
                     if (!isSimulation) {
-                        await whatsappService.sendTextMessage(phone, failText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:cpf_technical_error_handoff', () => whatsappService.sendTextMessage(phone, failText, phoneId, clinicToken));
                     }
 
                     return {
@@ -3151,9 +3151,37 @@ class ConversationController {
                     requireDescription: false
                 };
             } else {
+                // Guarda 1: validação de lease antes da chamada à IA
+                if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
+                    const leaseErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou antes da chamada ao Gemini');
+                    leaseErr.code = 'WEBHOOK_LEASE_LOST';
+                    leaseErr.isRetryable = true;
+                    throw leaseErr;
+                }
+
+                // Timeout de aplicação obrigatório (Regra 27)
+                const AI_TIMEOUT_MS = parseInt(process.env.GEMINI_TIMEOUT_MS) || 7000;
+                let aiTimeoutTimer = null;
+                const aiTimeoutPromise = new Promise((_, reject) => {
+                    aiTimeoutTimer = setTimeout(() => {
+                        const tErr = new Error(`AI_TIMEOUT: Chamada ao Gemini excedeu o limite seguro de ${AI_TIMEOUT_MS}ms`);
+                        tErr.code = 'AI_TIMEOUT';
+                        tErr.isRetryable = true;
+                        reject(tErr);
+                    }, AI_TIMEOUT_MS);
+                    if (typeof aiTimeoutTimer.unref === 'function') aiTimeoutTimer.unref();
+                });
+
                 try {
-                    aiResponse = await aiService.generateResponse(textForAI, history, clinicSettings);
+                    aiResponse = await Promise.race([
+                        aiService.generateResponse(textForAI, history, clinicSettings),
+                        aiTimeoutPromise
+                    ]);
                 } catch (aiErr) {
+                    // Erros de retry/lease não podem ser engolidos nem convertidos em mensagem padrão!
+                    if (aiErr.code === 'WEBHOOK_LEASE_LOST' || aiErr.code === 'SESSION_LOCK_LOST' || aiErr.code === 'SESSION_LOCK_TIMEOUT' || aiErr.isRetryable) {
+                        throw aiErr;
+                    }
                     logger.warn('AI_FALLBACK', `Falha ao chamar Gemini (${aiErr.message}). Usando resposta padrão.`);
                     aiResponse = {
                         text: `Olá! Sou a ${personaName}, assistente virtual da ${clinicName}. Como posso ajudar você hoje?`,
@@ -3165,6 +3193,16 @@ class ConversationController {
                         transferToHuman: false,
                         requireDescription: false
                     };
+                } finally {
+                    if (aiTimeoutTimer) clearTimeout(aiTimeoutTimer);
+                }
+
+                // Guarda 2: validação de lease novamente após receber resposta da IA e antes de utilizá-la
+                if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
+                    const leaseErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou após resposta do Gemini');
+                    leaseErr.code = 'WEBHOOK_LEASE_LOST';
+                    leaseErr.isRetryable = true;
+                    throw leaseErr;
                 }
             }
             const logSanitizedText = rawCpf
@@ -3356,7 +3394,7 @@ class ConversationController {
                             title: "Tratamentos",
                             rows: PROCEDURES_RICH
                         }];
-                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken);
+                        await sendGuarded('whatsapp:fsm_procedures_list', () => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                     } else if (aiResponse.showDoctorList) {
                         if (draft.available_doctors && draft.available_doctors.length > 0) {
                             const docRows = draft.available_doctors.map(d => ({
@@ -3373,10 +3411,10 @@ class ConversationController {
                                 title: "Profissionais",
                                 rows: docRows
                             }];
-                            await whatsappService.sendListMessage(phone, responseText, "Ver Médicos", sections, "Especialistas", phoneId, clinicToken);
+                            await sendGuarded('whatsapp:fsm_doctor_list', () => whatsappService.sendListMessage(phone, responseText, "Ver Médicos", sections, "Especialistas", phoneId, clinicToken));
                         } else {
                             // Fallback caso dê erro e a lista esteja vazia
-                            await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken);
+                            await sendGuarded('whatsapp:fsm_doctor_list_empty', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken));
                         }
                     } else if (aiResponse.showCalendar) {
                         const rows = [];
@@ -3444,7 +3482,7 @@ class ConversationController {
                             title: "Datas Disponíveis",
                             rows
                         }];
-                        await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken);
+                        await sendGuarded('whatsapp:fsm_calendar', () => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                     } else if (aiResponse.showTimeSlots) {
                         if (availableSlots && availableSlots.length > 0) {
                             // Limita a 4 opções por período para sobrar espaço para o botão "Outros horários..."
@@ -3475,19 +3513,22 @@ class ConversationController {
                                 });
                             }
 
-                            await whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken);
+                            await sendGuarded('whatsapp:fsm_time_slots', () => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
                         } else {
-                            await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken);
+                            await sendGuarded('whatsapp:fsm_no_time_slots', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken));
                         }
                     } else if (aiResponse.buttons?.length > 0) {
-                        await whatsappService.sendButtonMessage(phone, responseText, aiResponse.buttons, phoneId, clinicToken);
+                        await sendGuarded('whatsapp:fsm_buttons', () => whatsappService.sendButtonMessage(phone, responseText, aiResponse.buttons, phoneId, clinicToken));
                     } else {
-                        await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken);
+                        await sendGuarded('whatsapp:fsm_text_only', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken));
                     }
                 } catch (sendError) {
                     logger.error('WHATSAPP_SEND', `Falha ao enviar mensagem via WhatsApp API: ${sendError.message}`, sendError.stack);
+                    if (sendError.code === 'SESSION_LOCK_LOST' || sendError.code === 'WEBHOOK_LEASE_LOST' || sendError.code === 'EFFECT_LEASE_LOST' || sendError.isRetryable) {
+                        throw sendError;
+                    }
                     responseText = 'Desculpe, estou com dificuldades técnicas. Retorno em breve.';
-                    await whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken).catch(() => {});
+                    await sendGuarded('whatsapp:fsm_send_error', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken)).catch(() => {});
                 }
             }
 
@@ -3543,7 +3584,7 @@ class ConversationController {
             }
             const errText = 'Desculpe, ocorreu um erro interno.';
             if (!isSimulation) {
-                await whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken).catch(() => {});
+                await sendGuarded('whatsapp:error_fallback', () => whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken)).catch(() => {});
             }
             return {
                 text:            errText,
