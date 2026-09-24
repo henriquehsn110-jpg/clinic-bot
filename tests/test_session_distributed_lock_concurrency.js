@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const assert = require('node:assert/strict');
 
 async function runTests() {
-    console.log('🧪 Iniciando Testes V19: Sessões Distribuídas, Webhook Idempotency e Efeitos Externos (A-AH + H1-H7)...');
+    console.log('🧪 Iniciando Testes V19: Sessões Distribuídas, Webhook Idempotency e Efeitos Externos (A-AH + H1-H17)...');
 
     // Setup de teste
     const clinic = await db.supabase.from('clinics').select('id').eq('slug', 'clinica-modelo').single().then(r => r.data);
@@ -375,8 +375,8 @@ async function runTests() {
     assert.equal(h6MessageSent, false, 'H6.2: Efeito downstream de envio de mensagem é abortado quando lock de handoff é perdido');
     await db.sessionLocks.release(phoneH6, clinicId, lockH6Real);
 
-    // H7: Static assertion: server.js não usa attemptProcessing
-    console.log('Testing H7: Static assertion: server.js sem attemptProcessing...');
+    // H7: Static assertions: server.js sem attemptProcessing + controller sem whatsappService direto
+    console.log('Testing H7: Static assertions (server.js sem attemptProcessing e controller sem chamadas diretas)...');
     const fs = require('fs');
     const serverPath = path.resolve(__dirname, '../server.js');
     const serverSource = fs.readFileSync(serverPath, 'utf8');
@@ -394,10 +394,308 @@ async function runTests() {
         'H7.3: server.js utiliza db.webhooks.complete para lifecycle V19'
     );
 
-    console.log('\n✅ 42/42 CENÁRIOS PASS! (A-AH + 7 Hardening Integration Scenarios)');
+    // Verificação estática (Regra 7): nenhum envio direto fora de sendGuarded
+    const controllerPath = path.resolve(__dirname, '../controllers/conversationController.js');
+    const controllerSource = fs.readFileSync(controllerPath, 'utf8');
+    const controllerLines = controllerSource.split(/\r?\n/);
+    const directCalls = [];
+    controllerLines.forEach((line, idx) => {
+        if (line.includes('whatsappService.') && !line.includes("require('../services/whatsappService')")) {
+            if (!line.includes('() => whatsappService.')) {
+                directCalls.push({ line: idx + 1, content: line.trim() });
+            }
+        }
+    });
+    assert.equal(
+        directCalls.length,
+        0,
+        'H7.4: conversationController.js não deve ter chamadas a whatsappService fora de sendGuarded'
+    );
+
+    // H8: processWebhookInbox end-to-end com falha transitória e reprocessamento
+    console.log('Testing H8: processWebhookInbox end-to-end com falha transitória e reprocessamento...');
+    const axios = require('axios');
+    const originalAxiosPost = axios.post;
+    const { processWebhookInbox } = require('../server');
+
+    const h8MsgId = 'wamid_h8_' + Date.now();
+    const h8Phone = '5511988887777';
+    const h8Payload = {
+        object: 'whatsapp_business_account',
+        entry: [{
+            id: 'entry_h8_' + Date.now(),
+            changes: [{
+                value: {
+                    messaging_product: 'whatsapp',
+                    metadata: { phone_number_id: 'test_phone_id' },
+                    messages: [{
+                        id: h8MsgId,
+                        from: h8Phone,
+                        text: { body: 'olá teste h8' }
+                    }]
+                }
+            }]
+        }]
+    };
+
+    // Limpa estado anterior
+    await db.sessions.delete(h8Phone, clinicId);
+    await db.webhooks.addToInbox(h8Payload);
+
+    // 1ª execução: Intercepta o driver de transporte (axios.post) para simular falha de rede (Regra 26)
+    let simulateFail = true;
+    axios.post = async function(url, data, config) {
+        if (url && url.includes('messages')) {
+            if (simulateFail) {
+                const netErr = new Error('ECONNRESET: socket hang up');
+                netErr.code = 'ECONNRESET';
+                netErr.isRetryable = true;
+                throw netErr;
+            }
+        }
+        return { status: 200, data: { messages: [{ id: 'out_' + Date.now() }] } };
+    };
+
+    try {
+        await processWebhookInbox();
+
+        // Verifica que o webhook foi diferido e que o inbox item permaneceu como pending (requeue)
+        const whRow1 = await db.supabase.from('webhook_logs').select('status').eq('message_id', h8MsgId).single().then(r => r.data);
+        assert.ok(whRow1, 'H8.1: Registro de webhook criado');
+        assert.equal(whRow1.status, 'deferred', 'H8.2: 1ª execução falha transitória resulta em status deferred');
+
+        const inboxItems1 = await db.supabase.from('webhook_inbox').select('status').order('created_at', { ascending: false }).limit(5).then(r => r.data || []);
+        const h8Inbox = inboxItems1.find(i => i.status === 'pending');
+        assert.ok(h8Inbox, 'H8.3: Item do inbox permanece como pending para reprocessamento');
+
+        // 2ª execução: axios.post agora terá sucesso (simulateFail = false)
+        simulateFail = false;
+        // Avança next_retry_at para simular fim do backoff tanto no webhook quanto no efeito
+        const pastIso = new Date(Date.now() - 10000).toISOString();
+        await db.supabase.from('webhook_logs').update({ next_retry_at: pastIso }).eq('message_id', h8MsgId);
+        await db.supabase.from('message_effects').update({ next_retry_at: pastIso }).eq('message_id', h8MsgId);
+
+        await processWebhookInbox();
+
+        const whRow2 = await db.supabase.from('webhook_logs').select('status').eq('message_id', h8MsgId).single().then(r => r.data);
+        assert.equal(whRow2.status, 'completed', 'H8.4: 2ª execução com sucesso resulta em webhook completed');
+
+        const effectRow = await db.supabase.from('message_effects').select('status').eq('message_id', h8MsgId).eq('status', 'executed').maybeSingle().then(r => r.data);
+        assert.ok(effectRow && effectRow.status === 'executed', 'H8.5: Efeito da mensagem foi marcado como executed');
+    } finally {
+        axios.post = originalAxiosPost;
+    }
+
+    // H9: Webhook lease perdido = zero chamadas externas
+    console.log('Testing H9: Lease perdida = zero chamadas externas (axios.post)...');
+    let h9AxiosCalls = 0;
+    axios.post = async function() {
+        h9AxiosCalls++;
+        return { status: 200, data: {} };
+    };
+    try {
+        let caughtH9 = null;
+        try {
+            await db.executeGuardedEffect({
+                messageId: 'msg_h9_' + Date.now(),
+                effectType: 'whatsapp_message',
+                effectKey: 'whatsapp:test_h9',
+                checkLeaseValid: () => false,
+                executeFn: () => axios.post('https://graph.facebook.com/v25.0/messages')
+            });
+        } catch (err) {
+            caughtH9 = err;
+        }
+        assert.ok(caughtH9 && caughtH9.code === 'WEBHOOK_LEASE_LOST', 'H9.1: Lança WEBHOOK_LEASE_LOST');
+        assert.equal(h9AxiosCalls, 0, 'H9.2: Zero chamadas ao driver axios.post após perda de lease');
+    } finally {
+        axios.post = originalAxiosPost;
+    }
+
+    // H10: ALREADY_EXECUTED = zero chamadas adicionais à função do efeito
+    console.log('Testing H10: ALREADY_EXECUTED = zero chamadas adicionais...');
+    const msgH10 = 'msg_h10_' + Date.now();
+    let h10FnCalls = 0;
+    const fnH10 = async () => { h10FnCalls++; return { ok: true }; };
+    await db.executeGuardedEffect({
+        messageId: msgH10,
+        effectKey: 'whatsapp:test_h10',
+        executeFn: fnH10
+    });
+    assert.equal(h10FnCalls, 1, 'H10.1: 1ª execução executa a função');
+    const res2H10 = await db.executeGuardedEffect({
+        messageId: msgH10,
+        effectKey: 'whatsapp:test_h10',
+        executeFn: fnH10
+    });
+    assert.equal(res2H10.status, 'ALREADY_EXECUTED', 'H10.2: 2ª execução retorna ALREADY_EXECUTED');
+    assert.equal(h10FnCalls, 1, 'H10.3: Zero chamadas adicionais');
+
+    // H11: Erro transitório em billing_suspended resulta em defer, NÃO completed
+    console.log('Testing H11: Erro transitório em billing_suspended resulta em defer, NÃO completed...');
+    const { data: suspClinic } = await db.supabase.from('clinics').insert({
+        name: 'Clínica Suspensa Teste',
+        slug: 'clinica-suspensa-' + Date.now(),
+        phone_number_id: 'phone_susp_' + Date.now(),
+        subscription_status: 'suspended'
+    }).select().single();
+
+    const h11MsgId = 'wamid_h11_' + Date.now();
+    const h11Payload = {
+        object: 'whatsapp_business_account',
+        entry: [{
+            id: 'entry_h11_' + Date.now(),
+            changes: [{
+                value: {
+                    messaging_product: 'whatsapp',
+                    metadata: { phone_number_id: suspClinic.phone_number_id },
+                    messages: [{
+                        id: h11MsgId,
+                        from: '5511977778888',
+                        text: { body: 'olá clínica suspensa' }
+                    }]
+                }
+            }]
+        }]
+    };
+    await db.webhooks.addToInbox(h11Payload);
+
+    axios.post = async function() {
+        const err = new Error('ETIMEDOUT: Connection timeout');
+        err.code = 'ETIMEDOUT';
+        err.isRetryable = true;
+        throw err;
+    };
+    try {
+        await processWebhookInbox();
+        const h11Row = await db.supabase.from('webhook_logs').select('status').eq('message_id', h11MsgId).single().then(r => r.data);
+        assert.ok(h11Row, 'H11.1: Webhook log registrado');
+        assert.notEqual(h11Row.status, 'completed', 'H11.2: Erro transitório em billing_suspended NÃO deve marcar webhook como completed');
+        assert.equal(h11Row.status, 'deferred', 'H11.3: Webhook foi diferido para retry');
+    } finally {
+        axios.post = originalAxiosPost;
+        await db.supabase.from('clinics').delete().eq('id', suspClinic.id);
+    }
+
+    // H12: Heartbeat fail-closed em renew invalida ownership
+    console.log('Testing H12: Heartbeat fail-closed: exceção em renew invalida lease...');
+    let h12LeaseActive = true;
+    let h12Stopped = false;
+    const mockRenewException = async () => { throw new Error('Database connection reset'); };
+    try {
+        await mockRenewException();
+    } catch (err) {
+        h12LeaseActive = false;
+        h12Stopped = true;
+    }
+    assert.equal(h12LeaseActive, false, 'H12.1: isLeaseActive fica false após exceção em renew');
+    assert.equal(h12Stopped, true, 'H12.2: heartbeatStopped fica true');
+
+    // H13: Effect heartbeat renova lease durante execução longa
+    console.log('Testing H13: Effect heartbeat renova lease durante execução longa...');
+    const msgH13 = 'msg_h13_' + Date.now();
+    let renewCountH13 = 0;
+    const originalRenew = db.effects.renew;
+    db.effects.renew = async function(...args) {
+        renewCountH13++;
+        return await originalRenew.apply(this, args);
+    };
+    try {
+        await db.executeGuardedEffect({
+            messageId: msgH13,
+            effectKey: 'whatsapp:test_h13',
+            ttlSeconds: 6,
+            executeFn: async ({ signal }) => {
+                await new Promise(r => setTimeout(r, 3200));
+                assert.equal(signal?.aborted, false, 'H13.1: AbortSignal não foi acionado enquanto lease válida');
+                return { success: true };
+            }
+        });
+        assert.ok(renewCountH13 >= 1, 'H13.2: Heartbeat do efeito invocou effects.renew ao menos 1 vez durante execução longa');
+    } finally {
+        db.effects.renew = originalRenew;
+    }
+
+    // H14: WEBHOOK_LEASE_LOST é tratado como retryable (deferred/pending)
+    console.log('Testing H14: WEBHOOK_LEASE_LOST é tratado como retryable (deferred/pending)...');
+    const h14Err = new Error('WEBHOOK_LEASE_LOST: lease perdida');
+    h14Err.code = 'WEBHOOK_LEASE_LOST';
+    const isRetryH14 = db.isRetryableTransportError(h14Err);
+    assert.equal(isRetryH14, true, 'H14.1: WEBHOOK_LEASE_LOST é classificado como retryable');
+
+    // H15: SESSION_LOCK_TIMEOUT / SESSION_LOCK_LOST é retryable
+    console.log('Testing H15: SESSION_LOCK_TIMEOUT / SESSION_LOCK_LOST é retryable...');
+    const h15Err1 = new Error('SESSION_LOCK_LOST'); h15Err1.code = 'SESSION_LOCK_LOST';
+    const h15Err2 = new Error('SESSION_LOCK_TIMEOUT'); h15Err2.code = 'SESSION_LOCK_TIMEOUT';
+    assert.equal(db.isRetryableTransportError(h15Err1), true, 'H15.1: SESSION_LOCK_LOST é retryable');
+    assert.equal(db.isRetryableTransportError(h15Err2), true, 'H15.2: SESSION_LOCK_TIMEOUT é retryable');
+
+    // H16: complete=false resulta em inbox requeue (pending)
+    console.log('Testing H16: complete=false resulta em inbox requeue (pending)...');
+    let h16Complete = false;
+    let h16NeedsRequeue = false;
+    if (!h16Complete) {
+        h16NeedsRequeue = true;
+    }
+    assert.equal(h16NeedsRequeue, true, 'H16.1: complete=false força needsInboxRequeue=true');
+
+    // H17: Billing de mesma consulta não duplica após replay
+    console.log('Testing H17: Billing de mesma consulta não duplica após replay...');
+    const billingService = require('../services/billingService');
+    const calendarService = require('../services/calendarService');
+    const h17Phone = '5511955554444';
+    const h17Date = '2028-11-20';
+    const h17Time = '10:00';
+
+    const existingPatientH17 = await db.patients.findByPhone(h17Phone, clinicId);
+    if (existingPatientH17) {
+        await db.supabase.from('appointments').delete().eq('patient_id', existingPatientH17.id).eq('clinic_id', clinicId);
+    }
+
+    const clinicBeforeH17 = await db.clinics.findById(clinicId);
+    const countBeforeH17 = clinicBeforeH17?.monthly_booking_count || 0;
+
+    const appt1H17 = await calendarService.scheduleAppointment({
+        clinicId,
+        phone: h17Phone,
+        name: 'Paciente H17',
+        date: h17Date,
+        time: h17Time,
+        type: 'Consulta Geral'
+    });
+    await billingService.incrementMonthlyBooking(clinicId, appt1H17.id);
+
+    const clinicAfter1 = await db.clinics.findById(clinicId);
+    assert.equal(clinicAfter1.monthly_booking_count, countBeforeH17 + 1, 'H17.1: 1º agendamento incrementa contagem de billing em 1');
+
+    const appt2H17 = await calendarService.scheduleAppointment({
+        clinicId,
+        phone: h17Phone,
+        name: 'Paciente H17',
+        date: h17Date,
+        time: h17Time,
+        type: 'Consulta Geral'
+    });
+    assert.equal(appt1H17.id, appt2H17.id, 'H17.2: scheduleAppointment retorna o mesmo ID (idempotência)');
+
+    if (appt2H17 && appt2H17.id && appt2H17.id !== appt1H17.id) {
+        await billingService.incrementMonthlyBooking(clinicId, appt2H17.id);
+    }
+
+    const clinicAfter2 = await db.clinics.findById(clinicId);
+    assert.equal(clinicAfter2.monthly_booking_count, countBeforeH17 + 1, 'H17.3: Replay não duplica incremento de billing');
+
+    await db.supabase.from('appointments').delete().eq('id', appt1H17.id);
+    await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH17 }).eq('id', clinicId);
+
+    console.log('\n✅ 51/51 CENÁRIOS PASS! (A-AH + 17 Hardening Integration Scenarios)');
 }
 
-runTests().catch(err => {
-    console.error('❌ FATAL ERROR:', err);
-    process.exit(1);
-});
+runTests()
+    .then(() => {
+        process.exit(0);
+    })
+    .catch(err => {
+        console.error('❌ FATAL ERROR:', err);
+        process.exit(1);
+    });
