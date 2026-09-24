@@ -367,8 +367,11 @@ const processWebhookInbox = async () => {
                                                 }
                                                 if (!heartbeatStopped) scheduleHeartbeat();
                                             } catch (hbErr) {
-                                                console.warn(`⚠️ [WEBHOOK_HEARTBEAT] Erro ao renovar lease da mensagem [${messageId}]: ${hbErr.message}`);
-                                                if (!heartbeatStopped) scheduleHeartbeat();
+                                                // FAIL-CLOSED: exception in renew means ownership is uncertain.
+                                                // Safer to assume lost than to continue with uncertain ownership.
+                                                console.warn(`⚠️ [WEBHOOK_HEARTBEAT] Exceção ao renovar lease da mensagem [${messageId}]: ${hbErr.message}. Ownership incerto, invalidando.`);
+                                                isLeaseActive = false;
+                                                heartbeatStopped = true;
                                             }
                                         }, 10000);
                                     };
@@ -419,12 +422,18 @@ const processWebhookInbox = async () => {
                                                         "Prezado paciente, o atendimento automático desta clínica está temporariamente suspenso. Por favor, entre em contato diretamente com a recepção da clínica.",
                                                         phoneNumberId
                                                     )
-                                                }).catch((e) => console.warn(`[BILLING_EFFECT] Erro ao avisar suspensão: ${e.message}`));
+                                                });
 
                                                 stopHeartbeat();
                                                 if (checkLeaseValid()) {
                                                     const completed = await db.webhooks.complete(messageId, processingToken);
-                                                    if (!completed) isLeaseActive = false;
+                                                    if (!completed) {
+                                                        console.warn(`⚠️ [WEBHOOK] complete retornou false para [${messageId}] (ownership perdido)`);
+                                                        isLeaseActive = false;
+                                                        needsInboxRequeue = true;
+                                                    }
+                                                } else {
+                                                    needsInboxRequeue = true;
                                                 }
                                                 continue;
                                             }
@@ -441,7 +450,6 @@ const processWebhookInbox = async () => {
                                                 isSimulation: false,
                                                 checkLeaseValid
                                             });
-                                            await billingService.incrementMonthlyBooking(clinicId);
 
                                             stopHeartbeat();
                                             if (checkLeaseValid()) {
@@ -449,7 +457,10 @@ const processWebhookInbox = async () => {
                                                 if (!completed) {
                                                     console.warn(`⚠️ [WEBHOOK] complete retornou false para [${messageId}] (ownership perdido)`);
                                                     isLeaseActive = false;
+                                                    needsInboxRequeue = true;
                                                 }
+                                            } else {
+                                                needsInboxRequeue = true;
                                             }
                                         } else {
                                             console.log(`📩 [WEBHOOK] Mensagem com formato não suportado recebida de [${phone}]`);
@@ -463,7 +474,7 @@ const processWebhookInbox = async () => {
                                                     "Por enquanto, eu só consigo responder mensagens de texto e cliques em botões. Como posso te ajudar por texto?",
                                                     phoneNumberId
                                                 )
-                                            }).catch((e) => console.warn(`[UNSUPPORTED_FORMAT_EFFECT] Erro ao avisar formato não suportado: ${e.message}`));
+                                            });
 
                                             stopHeartbeat();
                                             if (checkLeaseValid()) {
@@ -471,12 +482,20 @@ const processWebhookInbox = async () => {
                                                 if (!completed) {
                                                     console.warn(`⚠️ [WEBHOOK] complete retornou false para [${messageId}] (ownership perdido)`);
                                                     isLeaseActive = false;
+                                                    needsInboxRequeue = true;
                                                 }
+                                            } else {
+                                                needsInboxRequeue = true;
                                             }
                                         }
                                     } catch (messageErr) {
                                         stopHeartbeat();
-                                        const isRetryable = messageErr.isRetryable || db.isRetryableTransportError(messageErr);
+                                        const isRetryable = messageErr.isRetryable || 
+                                            db.isRetryableTransportError(messageErr) ||
+                                            messageErr.code === 'WEBHOOK_LEASE_LOST' ||
+                                            messageErr.code === 'SESSION_LOCK_LOST' ||
+                                            messageErr.code === 'SESSION_LOCK_TIMEOUT' ||
+                                            messageErr.code === 'EFFECT_LEASE_LOST';
                                         if (isRetryable) {
                                             console.warn(`⏳ [WEBHOOK] Mensagem [${messageId}] falhou com erro transitório (${messageErr.message}). Deferindo...`);
                                             if (checkLeaseValid()) {
@@ -495,7 +514,10 @@ const processWebhookInbox = async () => {
                                                 if (!failed) {
                                                     console.warn(`⚠️ [WEBHOOK] fail retornou false para [${messageId}] (ownership perdido)`);
                                                     isLeaseActive = false;
+                                                    needsInboxRequeue = true;
                                                 }
+                                            } else {
+                                                needsInboxRequeue = true;
                                             }
                                         }
                                     }
@@ -638,3 +660,9 @@ app.listen(PORT, () => {
         console.warn('⚠️ [REMINDERS] Erro ao inicializar node-cron:', cronErr.message);
     }
 });
+
+app.processWebhookInbox = processWebhookInbox;
+module.exports = app;
+module.exports.processWebhookInbox = processWebhookInbox;
+module.exports.app = app;
+
