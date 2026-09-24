@@ -112,7 +112,7 @@ class WhatsAppService {
         } catch (fallbackErr) {
             logger.warn('WHATSAPP_FALLBACK', `Falha no envio de botões para ${to}. Enviando texto formatado como fallback.`);
             const formattedFallback = `${safeBodyText}\n\n` + validButtons.map((b, i) => `${i + 1}. ${b}`).join('\n');
-            return this.sendTextMessage(to, formattedFallback, phoneId, token).catch(() => {});
+            return this.sendTextMessage(to, formattedFallback, phoneId, token);
         }
     }
 
@@ -170,7 +170,7 @@ class WhatsAppService {
                     optNum++;
                 });
             });
-            return this.sendTextMessage(to, listFallback, phoneId, token).catch(() => {});
+            return this.sendTextMessage(to, listFallback, phoneId, token);
         }
     }
 

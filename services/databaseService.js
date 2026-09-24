@@ -1397,7 +1397,10 @@ function isRetryableTransportError(err) {
     if (!err) return false;
     if (err.isRetryable) return true;
     const code = err.code || err.name;
-    if (['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'AbortError'].includes(code)) {
+    // Ownership/lease loss errors are always retryable — never convert to terminal.
+    // The message should be deferred/requeued, not failed, so another worker can pick it up.
+    if (['WEBHOOK_LEASE_LOST', 'SESSION_LOCK_LOST', 'SESSION_LOCK_TIMEOUT', 'EFFECT_LEASE_LOST',
+         'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'AbortError'].includes(code)) {
         return true;
     }
     const status = err.response?.status || err.status;
@@ -1463,6 +1466,7 @@ async function executeGuardedEffect({
     if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
         const leaseLostErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou ou foi perdida. Efeito abortado antes do claim.');
         leaseLostErr.code = 'WEBHOOK_LEASE_LOST';
+        leaseLostErr.isRetryable = true;
         throw leaseLostErr;
     }
 
@@ -1509,14 +1513,75 @@ async function executeGuardedEffect({
         await effects.defer(messageId, effectType, effectKey, effectToken, 'Parent webhook lease lost before execution', 5).catch(() => {});
         const leaseLostErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou durante o claim. Efeito cancelado.');
         leaseLostErr.code = 'WEBHOOK_LEASE_LOST';
+        leaseLostErr.isRetryable = true;
         throw leaseLostErr;
     }
 
-    // 4. Executa a função do efeito
+    // 4. Executa a função do efeito COM heartbeat serializado de renovação do lease do efeito.
+    //
+    // DESIGN: A each ttlSeconds/3, we renew the effect's own lease. If renew returns false
+    // OR throws an exception, the effect ownership is uncertain/lost. We use AbortController
+    // to signal the executeFn if the transport supports AbortSignal (e.g., axios).
+    //
+    // NOTA DE DESIGN (JANELA AT-LEAST-ONCE PARA EFEITOS EXTERNOS):
+    // Se executeFn (ex: Meta WhatsApp API) retorna sucesso mas o Node.js cai antes de
+    // markExecuted, o claim expirará após ttlSeconds e uma retentativa subsequente poderá
+    // reenviar a mensagem. Isso é inerente a sistemas distribuídos sem 2PC com APIs de terceiros.
+    // O contrato é at-least-once delivery, não exactly-once.
     let result;
+    const abortController = new AbortController();
+    let effectHeartbeatTimer = null;
+    let effectHeartbeatStopped = false;
+    let isEffectLeaseValid = true;
+
+    const scheduleEffectHeartbeat = () => {
+        if (effectHeartbeatStopped) return;
+        const intervalMs = Math.floor((ttlSeconds / 3) * 1000);
+        effectHeartbeatTimer = setTimeout(async () => {
+            if (effectHeartbeatStopped) return;
+            try {
+                const renewed = await effects.renew(messageId, effectType, effectKey, effectToken, ttlSeconds);
+                if (!renewed) {
+                    // renew returned false: another worker took over
+                    logger.warn('EFFECT_HEARTBEAT', `Perda de ownership do efeito [${effectKey}] para mensagem [${messageId}]`);
+                    isEffectLeaseValid = false;
+                    effectHeartbeatStopped = true;
+                    abortController.abort();
+                    return;
+                }
+                if (!effectHeartbeatStopped) scheduleEffectHeartbeat();
+            } catch (hbErr) {
+                // Exception in renew: ownership is uncertain — fail-closed
+                logger.warn('EFFECT_HEARTBEAT', `Exceção ao renovar efeito [${effectKey}]: ${hbErr.message}. Ownership incerto, invalidando.`);
+                isEffectLeaseValid = false;
+                effectHeartbeatStopped = true;
+                abortController.abort();
+            }
+        }, intervalMs);
+    };
+
+    const stopEffectHeartbeat = () => {
+        effectHeartbeatStopped = true;
+        if (effectHeartbeatTimer) clearTimeout(effectHeartbeatTimer);
+    };
+
+    scheduleEffectHeartbeat();
+
     try {
-        result = await executeFn();
+        // Pass AbortSignal to executeFn if it accepts options (e.g., for axios signal support)
+        result = await executeFn({ signal: abortController.signal });
     } catch (execErr) {
+        stopEffectHeartbeat();
+
+        // If the abort was triggered by effect lease loss, classify as EFFECT_LEASE_LOST
+        if (!isEffectLeaseValid || abortController.signal.aborted) {
+            await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost during execution', 5).catch(() => {});
+            const lostErr = new Error(`EFFECT_LEASE_LOST: Lease do efeito [${effectKey}] perdida durante execução.`);
+            lostErr.code = 'EFFECT_LEASE_LOST';
+            lostErr.isRetryable = true;
+            throw lostErr;
+        }
+
         const isRetryable = isRetryableTransportError(execErr);
         if (isRetryable) {
             await effects.defer(messageId, effectType, effectKey, effectToken, execErr.message || 'Transient transport error', 5).catch(() => {});
@@ -1529,6 +1594,19 @@ async function executeGuardedEffect({
             await effects.fail(messageId, effectType, effectKey, effectToken, execErr.message || 'Terminal error').catch(() => {});
             throw execErr;
         }
+    }
+
+    stopEffectHeartbeat();
+
+    // Check if effect lease was lost during execution (executeFn returned but heartbeat failed)
+    if (!isEffectLeaseValid) {
+        // executeFn completed but ownership was lost — the external effect (e.g., WhatsApp message)
+        // may have been sent. We cannot undo it (at-least-once). Defer for safety.
+        await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost after execution completed', 5).catch(() => {});
+        const lostErr = new Error(`EFFECT_LEASE_LOST: Lease do efeito [${effectKey}] perdida após execução.`);
+        lostErr.code = 'EFFECT_LEASE_LOST';
+        lostErr.isRetryable = true;
+        throw lostErr;
     }
 
     // 5. Marca como executado com sucesso
