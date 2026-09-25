@@ -17,6 +17,8 @@ async function runTests() {
     await db.supabase.from('session_locks').delete().eq('clinic_id', clinicId);
     await db.supabase.from('webhook_logs').delete().neq('message_id', 'dummy');
     await db.supabase.from('message_effects').delete().neq('message_id', 'dummy');
+    await db.supabase.from('webhook_inbox').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await db.supabase.from('clinics').update({ phone_number_id: 'test_phone_id' }).eq('id', clinicId);
     await db.sessions.delete(phone, clinicId);
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -245,6 +247,7 @@ async function runTests() {
     const requeuedItem = pendingBatch2.find(i => i.id === claimedInboxItem.id);
     assert.ok(requeuedItem, 'H1.2: Item requeued com status pending é consumido novamente por claim_webhook_inbox');
     await db.webhooks.updateInboxStatus(claimedInboxItem.id, 'completed');
+    await db.supabase.from('webhook_inbox').delete().eq('id', claimedInboxItem.id);
 
     // H2: Efeito already_processing aborta webhook com defer
     console.log('Testing H2: Efeito already_processing aborta webhook com defer...');
@@ -568,7 +571,7 @@ async function runTests() {
             }]
         }]
     };
-    await db.webhooks.addToInbox(h11Payload);
+    const h11InboxItem = await db.webhooks.addToInbox(h11Payload);
 
     axios.post = async function() {
         const err = new Error('ETIMEDOUT: Connection timeout');
@@ -584,7 +587,13 @@ async function runTests() {
         assert.equal(h11Row.status, 'deferred', 'H11.3: Webhook foi diferido para retry');
     } finally {
         axios.post = originalAxiosPost;
+        if (h11InboxItem?.id) {
+            await db.supabase.from('webhook_inbox').delete().eq('id', h11InboxItem.id);
+        }
+        await db.supabase.from('webhook_logs').delete().eq('message_id', h11MsgId);
+        await db.supabase.from('message_effects').delete().eq('message_id', h11MsgId);
         await db.supabase.from('clinics').delete().eq('id', suspClinic.id);
+        await db.supabase.from('clinics').update({ phone_number_id: 'test_phone_id' }).eq('id', clinicId);
     }
 
     // H12: Heartbeat fail-closed em renew invalida ownership e bloqueia transporte WhatsApp
@@ -702,6 +711,9 @@ async function runTests() {
         }]
     };
 
+    await db.sessions.delete(h16Phone, clinicId);
+    await db.supabase.from('webhook_logs').delete().eq('message_id', h16MsgId);
+    await db.supabase.from('message_effects').delete().eq('message_id', h16MsgId);
     const h16InboxItem = await db.webhooks.addToInbox(h16Payload);
     const h16InboxId = h16InboxItem?.id;
 
@@ -768,8 +780,8 @@ async function runTests() {
         await db.supabase.from('appointments').delete().eq('patient_id', existingPatientH17.id).eq('clinic_id', clinicId);
     }
 
-    const clinicBeforeH17 = await db.clinics.findById(clinicId);
-    const countBeforeH17 = clinicBeforeH17?.monthly_booking_count || 0;
+    const countBeforeH17 = await billingService.getMonthlyBookingCount(clinicId);
+    await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH17 }).eq('id', clinicId);
 
     // 1. Appointment criado
     const appt1H17 = await calendarService.scheduleAppointment({
@@ -811,12 +823,116 @@ async function runTests() {
     const clinicAfter2 = await db.clinics.findById(clinicId);
     assert.equal(clinicAfter2.monthly_booking_count, countBeforeH17 + 1, 'H17.6: Billing permanece exatamente +1 após replay');
 
-    // Teardown
+    // Teardown H17
     await db.supabase.from('appointments').delete().eq('id', appt1H17.id);
     await db.supabase.from('message_effects').delete().eq('message_id', String(appt1H17.id));
     await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH17 }).eq('id', clinicId);
 
-    console.log('\n✅ 51/51 CENÁRIOS PASS! (A-AH + 17 Hardening Integration Scenarios)');
+    // H18: Crash/falha entre idempotency marker e incremento não perde billing
+    console.log('Testing H18: Crash entre idempotency marker e incremento não perde billing...');
+    const h18Phone = '5511955551818';
+    const h18Date = '2028-11-22';
+    const h18Time = '11:00';
+
+    const existingPatientH18 = await db.patients.findByPhone(h18Phone, clinicId);
+    if (existingPatientH18) {
+        await db.supabase.from('appointments').delete().eq('patient_id', existingPatientH18.id).eq('clinic_id', clinicId);
+    }
+
+    const countBeforeH18 = await billingService.getMonthlyBookingCount(clinicId);
+    await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH18 }).eq('id', clinicId);
+
+    // 1. Appointment criado no banco
+    const apptH18 = await calendarService.scheduleAppointment({
+        clinicId,
+        phone: h18Phone,
+        name: 'Paciente H18',
+        date: h18Date,
+        time: h18Time,
+        type: 'Consulta Geral'
+    });
+    assert.ok(apptH18 && apptH18.id, 'H18.1: Agendamento H18 criado com sucesso');
+
+    // 2. Simula crash entre a inserção do marker e o incremento:
+    // O marker é gravado em message_effects, mas clinics.monthly_booking_count permanece desatualizado (crash imediato)
+    await db.supabase.from('message_effects').insert({
+        message_id: String(apptH18.id),
+        effect_type: 'billing_booking',
+        effect_key: String(clinicId),
+        status: 'executed',
+        executed_at: new Date().toISOString()
+    });
+
+    const clinicDuringCrash = await db.clinics.findById(clinicId);
+    assert.equal(clinicDuringCrash.monthly_booking_count, countBeforeH18, 'H18.2: Simulação de crash: contador ainda não havia sido incrementado');
+
+    // 3. Sistema se recupera e reexecuta incrementMonthlyBooking para o mesmo appointment
+    // A implementação anterior ignorava por 23505 e perdia o billing; a nova deriva da verdade e sincroniza
+    await billingService.incrementMonthlyBooking(clinicId, apptH18.id);
+
+    // 4. Comprova que o faturamento da clínica reflete o agendamento criado (não foi perdido)
+    const clinicRecovered = await db.clinics.findById(clinicId);
+    assert.equal(clinicRecovered.monthly_booking_count, countBeforeH18 + 1, 'H18.3: Billing recuperado com sucesso após crash pós-marker (+1)');
+
+    // Teardown H18
+    await db.supabase.from('appointments').delete().eq('id', apptH18.id);
+    await db.supabase.from('message_effects').delete().eq('message_id', String(apptH18.id));
+    await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH18 }).eq('id', clinicId);
+
+    // H19: Dois appointments distintos concorrentes incrementam exatamente +2
+    console.log('Testing H19: Dois appointments distintos concorrentes incrementam exatamente +2...');
+    const h19Phone1 = '5511955551901';
+    const h19Phone2 = '5511955551902';
+    const h19Date = '2028-11-25';
+    const h19Time1 = '09:00';
+    const h19Time2 = '10:00';
+
+    const p1 = await db.patients.findByPhone(h19Phone1, clinicId);
+    if (p1) await db.supabase.from('appointments').delete().eq('patient_id', p1.id).eq('clinic_id', clinicId);
+    const p2 = await db.patients.findByPhone(h19Phone2, clinicId);
+    if (p2) await db.supabase.from('appointments').delete().eq('patient_id', p2.id).eq('clinic_id', clinicId);
+
+    const countBeforeH19 = await billingService.getMonthlyBookingCount(clinicId);
+    await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH19 }).eq('id', clinicId);
+
+    // 1. Criação dos dois agendamentos distintos
+    const apptH19_1 = await calendarService.scheduleAppointment({
+        clinicId,
+        phone: h19Phone1,
+        name: 'Paciente Concorrente 1',
+        date: h19Date,
+        time: h19Time1,
+        type: 'Consulta Geral'
+    });
+    const apptH19_2 = await calendarService.scheduleAppointment({
+        clinicId,
+        phone: h19Phone2,
+        name: 'Paciente Concorrente 2',
+        date: h19Date,
+        time: h19Time2,
+        type: 'Consulta Geral'
+    });
+    assert.ok(apptH19_1 && apptH19_1.id, 'H19.1: 1º agendamento concorrente criado');
+    assert.ok(apptH19_2 && apptH19_2.id, 'H19.2: 2º agendamento concorrente criado');
+
+    // 2. Disparo concorrente de billing via Promise.all
+    const [billedH19_1, billedH19_2] = await Promise.all([
+        billingService.incrementMonthlyBooking(clinicId, apptH19_1.id),
+        billingService.incrementMonthlyBooking(clinicId, apptH19_2.id)
+    ]);
+    assert.equal(billedH19_1, true, 'H19.3: 1º billing concorrente processado com sucesso');
+    assert.equal(billedH19_2, true, 'H19.4: 2º billing concorrente processado com sucesso');
+
+    // 3. Comprova que clinics.monthly_booking_count foi incrementado em EXATAMENTE +2 (zero lost update)
+    const clinicAfterH19 = await db.clinics.findById(clinicId);
+    assert.equal(clinicAfterH19.monthly_booking_count, countBeforeH19 + 2, 'H19.5: Dois appointments concorrentes incrementaram exatamente +2');
+
+    // Teardown H19
+    await db.supabase.from('appointments').delete().in('id', [apptH19_1.id, apptH19_2.id]);
+    await db.supabase.from('message_effects').delete().in('message_id', [String(apptH19_1.id), String(apptH19_2.id)]);
+    await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH19 }).eq('id', clinicId);
+
+    console.log('\n✅ 53/53 CENÁRIOS PASS! (A-AH + 19 Hardening Integration Scenarios)');
 }
 
 runTests()

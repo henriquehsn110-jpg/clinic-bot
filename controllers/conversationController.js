@@ -762,6 +762,9 @@ class ConversationController {
                             return { text: staleText, buttons: ["Agendar Consulta"], showCalendar: false, showTimeSlots: false, showProceduresList: false, requireCpf: false, procedures: null, availableSlots: null, transferToHuman: false };
                         }
 
+                        if (lockContext && typeof lockContext.assertLockValid === 'function') {
+                            lockContext.assertLockValid();
+                        }
                         await db.appointments.updateStatus(targetApptId, 'cancelled', clinicId);
                         logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${targetApptId} cancelada com sucesso via botão autorizado (nonce: ${nonce}).`);
 
@@ -1067,6 +1070,9 @@ class ConversationController {
                     confirmText = 'Esta consulta não pôde ser confirmada pois o horário agendado já passou. Deseja agendar um novo horário? 😊';
                 } else {
                     // Tenta o update atômico condicional (status = pending, deleted_at IS NULL)
+                    if (lockContext && typeof lockContext.assertLockValid === 'function') {
+                        lockContext.assertLockValid();
+                    }
                     const updatedAppt = await db.appointments.confirmPendingAppointment(chosenReminderApptId, clinicId);
                     if (!updatedAppt) {
                         // 0 rows afetadas -> recarrega estado real
@@ -1150,6 +1156,9 @@ class ConversationController {
                 );
                 if (pendingAppts.length === 1) {
                     const targetAppt = pendingAppts[0];
+                    if (lockContext && typeof lockContext.assertLockValid === 'function') {
+                        lockContext.assertLockValid();
+                    }
                     const updatedAppt = await db.appointments.confirmPendingAppointment(targetAppt.id, clinicId);
 
                     let confirmText = '';
@@ -1706,6 +1715,9 @@ class ConversationController {
             // 5. Atalhos para reagendamento, remarcação e cancelamento
             const isRescheduleIntent = (/remarcar|reagendar/i.test(sanitizedText) && !/remarcar\/cancelar/i.test(sanitizedText)) || sanitizedText.toLowerCase() === 'agendar nova consulta';
             if (isRescheduleIntent) {
+                if (lockContext && typeof lockContext.assertLockValid === 'function') {
+                    lockContext.assertLockValid();
+                }
                 logger.info('RESCHEDULE_BOOKING', `Paciente [${phone}] iniciou reagendamento de consulta.`);
                 draft.is_family_booking = false;
                 draft.dependentName = null;
@@ -2067,6 +2079,9 @@ class ConversationController {
 
                 if (draft.date && draft.time && draft.type) {
                     try {
+                        if (lockContext && typeof lockContext.assertLockValid === 'function') {
+                            lockContext.assertLockValid();
+                        }
                         const newAppt = await calendarService.scheduleAppointment({
                             clinicId,
                             phone,
@@ -2092,8 +2107,10 @@ class ConversationController {
 
                         // Quota de billing SaaS: incremento idempotente derivado da consulta recém-criada
                         if (newAppt && newAppt.id && newAppt.id !== draft.confirmed_appointment_id) {
+                            if (lockContext && typeof lockContext.assertLockValid === 'function') {
+                                lockContext.assertLockValid();
+                            }
                             await billingService.incrementMonthlyBooking(clinicId, newAppt.id).catch(() => {});
-                        
                         }
 
                         // Construção da mensagem de sucesso exclusivamente a partir do registro persistido (P0)
