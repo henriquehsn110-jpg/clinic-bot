@@ -943,20 +943,31 @@ const sessionLocks = {
         // 2. Heartbeat e monitoramento de Ownership
         let lockLostSignal = false;
         let heartbeatTimer = null;
+        let heartbeatStopped = false;
+
+        const stopHeartbeat = () => {
+            heartbeatStopped = true;
+            if (heartbeatTimer) clearTimeout(heartbeatTimer);
+        };
         
         const heartbeatFn = async () => {
-            if (lockLostSignal) return;
+            if (lockLostSignal || heartbeatStopped) return;
             try {
                 const renewed = await this.renew(phone, clinicId, activeLockId, ttlSeconds);
                 if (!renewed) {
                     lockLostSignal = true;
+                    stopHeartbeat();
                     logger.warn('SESSION_LOCK_LOST', `Perda de ownership detectada (phone: ${phone})`);
                 } else {
-                    heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+                    if (!heartbeatStopped) {
+                        heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+                    }
                 }
             } catch (err) {
-                logger.error('SESSION_LOCK_RENEW_ERROR', err.message);
-                heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+                // FAIL-CLOSED: exception in renew invalidates lock immediately and stops heartbeat
+                lockLostSignal = true;
+                stopHeartbeat();
+                logger.error('SESSION_LOCK_RENEW_ERROR', `Falha ao renovar session lock (phone: ${phone}): ${err.message}. Fail-closed ativado.`);
             }
         };
         
@@ -969,6 +980,7 @@ const sessionLocks = {
                 if (lockLostSignal) {
                     const err = new Error('SESSION_LOCK_LOST: O worker atual perdeu a posse do lock.');
                     err.code = 'SESSION_LOCK_LOST';
+                    err.isRetryable = true;
                     throw err;
                 }
             }
@@ -978,7 +990,7 @@ const sessionLocks = {
             // 3. Executar o core action (handleIncomingMessageUnlocked)
             return await actionFn(lockContext);
         } finally {
-            clearTimeout(heartbeatTimer);
+            stopHeartbeat();
             if (!lockLostSignal) {
                 await this.release(phone, clinicId, activeLockId).catch(() => {});
             }
@@ -1207,8 +1219,9 @@ const webhooks = {
         return true; // Primeira vez
     },
     async addToInbox(payload) {
-        const { error } = await supabase.from('webhook_inbox').insert({ payload });
+        const { data, error } = await supabase.from('webhook_inbox').insert({ payload }).select().single();
         if (error) throw new Error(`Falha ao inserir no webhook_inbox: ${error.message}`);
+        return data;
     },
     async fetchPending(limit = 10) {
         try {
@@ -1575,7 +1588,10 @@ async function executeGuardedEffect({
 
         // If the abort was triggered by effect lease loss, classify as EFFECT_LEASE_LOST
         if (!isEffectLeaseValid || abortController.signal.aborted) {
-            await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost during execution', 5).catch(() => {});
+            const deferred = await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost during execution', 5).catch(() => false);
+            if (deferred === false) {
+                logger.warn('EFFECT_DEFER_LOST', `effects.defer retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+            }
             const lostErr = new Error(`EFFECT_LEASE_LOST: Lease do efeito [${effectKey}] perdida durante execução.`);
             lostErr.code = 'EFFECT_LEASE_LOST';
             lostErr.isRetryable = true;
@@ -1584,14 +1600,25 @@ async function executeGuardedEffect({
 
         const isRetryable = isRetryableTransportError(execErr);
         if (isRetryable) {
-            await effects.defer(messageId, effectType, effectKey, effectToken, execErr.message || 'Transient transport error', 5).catch(() => {});
+            const deferred = await effects.defer(messageId, effectType, effectKey, effectToken, execErr.message || 'Transient transport error', 5).catch(() => false);
+            if (deferred === false) {
+                logger.warn('EFFECT_DEFER_LOST', `effects.defer retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+            }
             const retryErr = new Error(`EFFECT_TRANSPORT_ERROR: ${execErr.message}`);
             retryErr.code = 'EFFECT_TRANSPORT_ERROR';
             retryErr.isRetryable = true;
             retryErr.originalError = execErr;
             throw retryErr;
         } else {
-            await effects.fail(messageId, effectType, effectKey, effectToken, execErr.message || 'Terminal error').catch(() => {});
+            const failed = await effects.fail(messageId, effectType, effectKey, effectToken, execErr.message || 'Terminal error').catch(() => false);
+            if (failed === false) {
+                logger.warn('EFFECT_FAIL_LOST', `effects.fail retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+                const leaseLostErr = new Error(`EFFECT_LEASE_LOST: Ownership perdido ao registrar falha terminal do efeito [${effectKey}].`);
+                leaseLostErr.code = 'EFFECT_LEASE_LOST';
+                leaseLostErr.isRetryable = true;
+                leaseLostErr.originalError = execErr;
+                throw leaseLostErr;
+            }
             throw execErr;
         }
     }
@@ -1602,7 +1629,10 @@ async function executeGuardedEffect({
     if (!isEffectLeaseValid) {
         // executeFn completed but ownership was lost — the external effect (e.g., WhatsApp message)
         // may have been sent. We cannot undo it (at-least-once). Defer for safety.
-        await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost after execution completed', 5).catch(() => {});
+        const deferred = await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost after execution completed', 5).catch(() => false);
+        if (deferred === false) {
+            logger.warn('EFFECT_DEFER_LOST', `effects.defer retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+        }
         const lostErr = new Error(`EFFECT_LEASE_LOST: Lease do efeito [${effectKey}] perdida após execução.`);
         lostErr.code = 'EFFECT_LEASE_LOST';
         lostErr.isRetryable = true;
@@ -1612,10 +1642,14 @@ async function executeGuardedEffect({
     // 5. Marca como executado com sucesso
     const marked = await effects.markExecuted(messageId, effectType, effectKey, effectToken);
     if (!marked) {
-        logger.warn('EFFECT_LEASE_LOST', `Lease do efeito [${effectKey}] para mensagem [${messageId}] expirou antes de ser concluído.`);
+        logger.warn('EFFECT_LEASE_LOST', `Lease do efeito [${effectKey}] para mensagem [${messageId}] expirou ou foi perdida antes da confirmação final.`);
+        const leaseLostErr = new Error(`EFFECT_LEASE_LOST: Falha ao marcar efeito [${effectKey}] como executado (ownership expirou ou foi perdido).`);
+        leaseLostErr.code = 'EFFECT_LEASE_LOST';
+        leaseLostErr.isRetryable = true;
+        throw leaseLostErr;
     }
 
-    return { status: 'EXECUTED', result, marked };
+    return { status: 'EXECUTED', result, marked: true };
 }
 
 // ── Export ─────────────────────────────────────────────────────────────────────

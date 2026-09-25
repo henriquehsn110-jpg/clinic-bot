@@ -600,12 +600,40 @@ class ConversationController {
         let buttonId = typeof phoneOrObj === 'object' ? (phoneOrObj.buttonId || null) : null;
         let buttonTitle = typeof phoneOrObj === 'object' ? (phoneOrObj.buttonTitle || null) : null;
         let messageId = typeof phoneOrObj === 'object' ? (phoneOrObj.messageId || null) : null;
-let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseValid : null;
+        let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseValid : null;
 
-        // Helper para envio de WhatsApp com deduplicação semântica, ledger durável e validação de lease (V19)
+        // Helper para envio de WhatsApp com deduplicação semântica, ledger durável e validação de DUAS posses (V19)
         const sendGuarded = async (effectKey, sendFn, payload = null) => {
+            // Validação estrita de DUAS posses obrigatórias antes de qualquer side effect (V19):
+            // 1. Session lock
+            if (lockContext) {
+                if (typeof lockContext.isLockValid === 'function' && !lockContext.isLockValid()) {
+                    const lockErr = new Error('SESSION_LOCK_LOST: Posse do lock de sessão foi perdida antes de disparar efeito.');
+                    lockErr.code = 'SESSION_LOCK_LOST';
+                    lockErr.isRetryable = true;
+                    throw lockErr;
+                }
+                if (typeof lockContext.assertLockValid === 'function') {
+                    lockContext.assertLockValid();
+                }
+            }
+
+            // 2. Webhook processing lease
+            if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
+                const leaseErr = new Error('WEBHOOK_LEASE_LOST: Posse do processamento do webhook foi perdida antes de disparar efeito.');
+                leaseErr.code = 'WEBHOOK_LEASE_LOST';
+                leaseErr.isRetryable = true;
+                throw leaseErr;
+            }
+
+            const combinedCheckLeaseValid = () => {
+                if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) return false;
+                if (lockContext && typeof lockContext.isLockValid === 'function' && !lockContext.isLockValid()) return false;
+                return true;
+            };
+
             if (!messageId) {
-                return await sendFn();
+                return await sendFn({ signal: null });
             }
             return await db.executeGuardedEffect({
                 messageId,
@@ -614,7 +642,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 payload,
                 ttlSeconds: 30,
                 maxRetries: 3,
-                checkLeaseValid,
+                checkLeaseValid: combinedCheckLeaseValid,
                 executeFn: sendFn
             });
         };
@@ -678,7 +706,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     const responseText = `Sua mensagem foi encaminhada para a nossa recepção e em breve um atendente irá responder! 😊\n\nSe preferir voltar ao atendimento automático com a ${personaName}, basta clicar no botão abaixo:`;
                     const btnLabel = buildAiReturnButtonLabel(personaName);
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:handoff_return_ai', () => whatsappService.sendButtonMessage(phone, responseText, [btnLabel], phoneId, clinicToken));
+                        await sendGuarded('whatsapp:handoff_return_ai', ({ signal }) => whatsappService.sendButtonMessage(phone, responseText, [btnLabel], phoneId, clinicToken, { signal }));
                     }
                     return {
                         text: responseText,
@@ -751,7 +779,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                    await sendGuarded('whatsapp:cancel_success', () => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:cancel_success', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -773,7 +801,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                    await sendGuarded('whatsapp:keep_appointment', () => whatsappService.sendTextMessage(phone, keepText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:keep_appointment', ({ signal }) => whatsappService.sendTextMessage(phone, keepText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -807,7 +835,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                    await sendGuarded('whatsapp:cancel_interactive_required', () => whatsappService.sendButtonMessage(phone, warnText, confirmButtons, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:cancel_interactive_required', ({ signal }) => whatsappService.sendButtonMessage(phone, warnText, confirmButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -847,7 +875,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await sendGuarded('whatsapp:handoff_requested', () => whatsappService.sendTextMessage(phone, "Com certeza! Estou transferindo seu atendimento para a nossa recepção. Em breve um atendente irá responder você! 😊", phoneId, clinicToken));
+                    await sendGuarded('whatsapp:handoff_requested', ({ signal }) => whatsappService.sendTextMessage(phone, "Com certeza! Estou transferindo seu atendimento para a nossa recepção. Em breve um atendente irá responder você! 😊", phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -871,7 +899,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await persistHumanHandoff(phone, patient, history, sanitizedText, 'Protocolo de Urgência Operacional (Sintomas Críticos)', clinicId, lockContext);
 
                 if (!isSimulation) {
-                    await sendGuarded('whatsapp:urgency_handoff', () => whatsappService.sendTextMessage(phone, urgencyText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:urgency_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, urgencyText, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -895,7 +923,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
 
                 if (!isSimulation) {
-                    await sendGuarded('whatsapp:profanity_handoff', () => whatsappService.sendTextMessage(phone, handoffMsg, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:profanity_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, handoffMsg, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -926,7 +954,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await persistHumanHandoff(phone, patient, history, sanitizedText, 'Agente Guardião Anti-Looping: Impasse/Frustração detectada no chat', clinicId, lockContext);
 
                 if (!isSimulation) {
-                    await sendGuarded('whatsapp:frustration_handoff', () => whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:frustration_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -971,7 +999,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                    await sendGuarded('whatsapp:active_appointments_cta', () => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:active_appointments_cta', ({ signal }) => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1072,7 +1100,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                        await sendGuarded('whatsapp:reminder_confirm_specific', () => whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:reminder_confirm_specific', ({ signal }) => whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1156,7 +1184,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:reminder_confirm_single', () => whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:reminder_confirm_single', ({ signal }) => whatsappService.sendTextMessage(phone, confirmText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1179,7 +1207,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await persistHumanHandoff(phone, patient, history, sanitizedText, 'Desambiguação de lembretes: mais de 10 consultas pendentes', clinicId, lockContext);
 
                         if (!isSimulation) {
-                        await sendGuarded('whatsapp:reminder_overflow_handoff', () => whatsappService.sendTextMessage(phone, overflowText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:reminder_overflow_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, overflowText, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -1214,7 +1242,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         }));
 
                         if (!isSimulation) {
-                            await sendGuarded('whatsapp:reminder_disambiguate_buttons', () => whatsappService.sendButtonMessage(phone, disambiguateText, disambiguateButtons, phoneId, clinicToken));
+                            await sendGuarded('whatsapp:reminder_disambiguate_buttons', ({ signal }) => whatsappService.sendButtonMessage(phone, disambiguateText, disambiguateButtons, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -1247,7 +1275,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         }];
 
                         if (!isSimulation) {
-                            await sendGuarded('whatsapp:reminder_disambiguate_list', () => whatsappService.sendListMessage(phone, disambiguateText, "Ver Consultas", sections, "Confirmação de Presença", phoneId, clinicToken));
+                            await sendGuarded('whatsapp:reminder_disambiguate_list', ({ signal }) => whatsappService.sendListMessage(phone, disambiguateText, "Ver Consultas", sections, "Confirmação de Presença", phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -1282,7 +1310,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:reminder_already_confirmed', () => whatsappService.sendTextMessage(phone, alreadyText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:reminder_already_confirmed', ({ signal }) => whatsappService.sendTextMessage(phone, alreadyText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1307,7 +1335,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                        await sendGuarded('whatsapp:reminder_no_appointments', () => whatsappService.sendButtonMessage(phone, noApptText, noApptButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:reminder_no_appointments', ({ signal }) => whatsappService.sendButtonMessage(phone, noApptText, noApptButtons, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1360,7 +1388,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                        await sendGuarded('whatsapp:welcome', () => whatsappService.sendButtonMessage(phone, welcomeText, welcomeButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:welcome', ({ signal }) => whatsappService.sendButtonMessage(phone, welcomeText, welcomeButtons, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1425,7 +1453,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                        await sendGuarded('whatsapp:schedule_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:schedule_procedures', ({ signal }) => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1464,7 +1492,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:family_existing_dependents', () => whatsappService.sendButtonMessage(phone, promptText, depButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:family_existing_dependents', ({ signal }) => whatsappService.sendButtonMessage(phone, promptText, depButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1488,7 +1516,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                        await sendGuarded('whatsapp:family_ask_dependent_name', () => whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:family_ask_dependent_name', ({ signal }) => whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1524,7 +1552,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
 
                     if (!isSimulation) {
                         const sections = [{ title: "Tratamentos", rows: PROCEDURES_RICH }];
-                        await sendGuarded('whatsapp:family_dependent_procedures', () => whatsappService.sendListMessage(phone, selectProcText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:family_dependent_procedures', ({ signal }) => whatsappService.sendListMessage(phone, selectProcText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1545,7 +1573,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:family_ask_another_name', () => whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:family_ask_another_name', ({ signal }) => whatsappService.sendTextMessage(phone, familyText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1577,7 +1605,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                        await sendGuarded('whatsapp:alter_appointment_options', () => whatsappService.sendButtonMessage(phone, alterText, alterButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:alter_appointment_options', ({ signal }) => whatsappService.sendButtonMessage(phone, alterText, alterButtons, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1636,7 +1664,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                        await sendGuarded('whatsapp:alter_specialty_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:alter_specialty_procedures', ({ signal }) => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1706,7 +1734,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         title: "Tratamentos",
                         rows: PROCEDURES_RICH
                     }];
-                        await sendGuarded('whatsapp:reschedule_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:reschedule_procedures', ({ signal }) => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1748,7 +1776,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                        await sendGuarded('whatsapp:reschedule_cancel_options', () => whatsappService.sendButtonMessage(phone, rcText, rcButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:reschedule_cancel_options', ({ signal }) => whatsappService.sendButtonMessage(phone, rcText, rcButtons, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1811,7 +1839,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:cancel_no_appointments', () => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:cancel_no_appointments', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1848,7 +1876,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:cancel_single_confirm', () => whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:cancel_single_confirm', ({ signal }) => whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1910,7 +1938,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:cancel_chosen_confirm', () => whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:cancel_chosen_confirm', ({ signal }) => whatsappService.sendButtonMessage(phone, confirmCancelText, confirmButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1942,7 +1970,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                        await sendGuarded('whatsapp:cancel_select_options', () => whatsappService.sendButtonMessage(phone, selectText, selectButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:cancel_select_options', ({ signal }) => whatsappService.sendButtonMessage(phone, selectText, selectButtons, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -1966,7 +1994,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:confirm_no_draft', () => whatsappService.sendButtonMessage(phone, noDraftText, noDraftButtons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:confirm_no_draft', ({ signal }) => whatsappService.sendButtonMessage(phone, noDraftText, noDraftButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -1996,7 +2024,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:confirm_ask_name', () => whatsappService.sendTextMessage(phone, askNameText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:confirm_ask_name', ({ signal }) => whatsappService.sendTextMessage(phone, askNameText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -2021,7 +2049,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                        await sendGuarded('whatsapp:confirm_ask_cpf', () => whatsappService.sendTextMessage(phone, askCpfText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:confirm_ask_cpf', ({ signal }) => whatsappService.sendTextMessage(phone, askCpfText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -2102,7 +2130,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, [], draft);
 
                         if (!isSimulation) {
-                        await sendGuarded('whatsapp:booking_confirmed_cta', () => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:booking_confirmed_cta', ({ signal }) => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2175,7 +2203,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                        await sendGuarded('whatsapp:booking_replay_cta', () => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:booking_replay_cta', ({ signal }) => whatsappService.sendCtaUrlMessage(phone, confirmText, 'Adicionar à Agenda', calUrl, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2204,7 +2232,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                             title: "Tratamentos",
                             rows: PROCEDURES_RICH
                         }];
-                        await sendGuarded('whatsapp:booking_corrupt_draft_procedures', () => whatsappService.sendListMessage(phone, errText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:booking_corrupt_draft_procedures', ({ signal }) => whatsappService.sendListMessage(phone, errText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -2355,7 +2383,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                            await sendGuarded('whatsapp:gate1_resume_personal', () => whatsappService.sendButtonMessage(phone, resumeText, resumeButtons, phoneId, clinicToken));
+                            await sendGuarded('whatsapp:gate1_resume_personal', ({ signal }) => whatsappService.sendButtonMessage(phone, resumeText, resumeButtons, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2383,7 +2411,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                            await sendGuarded('whatsapp:gate1_cancel_family', () => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken));
+                            await sendGuarded('whatsapp:gate1_cancel_family', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -2432,7 +2460,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                                    await sendGuarded('whatsapp:gate1_ask_dependent_name', () => whatsappService.sendButtonMessage(phone, askDependentNameText, escapeButtons, phoneId, clinicToken));
+                                    await sendGuarded('whatsapp:gate1_ask_dependent_name', ({ signal }) => whatsappService.sendButtonMessage(phone, askDependentNameText, escapeButtons, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2466,7 +2494,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                     if (!isSimulation) {
-                            await sendGuarded('whatsapp:gate2_cancel_family', () => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken));
+                            await sendGuarded('whatsapp:gate2_cancel_family', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -2517,7 +2545,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                                     title: "Tratamentos",
                                     rows: PROCEDURES_RICH
                                 }];
-                                        await sendGuarded('whatsapp:gate2_minor_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                                        await sendGuarded('whatsapp:gate2_minor_procedures', ({ signal }) => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                             }
 
                             return {
@@ -2545,7 +2573,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                                        await sendGuarded('whatsapp:gate2_ask_guardian_cpf', () => whatsappService.sendButtonMessage(phone, askGuardianCpfText, escapeButtons, phoneId, clinicToken));
+                                        await sendGuarded('whatsapp:gate2_ask_guardian_cpf', ({ signal }) => whatsappService.sendButtonMessage(phone, askGuardianCpfText, escapeButtons, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2583,7 +2611,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                             await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                             if (!isSimulation) {
-                                        await sendGuarded('whatsapp:gate2_reject_titular_cpf', () => whatsappService.sendButtonMessage(phone, rejectTitularCpfText, escapeButtons, phoneId, clinicToken));
+                                        await sendGuarded('whatsapp:gate2_reject_titular_cpf', ({ signal }) => whatsappService.sendButtonMessage(phone, rejectTitularCpfText, escapeButtons, phoneId, clinicToken, { signal }));
                             }
 
                             return {
@@ -2619,7 +2647,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                                 title: "Tratamentos",
                                 rows: PROCEDURES_RICH
                             }];
-                                            await sendGuarded('whatsapp:gate2_dependent_procedures', () => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                                            await sendGuarded('whatsapp:gate2_dependent_procedures', ({ signal }) => whatsappService.sendListMessage(phone, procText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2670,7 +2698,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                                        await sendGuarded('whatsapp:gate2_ask_dependent_cpf', () => whatsappService.sendButtonMessage(phone, askDependentCpfText, escapeButtons, phoneId, clinicToken));
+                                        await sendGuarded('whatsapp:gate2_ask_dependent_cpf', ({ signal }) => whatsappService.sendButtonMessage(phone, askDependentCpfText, escapeButtons, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2838,7 +2866,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                         if (!isSimulation) {
-                        await sendGuarded('whatsapp:ask_titular_name_retry', () => whatsappService.sendTextMessage(phone, nameErrText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:ask_titular_name_retry', ({ signal }) => whatsappService.sendTextMessage(phone, nameErrText, phoneId, clinicToken, { signal }));
                         }
 
                         return {
@@ -2958,7 +2986,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
 
                     const handoffText = "Para a sua comodidade e segurança, estou transferindo seu atendimento para a nossa equipe humana confirmar seus dados.";
                     if (!isSimulation) {
-                    await sendGuarded('whatsapp:cpf_max_retries_handoff', () => whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:cpf_max_retries_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, handoffText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -2983,7 +3011,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
 
                 if (!isSimulation) {
-                    await sendGuarded('whatsapp:cpf_invalid_format_retry', () => whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:cpf_invalid_format_retry', ({ signal }) => whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken, { signal }));
                 }
 
                 return {
@@ -3019,7 +3047,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
 
                             const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                             if (!isSimulation) {
-                    await sendGuarded('whatsapp:lgpd_cpf_conflict_handoff', () => whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:lgpd_cpf_conflict_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken, { signal }));
                             }
 
                             return {
@@ -3056,7 +3084,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         await persistHumanHandoff(phone, patient, history, sanitizedText, '', clinicId, lockContext);
                         const blockText = "Identificamos que este CPF já está cadastrado com outro número de telefone. Por motivos de segurança (LGPD), estou transferindo seu atendimento para a nossa equipe.";
                         if (!isSimulation) {
-                    await sendGuarded('whatsapp:lgpd_duplicate_cpf_handoff', () => whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:lgpd_duplicate_cpf_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, blockText, phoneId, clinicToken, { signal }));
                         }
                         return {
                             text:            blockText,
@@ -3078,7 +3106,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
 
                     const failText = "Estamos com uma instabilidade técnica temporária. Vou te transferir para um de nossos atendentes continuar seu atendimento.";
                     if (!isSimulation) {
-                    await sendGuarded('whatsapp:cpf_technical_error_handoff', () => whatsappService.sendTextMessage(phone, failText, phoneId, clinicToken));
+                    await sendGuarded('whatsapp:cpf_technical_error_handoff', ({ signal }) => whatsappService.sendTextMessage(phone, failText, phoneId, clinicToken, { signal }));
                     }
 
                     return {
@@ -3394,7 +3422,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                             title: "Tratamentos",
                             rows: PROCEDURES_RICH
                         }];
-                        await sendGuarded('whatsapp:fsm_procedures_list', () => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:fsm_procedures_list', ({ signal }) => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                     } else if (aiResponse.showDoctorList) {
                         if (draft.available_doctors && draft.available_doctors.length > 0) {
                             const docRows = draft.available_doctors.map(d => ({
@@ -3411,10 +3439,10 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                                 title: "Profissionais",
                                 rows: docRows
                             }];
-                            await sendGuarded('whatsapp:fsm_doctor_list', () => whatsappService.sendListMessage(phone, responseText, "Ver Médicos", sections, "Especialistas", phoneId, clinicToken));
+                            await sendGuarded('whatsapp:fsm_doctor_list', ({ signal }) => whatsappService.sendListMessage(phone, responseText, "Ver Médicos", sections, "Especialistas", phoneId, clinicToken, { signal }));
                         } else {
                             // Fallback caso dê erro e a lista esteja vazia
-                            await sendGuarded('whatsapp:fsm_doctor_list_empty', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken));
+                            await sendGuarded('whatsapp:fsm_doctor_list_empty', ({ signal }) => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken, { signal }));
                         }
                     } else if (aiResponse.showCalendar) {
                         const rows = [];
@@ -3482,7 +3510,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                             title: "Datas Disponíveis",
                             rows
                         }];
-                        await sendGuarded('whatsapp:fsm_calendar', () => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:fsm_calendar', ({ signal }) => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                     } else if (aiResponse.showTimeSlots) {
                         if (availableSlots && availableSlots.length > 0) {
                             // Limita a 4 opções por período para sobrar espaço para o botão "Outros horários..."
@@ -3513,14 +3541,14 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                                 });
                             }
 
-                            await sendGuarded('whatsapp:fsm_time_slots', () => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken));
+                            await sendGuarded('whatsapp:fsm_time_slots', ({ signal }) => whatsappService.sendListMessage(phone, responseText, "Ver Opções", sections, clinicListTitle, phoneId, clinicToken, { signal }));
                         } else {
-                            await sendGuarded('whatsapp:fsm_no_time_slots', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken));
+                            await sendGuarded('whatsapp:fsm_no_time_slots', ({ signal }) => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken, { signal }));
                         }
                     } else if (aiResponse.buttons?.length > 0) {
-                        await sendGuarded('whatsapp:fsm_buttons', () => whatsappService.sendButtonMessage(phone, responseText, aiResponse.buttons, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:fsm_buttons', ({ signal }) => whatsappService.sendButtonMessage(phone, responseText, aiResponse.buttons, phoneId, clinicToken, { signal }));
                     } else {
-                        await sendGuarded('whatsapp:fsm_text_only', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken));
+                        await sendGuarded('whatsapp:fsm_text_only', ({ signal }) => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken, { signal }));
                     }
                 } catch (sendError) {
                     logger.error('WHATSAPP_SEND', `Falha ao enviar mensagem via WhatsApp API: ${sendError.message}`, sendError.stack);
@@ -3528,7 +3556,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
                         throw sendError;
                     }
                     responseText = 'Desculpe, estou com dificuldades técnicas. Retorno em breve.';
-                    await sendGuarded('whatsapp:fsm_send_error', () => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken)).catch(() => {});
+                    await sendGuarded('whatsapp:fsm_send_error', ({ signal }) => whatsappService.sendTextMessage(phone, responseText, phoneId, clinicToken, { signal })).catch(() => {});
                 }
             }
 
@@ -3584,7 +3612,7 @@ let checkLeaseValid = typeof phoneOrObj === 'object' ? phoneOrObj.checkLeaseVali
             }
             const errText = 'Desculpe, ocorreu um erro interno.';
             if (!isSimulation) {
-                await sendGuarded('whatsapp:error_fallback', () => whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken)).catch(() => {});
+                await sendGuarded('whatsapp:error_fallback', ({ signal }) => whatsappService.sendTextMessage(phone, errText, phoneId, clinicToken, { signal })).catch(() => {});
             }
             return {
                 text:            errText,

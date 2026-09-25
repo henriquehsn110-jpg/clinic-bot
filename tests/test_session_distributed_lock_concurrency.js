@@ -401,7 +401,7 @@ async function runTests() {
     const directCalls = [];
     controllerLines.forEach((line, idx) => {
         if (line.includes('whatsappService.') && !line.includes("require('../services/whatsappService')")) {
-            if (!line.includes('() => whatsappService.')) {
+            if (!line.includes('() => whatsappService.') && !line.includes('({ signal }) => whatsappService.') && !line.includes('({signal}) => whatsappService.')) {
                 directCalls.push({ line: idx + 1, content: line.trim() });
             }
         }
@@ -440,7 +440,8 @@ async function runTests() {
 
     // Limpa estado anterior
     await db.sessions.delete(h8Phone, clinicId);
-    await db.webhooks.addToInbox(h8Payload);
+    const h8InboxItem = await db.webhooks.addToInbox(h8Payload);
+    const h8InboxId = h8InboxItem?.id;
 
     // 1ª execução: Intercepta o driver de transporte (axios.post) para simular falha de rede (Regra 26)
     let simulateFail = true;
@@ -464,9 +465,9 @@ async function runTests() {
         assert.ok(whRow1, 'H8.1: Registro de webhook criado');
         assert.equal(whRow1.status, 'deferred', 'H8.2: 1ª execução falha transitória resulta em status deferred');
 
-        const inboxItems1 = await db.supabase.from('webhook_inbox').select('status').order('created_at', { ascending: false }).limit(5).then(r => r.data || []);
-        const h8Inbox = inboxItems1.find(i => i.status === 'pending');
-        assert.ok(h8Inbox, 'H8.3: Item do inbox permanece como pending para reprocessamento');
+        const inboxRow1 = await db.supabase.from('webhook_inbox').select('status').eq('id', h8InboxId).single().then(r => r.data);
+        assert.ok(inboxRow1, 'H8.3: Registro no inbox encontrado');
+        assert.equal(inboxRow1.status, 'pending', 'H8.3: Item do inbox permanece como pending para reprocessamento');
 
         // 2ª execução: axios.post agora terá sucesso (simulateFail = false)
         simulateFail = false;
@@ -482,8 +483,17 @@ async function runTests() {
 
         const effectRow = await db.supabase.from('message_effects').select('status').eq('message_id', h8MsgId).eq('status', 'executed').maybeSingle().then(r => r.data);
         assert.ok(effectRow && effectRow.status === 'executed', 'H8.5: Efeito da mensagem foi marcado como executed');
+
+        const inboxRow2 = await db.supabase.from('webhook_inbox').select('status').eq('id', h8InboxId).single().then(r => r.data);
+        assert.ok(inboxRow2, 'H8.6: Registro de inbox encontrado após 2º processamento');
+        assert.equal(inboxRow2.status, 'completed', 'H8.7: webhook_inbox.status === completed após segundo processamento');
     } finally {
         axios.post = originalAxiosPost;
+        if (h8InboxId) {
+            await db.supabase.from('webhook_inbox').delete().eq('id', h8InboxId);
+        }
+        await db.supabase.from('webhook_logs').delete().eq('message_id', h8MsgId);
+        await db.supabase.from('message_effects').delete().eq('message_id', h8MsgId);
     }
 
     // H9: Webhook lease perdido = zero chamadas externas
@@ -577,19 +587,58 @@ async function runTests() {
         await db.supabase.from('clinics').delete().eq('id', suspClinic.id);
     }
 
-    // H12: Heartbeat fail-closed em renew invalida ownership
-    console.log('Testing H12: Heartbeat fail-closed: exceção em renew invalida lease...');
-    let h12LeaseActive = true;
-    let h12Stopped = false;
-    const mockRenewException = async () => { throw new Error('Database connection reset'); };
+    // H12: Heartbeat fail-closed em renew invalida ownership e bloqueia transporte WhatsApp
+    console.log('Testing H12: Heartbeat fail-closed em renew invalida ownership e bloqueia transporte...');
+    const h12Phone = '5511977771212';
+    const originalSessionRenew = db.sessionLocks.renew;
+    let h12AxiosCalls = 0;
+    axios.post = async function() {
+        h12AxiosCalls++;
+        return { status: 200, data: {} };
+    };
+
     try {
-        await mockRenewException();
-    } catch (err) {
-        h12LeaseActive = false;
-        h12Stopped = true;
+        let caughtLockErr = null;
+
+        await db.sessionLocks.withSessionLock(h12Phone, clinicId, async (lockContext) => {
+            assert.equal(lockContext.isLockValid(), true, 'H12.1: Lock inicialmente válido');
+
+            // Mock renew para lançar exceção simulando falha de rede/banco
+            db.sessionLocks.renew = async () => {
+                throw new Error('Database connection drop during session lock renew');
+            };
+
+            // Aguarda o heartbeat executar (ttlSeconds=5 -> intervalo ~1666ms)
+            await new Promise(r => setTimeout(r, 2000));
+
+            assert.equal(lockContext.isLockValid(), false, 'H12.2: isLockValid fica false após exceção no heartbeat');
+
+            assert.throws(() => {
+                lockContext.assertLockValid();
+            }, (err) => {
+                return err && err.code === 'SESSION_LOCK_LOST';
+            }, 'H12.3: assertLockValid passa a lançar SESSION_LOCK_LOST');
+
+            // Tentativa de executar envio no controller com lock perdido
+            try {
+                await conversationController.handleIncomingMessageUnlocked({
+                    phone: h12Phone,
+                    text: 'tentativa com lock perdido',
+                    clinicId,
+                    phoneNumberId: 'phone_test_h12'
+                }, null, false, clinicId, null, lockContext);
+            } catch (sendErr) {
+                caughtLockErr = sendErr;
+            }
+        }, { ttlSeconds: 5 });
+
+        assert.ok(caughtLockErr && caughtLockErr.code === 'SESSION_LOCK_LOST', 'H12.4: handleIncomingMessageUnlocked rejeita com SESSION_LOCK_LOST');
+        assert.equal(h12AxiosCalls, 0, 'H12.5: Zero chamadas ao transporte WhatsApp quando session lock está perdido');
+    } finally {
+        db.sessionLocks.renew = originalSessionRenew;
+        axios.post = originalAxiosPost;
+        await db.sessions.delete(h12Phone, clinicId);
     }
-    assert.equal(h12LeaseActive, false, 'H12.1: isLeaseActive fica false após exceção em renew');
-    assert.equal(h12Stopped, true, 'H12.2: heartbeatStopped fica true');
 
     // H13: Effect heartbeat renova lease durante execução longa
     console.log('Testing H13: Effect heartbeat renova lease durante execução longa...');
@@ -630,17 +679,84 @@ async function runTests() {
     assert.equal(db.isRetryableTransportError(h15Err1), true, 'H15.1: SESSION_LOCK_LOST é retryable');
     assert.equal(db.isRetryableTransportError(h15Err2), true, 'H15.2: SESSION_LOCK_TIMEOUT é retryable');
 
-    // H16: complete=false resulta em inbox requeue (pending)
-    console.log('Testing H16: complete=false resulta em inbox requeue (pending)...');
-    let h16Complete = false;
-    let h16NeedsRequeue = false;
-    if (!h16Complete) {
-        h16NeedsRequeue = true;
-    }
-    assert.equal(h16NeedsRequeue, true, 'H16.1: complete=false força needsInboxRequeue=true');
+    // H16: markExecuted=false lança EFFECT_LEASE_LOST, não completa webhook e reenfileira inbox
+    console.log('Testing H16: markExecuted=false lança EFFECT_LEASE_LOST, webhook não completa e inbox é requeued/pending...');
+    const originalMarkExecuted = db.effects.markExecuted;
+    const h16MsgId = 'wamid_h16_' + Date.now();
+    const h16Phone = '5511966661616';
+    const h16Payload = {
+        object: 'whatsapp_business_account',
+        entry: [{
+            id: 'entry_h16_' + Date.now(),
+            changes: [{
+                value: {
+                    messaging_product: 'whatsapp',
+                    metadata: { phone_number_id: 'test_phone_id' },
+                    messages: [{
+                        id: h16MsgId,
+                        from: h16Phone,
+                        text: { body: 'olá teste h16' }
+                    }]
+                }
+            }]
+        }]
+    };
 
-    // H17: Billing de mesma consulta não duplica após replay
-    console.log('Testing H17: Billing de mesma consulta não duplica após replay...');
+    const h16InboxItem = await db.webhooks.addToInbox(h16Payload);
+    const h16InboxId = h16InboxItem?.id;
+
+    // Força markExecuted a retornar false (simulando perda de lease antes da finalização)
+    db.effects.markExecuted = async () => false;
+
+    // Intercepta axios.post para simular transporte OK
+    axios.post = async function() {
+        return { status: 200, data: { messages: [{ id: 'out_h16' }] } };
+    };
+
+    try {
+        // 1. Prova direta no wrapper executeGuardedEffect:
+        let wrapperResult = null;
+        let caughtWrapperErr = null;
+        try {
+            wrapperResult = await db.executeGuardedEffect({
+                messageId: 'direct_h16_' + Date.now(),
+                effectKey: 'whatsapp:test_h16_direct',
+                executeFn: async () => ({ ok: true })
+            });
+        } catch (err) {
+            caughtWrapperErr = err;
+        }
+
+        assert.equal(wrapperResult, null, 'H16.1: Wrapper executeGuardedEffect NÃO retorna EXECUTED quando markExecuted=false');
+        assert.ok(caughtWrapperErr && caughtWrapperErr.code === 'EFFECT_LEASE_LOST', 'H16.2: Wrapper lança EFFECT_LEASE_LOST');
+        assert.equal(caughtWrapperErr?.isRetryable, true, 'H16.3: EFFECT_LEASE_LOST possui isRetryable=true');
+
+        // 2. Prova integrada no pipeline de processWebhookInbox:
+        await processWebhookInbox();
+
+        // Webhook pai não deve virar completed (deve ser deferred)
+        const whRowH16 = await db.supabase.from('webhook_logs').select('status, error_log').eq('message_id', h16MsgId).single().then(r => r.data);
+        assert.ok(whRowH16, 'H16.4: Registro de webhook criado');
+        assert.notEqual(whRowH16.status, 'completed', 'H16.5: Webhook pai NÃO vira completed quando efeito perde lease');
+        assert.equal(whRowH16.status, 'deferred', 'H16.6: Webhook pai vira deferred');
+
+        // Inbox item deve ser reenfileirado como pending
+        const inboxRowH16 = await db.supabase.from('webhook_inbox').select('status').eq('id', h16InboxId).single().then(r => r.data);
+        assert.ok(inboxRowH16, 'H16.7: Registro de inbox encontrado');
+        assert.equal(inboxRowH16.status, 'pending', 'H16.8: Inbox é requeued/pending para reprocessamento seguro');
+    } finally {
+        db.effects.markExecuted = originalMarkExecuted;
+        axios.post = originalAxiosPost;
+        await db.sessions.delete(h16Phone, clinicId);
+        if (h16InboxId) {
+            await db.supabase.from('webhook_inbox').delete().eq('id', h16InboxId);
+        }
+        await db.supabase.from('webhook_logs').delete().eq('message_id', h16MsgId);
+        await db.supabase.from('message_effects').delete().eq('message_id', h16MsgId);
+    }
+
+    // H17: Billing de mesma consulta permanece exatamente +1 após crash e replay
+    console.log('Testing H17: Billing de mesma consulta permanece exatamente +1 após crash e replay...');
     const billingService = require('../services/billingService');
     const calendarService = require('../services/calendarService');
     const h17Phone = '5511955554444';
@@ -655,6 +771,7 @@ async function runTests() {
     const clinicBeforeH17 = await db.clinics.findById(clinicId);
     const countBeforeH17 = clinicBeforeH17?.monthly_booking_count || 0;
 
+    // 1. Appointment criado
     const appt1H17 = await calendarService.scheduleAppointment({
         clinicId,
         phone: h17Phone,
@@ -663,11 +780,19 @@ async function runTests() {
         time: h17Time,
         type: 'Consulta Geral'
     });
-    await billingService.incrementMonthlyBooking(clinicId, appt1H17.id);
+    assert.ok(appt1H17 && appt1H17.id, 'H17.1: Agendamento criado com sucesso');
+
+    // 2. Billing aplicado
+    const billed1 = await billingService.incrementMonthlyBooking(clinicId, appt1H17.id);
+    assert.equal(billed1, true, 'H17.2: 1º incremento de billing executado com sucesso');
 
     const clinicAfter1 = await db.clinics.findById(clinicId);
-    assert.equal(clinicAfter1.monthly_booking_count, countBeforeH17 + 1, 'H17.1: 1º agendamento incrementa contagem de billing em 1');
+    assert.equal(clinicAfter1.monthly_booking_count, countBeforeH17 + 1, 'H17.3: Contagem de billing incrementada em exatamente +1');
 
+    // 3. Simular crash antes da persistência da sessão (draft não contém confirmed_appointment_id)
+    await db.sessions.setDraft(h17Phone, {}, clinicId);
+
+    // 4. Replay: nova chamada de scheduleAppointment (mesmo slot/paciente) e chamada incondicional de incrementMonthlyBooking
     const appt2H17 = await calendarService.scheduleAppointment({
         clinicId,
         phone: h17Phone,
@@ -676,16 +801,19 @@ async function runTests() {
         time: h17Time,
         type: 'Consulta Geral'
     });
-    assert.equal(appt1H17.id, appt2H17.id, 'H17.2: scheduleAppointment retorna o mesmo ID (idempotência)');
+    assert.equal(appt1H17.id, appt2H17.id, 'H17.4: scheduleAppointment retorna o mesmo ID (idempotência do agendamento)');
 
-    if (appt2H17 && appt2H17.id && appt2H17.id !== appt1H17.id) {
-        await billingService.incrementMonthlyBooking(clinicId, appt2H17.id);
-    }
+    // Chamada incondicional de replay (sem guarda de if no teste!)
+    const billed2 = await billingService.incrementMonthlyBooking(clinicId, appt2H17.id);
+    assert.equal(billed2, false, 'H17.5: 2ª chamada de billing rejeitada por idempotência persistente');
 
+    // 5. Billing permanece exatamente +1
     const clinicAfter2 = await db.clinics.findById(clinicId);
-    assert.equal(clinicAfter2.monthly_booking_count, countBeforeH17 + 1, 'H17.3: Replay não duplica incremento de billing');
+    assert.equal(clinicAfter2.monthly_booking_count, countBeforeH17 + 1, 'H17.6: Billing permanece exatamente +1 após replay');
 
+    // Teardown
     await db.supabase.from('appointments').delete().eq('id', appt1H17.id);
+    await db.supabase.from('message_effects').delete().eq('message_id', String(appt1H17.id));
     await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH17 }).eq('id', clinicId);
 
     console.log('\n✅ 51/51 CENÁRIOS PASS! (A-AH + 17 Hardening Integration Scenarios)');

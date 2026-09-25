@@ -172,16 +172,48 @@ class BillingService {
         return { status: 'processed', eventType: type };
     }
 
-    async incrementMonthlyBooking(clinicId) {
-        if (!clinicId) return;
+    async incrementMonthlyBooking(clinicId, appointmentId) {
+        if (!clinicId) return false;
+        if (!appointmentId) {
+            logger.warn('BILLING_INCREMENT_NO_APPT', `incrementMonthlyBooking invocado sem appointmentId para clínica [${clinicId}]. Ignorando para garantir idempotência.`);
+            return false;
+        }
+
         try {
+            // Fonte de verdade persistente com chave única por appointment_id (Option B)
+            // message_effects possui constraint UNIQUE (message_id, effect_type, effect_key)
+            const effectKey = String(clinicId);
+            const { error } = await db.supabase
+                .from('message_effects')
+                .insert({
+                    message_id: String(appointmentId),
+                    effect_type: 'billing_booking',
+                    effect_key: effectKey,
+                    status: 'executed',
+                    executed_at: new Date().toISOString()
+                });
+
+            if (error) {
+                // Código 23505 = duplicate key violation (idempotência garantida pelo banco)
+                if (error.code === '23505') {
+                    logger.info('BILLING_ALREADY_INCREMENTED', `Agendamento [${appointmentId}] já contabilizado para faturamento da clínica [${clinicId}]. Replay ignorado com segurança.`);
+                    return false;
+                }
+                logger.error('BILLING_EFFECT_ERR', `Erro ao registrar efeito de billing para [${appointmentId}]: ${error.message}`);
+                return false;
+            }
+
+            // Apenas incrementa se o registro único do appointment_id foi inserido com sucesso
             const clinic = await db.clinics.findById(clinicId);
             if (clinic) {
                 const newCount = (clinic.monthly_booking_count || 0) + 1;
                 await db.supabase.from('clinics').update({ monthly_booking_count: newCount }).eq('id', clinicId);
+                return true;
             }
+            return false;
         } catch (err) {
             logger.error('BILLING_INCREMENT_ERR', `Erro ao incrementar cota mensal [${clinicId}]: ${err.message}`);
+            return false;
         }
     }
 }

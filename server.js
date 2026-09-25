@@ -417,10 +417,12 @@ const processWebhookInbox = async () => {
                                                     effectType: 'whatsapp_message',
                                                     effectKey: 'whatsapp:billing_suspended',
                                                     checkLeaseValid,
-                                                    executeFn: () => whatsappService.sendTextMessage(
+                                                    executeFn: ({ signal }) => whatsappService.sendTextMessage(
                                                         phone,
                                                         "Prezado paciente, o atendimento automático desta clínica está temporariamente suspenso. Por favor, entre em contato diretamente com a recepção da clínica.",
-                                                        phoneNumberId
+                                                        phoneNumberId,
+                                                        null,
+                                                        { signal }
                                                     )
                                                 });
 
@@ -469,10 +471,12 @@ const processWebhookInbox = async () => {
                                                 effectType: 'whatsapp_message',
                                                 effectKey: 'whatsapp:unsupported_format',
                                                 checkLeaseValid,
-                                                executeFn: () => whatsappService.sendTextMessage(
+                                                executeFn: ({ signal }) => whatsappService.sendTextMessage(
                                                     phone,
                                                     "Por enquanto, eu só consigo responder mensagens de texto e cliques em botões. Como posso te ajudar por texto?",
-                                                    phoneNumberId
+                                                    phoneNumberId,
+                                                    null,
+                                                    { signal }
                                                 )
                                             });
 
@@ -546,7 +550,10 @@ const processWebhookInbox = async () => {
 };
 
 // Retry loop acionado periodicamente para capturar mensagens travadas
-setInterval(processWebhookInbox, 10000);
+let inboxProcessInterval = null;
+if (process.env.NODE_ENV !== 'test' && require.main === module) {
+    inboxProcessInterval = setInterval(processWebhookInbox, 10000);
+}
 
 const handleIncomingWebhook = async (req, res) => {
     const skipVerify = process.env.SKIP_WEBHOOK_VERIFY === 'true' && process.env.NODE_ENV !== 'production';
@@ -618,6 +625,10 @@ app.listen(PORT, () => {
     console.log(`🚀 Servidor online na porta ${PORT}`);
     console.log(`[SIMULATOR] Acesse http://localhost:${PORT}/simulator/index.html`);
     console.log(`[WEBHOOK] Roteie o tráfego para http://localhost:${PORT}/api/webhook`);
+
+    if (!inboxProcessInterval && process.env.NODE_ENV !== 'test') {
+        inboxProcessInterval = setInterval(processWebhookInbox, 10000);
+    }
 
     // Ativação do Agendador de Lembretes Automáticos Multi-Nível via Cron (fuso America/Sao_Paulo)
     // Se WHATSAPP_TOKEN estiver presente, realiza o disparo real via Meta API, a menos que REMINDERS_SIMULATION=true seja explicitamente forçado
