@@ -1,5 +1,4 @@
-const path = require('path');
-require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '.env') });
+require('dotenv').config();
 const Sentry = require("@sentry/node");
 
 // Apenas termos técnicos/calendário que NÃO são nomes próprios de pessoas
