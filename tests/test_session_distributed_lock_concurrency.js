@@ -1,11 +1,12 @@
 const path = require('path');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
+process.env.NODE_ENV = 'test';
 const db = require('../services/databaseService');
 const crypto = require('crypto');
 const assert = require('node:assert/strict');
 
 async function runTests() {
-    console.log('🧪 Iniciando Testes V19: Sessões Distribuídas, Webhook Idempotency e Efeitos Externos (A-AH + H1-H17)...');
+    console.log('🧪 Iniciando Testes V19: Sessões Distribuídas, Webhook Idempotency e Efeitos Externos (A-AH + H1-H20)...');
 
     // Setup de teste
     const clinic = await db.supabase.from('clinics').select('id').eq('slug', 'clinica-modelo').single().then(r => r.data);
@@ -932,7 +933,72 @@ async function runTests() {
     await db.supabase.from('message_effects').delete().in('message_id', [String(apptH19_1.id), String(apptH19_2.id)]);
     await db.supabase.from('clinics').update({ monthly_booking_count: countBeforeH19 }).eq('id', clinicId);
 
-    console.log('\n✅ 53/53 CENÁRIOS PASS! (A-AH + 19 Hardening Integration Scenarios)');
+    // H20: Monthly Quota Rollover (cache no limite do mês anterior permite acesso com zero appointments no mês atual)
+    console.log('Testing H20: Monthly Quota Rollover...');
+    const { data: h20Clinic } = await db.supabase.from('clinics').insert({
+        name: 'Clínica Rollover Teste H20',
+        slug: 'clinica-rollover-' + Date.now(),
+        phone_number_id: 'phone_h20_' + Date.now(),
+        monthly_booking_limit: 10,
+        monthly_booking_count: 10, // Simula cache no limite do mês anterior
+        subscription_status: 'active',
+        plan_type: 'starter'
+    }).select().single();
+
+    const { data: h20Doc, error: docErr } = await db.supabase.from('doctors').insert({
+        clinic_id: h20Clinic.id,
+        name: 'Dr. Rollover H20',
+        specialties: ['Clínica Geral'],
+        is_active: true
+    }).select().single();
+    if (docErr) throw new Error(`Falha ao criar médico H20: ${docErr.message}`);
+
+    const h20Phone = '5511955552020';
+    let apptH20 = null;
+
+    try {
+        // 1. Garantir zero appointments criados no mês atual para esta clínica
+        const countBeforeH20 = await billingService.getMonthlyBookingCount(h20Clinic.id);
+        assert.equal(countBeforeH20, 0, 'H20.1: Zero appointments no mês atual');
+
+        // 2. checkClinicAccess deve retornar allowed=true e usage.count = 0
+        const accessBeforeH20 = await billingService.checkClinicAccess(h20Clinic.id);
+        assert.equal(accessBeforeH20.allowed, true, 'H20.2: checkClinicAccess retorna allowed=true mesmo com cache no limite anterior');
+        assert.equal(accessBeforeH20.usage.count, 0, 'H20.3: usage.count deve ser 0');
+
+        // 3. Criar 1 appointment no mês atual
+        apptH20 = await calendarService.scheduleAppointment({
+            clinicId: h20Clinic.id,
+            doctorId: h20Doc.id,
+            phone: h20Phone,
+            name: 'Paciente Rollover H20',
+            date: '2028-11-20',
+            time: '14:00',
+            type: 'Consulta Geral'
+        });
+        assert.ok(apptH20 && apptH20.id, 'H20.4: Agendamento H20 criado com sucesso');
+
+        // 4. Contabiliza o billing do novo appointment
+        await billingService.incrementMonthlyBooking(h20Clinic.id, apptH20.id);
+
+        // 5. usage.count deve passar para 1
+        const accessAfterH20 = await billingService.checkClinicAccess(h20Clinic.id);
+        assert.equal(accessAfterH20.allowed, true, 'H20.5: Acesso continua permitido');
+        assert.equal(accessAfterH20.usage.count, 1, 'H20.6: usage.count deve passar para 1');
+    } finally {
+        if (apptH20 && apptH20.id) {
+            await db.supabase.from('appointments').delete().eq('id', apptH20.id);
+            await db.supabase.from('message_effects').delete().eq('message_id', String(apptH20.id));
+        }
+        const existingPatientH20 = await db.patients.findByPhone(h20Phone, h20Clinic.id);
+        if (existingPatientH20) {
+            await db.supabase.from('patients').delete().eq('id', existingPatientH20.id);
+        }
+        await db.supabase.from('doctors').delete().eq('clinic_id', h20Clinic.id);
+        await db.supabase.from('clinics').delete().eq('id', h20Clinic.id);
+    }
+
+    console.log('\n✅ 54/54 CENÁRIOS PASS! (A-AH + 20 Hardening Integration Scenarios)');
 }
 
 runTests()

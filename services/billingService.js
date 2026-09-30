@@ -83,8 +83,7 @@ class BillingService {
             }
 
             const limit = clinic.monthly_booking_limit || PLANS[clinic.plan_type || 'pro']?.bookingLimit || 1000;
-            const appointmentsCount = await this.getMonthlyBookingCount(clinicId);
-            const count = Math.max(clinic.monthly_booking_count || 0, appointmentsCount);
+            const count = await this.getMonthlyBookingCount(clinicId);
 
             if (count >= limit) {
                 logger.warn('BILLING_QUOTA_EXCEEDED', `Cota de agendamentos excedida para a clínica [${clinicId}]: ${count}/${limit}`);
