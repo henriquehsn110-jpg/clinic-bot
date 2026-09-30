@@ -43,18 +43,33 @@ async function runReminderTestSuite() {
     try {
         // 1. Obter clínica de teste
         const clinics = await db.clinics.getAll();
-        clinic = clinics[0];
-        if (!clinic) throw new Error('Nenhuma clínica encontrada no banco para testes.');
-        console.log(`🏥 Clínica selecionada: ${clinic.name} (${clinic.slug})`);
+        if (!clinics || clinics.length === 0) throw new Error('Nenhuma clínica encontrada no banco para testes.');
+        
+        let selectedClinic = clinics.find(c => c.slug === 'clinica-modelo');
+        let selectedDoctorId = null;
+        if (selectedClinic) {
+            const docs = await db.doctors.findByClinic(selectedClinic.id);
+            if (docs && docs.length > 0) selectedDoctorId = docs[0].id;
+        }
+        if (!selectedDoctorId) {
+            for (const c of clinics) {
+                const docs = await db.doctors.findByClinic(c.id);
+                if (docs && docs.length > 0) {
+                    selectedClinic = c;
+                    selectedDoctorId = docs[0].id;
+                    break;
+                }
+            }
+        }
+        clinic = selectedClinic || clinics[0];
+        const testDoctorId = selectedDoctorId;
+        console.log(`🏥 Clínica selecionada: ${clinic.name} (${clinic.slug}), Médico ID: ${testDoctorId}`);
 
         // 2. Criar ou obter paciente de teste
         patient = await db.patients.findOrCreate(testPhone, clinic.id);
         patient = await db.patients.updateName(testPhone, 'Paciente Teste Lembretes', clinic.id);
         patient = await db.patients.updateCpf(testPhone, testCpf, clinic.id);
         console.log(`👤 Paciente de teste: ${patient.name} (${patient.phone})\n`);
-
-        const doctorsList = await db.doctors.findByClinic(clinic.id);
-        const testDoctorId = doctorsList && doctorsList.length > 0 ? doctorsList[0].id : null;
 
         // ================================================================
         // TESTE 1: Lembrete D-1 (1 dia antes / Véspera)
