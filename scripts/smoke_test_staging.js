@@ -18,6 +18,18 @@ if (!process.env.VERIFY_TOKEN) {
 }
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
+if (!process.env.STAGING_ADMIN_EMAIL) {
+    console.error('❌ ERRO CRÍTICO: STAGING_ADMIN_EMAIL não está definido. Forneça via .env.staging ou variável de ambiente.');
+    process.exit(1);
+}
+const STAGING_ADMIN_EMAIL = process.env.STAGING_ADMIN_EMAIL;
+
+if (!process.env.STAGING_ADMIN_PASSWORD) {
+    console.error('❌ ERRO CRÍTICO: STAGING_ADMIN_PASSWORD não está definido. Forneça via .env.staging ou variável de ambiente.');
+    process.exit(1);
+}
+const STAGING_ADMIN_PASSWORD = process.env.STAGING_ADMIN_PASSWORD;
+
 const STAGING_URL = process.env.STAGING_SERVICE_URL || 'https://clinic-bot-staging.onrender.com';
 
 function signPayload(payload, secret) {
@@ -99,7 +111,7 @@ async function runStagingSmokeTest() {
         }
     }
 
-    // ── Teste 4: Webhook Mensagem V19 (RPCs & Session Locks) ───────────
+    // ── Teste 4: Webhook Mensagem V19 (RPCs & Polling Físico no Banco) ─
     console.log('\n[Etapa 4/5] Injetando Mensagem Legítima com Assinatura HMAC Válida...');
     try {
         // Validação física de clinic e phone_number_id antes do envio
@@ -150,16 +162,65 @@ async function runStagingSmokeTest() {
             timeout: 15000
         });
 
-        if (res.status === 200) {
-            console.log(`  ✅ PASS: Webhook legítimo processado com HTTP 200.`);
-            console.log(`     Mensagem ID: ${testMsgId} enfileirada e processada via V19 claim/lock sem chamadas externas.`);
-            passed++;
-        } else {
-            console.error('  ❌ FAIL: Status inesperado ao enviar mensagem:', res.status, res.data);
-            failed++;
+        if (res.status !== 200) {
+            throw new Error(`Status HTTP inesperado na recepção do webhook: ${res.status}`);
         }
+        console.log(`  ✅ Webhook HTTP 200 recebido para [${testMsgId}].`);
+
+        // Polling físico no banco de dados Staging para verificar execução assíncrona completa
+        console.log(`  ⏳ Polling no Supabase Staging para validar conclusão assíncrona da V19 (máx 30s)...`);
+        const maxWaitMs = 30000;
+        const startTime = Date.now();
+        let logRecord = null;
+        let lastLoggedStatus = null;
+
+        while (Date.now() - startTime < maxWaitMs) {
+            await new Promise(r => setTimeout(r, 1500));
+            const { data, error } = await db.supabase
+                .from('webhook_logs')
+                .select('message_id, status, error_log, completed_at, updated_at')
+                .eq('message_id', testMsgId)
+                .maybeSingle();
+
+            if (error) {
+                console.warn(`  ⚠️ Consulta webhook_logs: ${error.message}`);
+                continue;
+            }
+
+            if (data) {
+                logRecord = data;
+                if (data.status !== lastLoggedStatus) {
+                    console.log(`     Status atual no webhook_logs: "${data.status}"`);
+                    lastLoggedStatus = data.status;
+                }
+
+                if (data.status === 'completed') {
+                    break;
+                }
+                if (['failed', 'dead_letter'].includes(data.status)) {
+                    throw new Error(`Processamento do webhook falhou com status '${data.status}'. Erro: ${data.error_log}`);
+                }
+            }
+        }
+
+        if (!logRecord || logRecord.status !== 'completed') {
+            throw new Error(`Timeout: Mensagem [${testMsgId}] não concluiu o ciclo V19 em 30s. Status final: ${logRecord?.status || 'não encontrado'}. Erro: ${logRecord?.error_log || 'nenhum'}`);
+        }
+
+        // Validação adicional em message_effects
+        const { data: effectRecord } = await db.supabase
+            .from('message_effects')
+            .select('effect_type, status, executed_at, error_log')
+            .eq('message_id', testMsgId)
+            .maybeSingle();
+
+        console.log(`  ✅ PASS: Mensagem [${testMsgId}] concluída com status '${logRecord.status}' em ${logRecord.completed_at}!`);
+        if (effectRecord) {
+            console.log(`     Efeito registrado: tipo "${effectRecord.effect_type}", status "${effectRecord.status}".`);
+        }
+        passed++;
     } catch (err) {
-        console.error('  ❌ FAIL: Erro ao injetar mensagem legítima:', err.response?.status, err.response?.data || err.message);
+        console.error('  ❌ FAIL: Erro na validação de mensagem V19:', err.message);
         failed++;
     }
 
@@ -167,12 +228,12 @@ async function runStagingSmokeTest() {
     console.log('\n[Etapa 5/5] Testando Login no Dashboard e RPC get_dashboard_data...');
     try {
         const loginRes = await axios.post(`${STAGING_URL}/api/dashboard/auth/login`, {
-            email: 'admin@clinicamodelo.com.br',
-            password: '123456'
+            email: STAGING_ADMIN_EMAIL,
+            password: STAGING_ADMIN_PASSWORD
         }, { timeout: 10000 });
 
         if (loginRes.status === 200 && loginRes.data?.token) {
-            console.log('  ✅ PASS: Autenticação no Dashboard efetuada com sucesso (JWT gerado).');
+            console.log(`  ✅ PASS: Autenticação no Dashboard efetuada com sucesso para ${STAGING_ADMIN_EMAIL} (JWT gerado).`);
             const token = loginRes.data.token;
 
             const dataRes = await axios.get(`${STAGING_URL}/api/dashboard/data`, {

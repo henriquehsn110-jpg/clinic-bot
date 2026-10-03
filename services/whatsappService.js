@@ -68,6 +68,20 @@ class WhatsAppService {
         return { phoneId: resolvedPhoneId, token: resolvedToken, options: resolvedOptions };
     }
 
+    _checkSuppressed(to, description) {
+        if (process.env.DISABLE_EXTERNAL_WHATSAPP === 'true') {
+            logger.info('WHATSAPP_SUPPRESSED', `[DISABLE_EXTERNAL_WHATSAPP=true] Envio externo suprimido para [${to}] (${description}).`);
+            return {
+                data: {
+                    messaging_product: 'whatsapp',
+                    contacts: [{ input: to, wa_id: to }],
+                    messages: [{ id: `wamid_sim_${Date.now()}` }]
+                }
+            };
+        }
+        return null;
+    }
+
     _buildRequest(phoneId, token) {
         const resolvedPhoneId = phoneId || this.defaultPhoneId;
         const resolvedToken   = token || this.defaultToken;
@@ -88,6 +102,9 @@ class WhatsAppService {
     async sendTextMessage(to, text, phoneId, token, options = {}) {
         const resolved = this._resolveOptions(phoneId, token, options);
         logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Texto): "${text}"`);
+        const suppressed = this._checkSuppressed(to, `Texto: "${text}"`);
+        if (suppressed) return suppressed;
+
         const { url, headers } = this._buildRequest(resolved.phoneId, resolved.token);
         const signal = resolved.options?.signal;
         return withRetry(async () => {
@@ -109,9 +126,12 @@ class WhatsAppService {
         const resolved = this._resolveOptions(phoneId, token, options);
         const buttonTitles = (buttons || []).map(b => typeof b === 'object' ? `${b.title} (${b.id})` : b);
         logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Botões): "${bodyText}" | Botões: [${buttonTitles.join(', ')}]`);
+        const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
+        const suppressed = this._checkSuppressed(to, `Botões: "${safeBodyText}"`);
+        if (suppressed) return suppressed;
+
         const { url, headers } = this._buildRequest(resolved.phoneId, resolved.token);
         const validButtons = (buttons || []).slice(0, 3);
-        const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
         const signal = resolved.options?.signal;
         if (validButtons.length === 0) return this.sendTextMessage(to, safeBodyText, resolved.phoneId, resolved.token, resolved.options);
 
@@ -163,6 +183,9 @@ class WhatsAppService {
     async sendListMessage(to, bodyText, buttonLabel, sections, headerText = "Clínica Modelo", phoneId, token, options = {}) {
         const resolved = this._resolveOptions(phoneId, token, options);
         logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Lista Interativa): "${bodyText}" | Botão: "${buttonLabel}"`);
+        const suppressed = this._checkSuppressed(to, `Lista: "${bodyText}"`);
+        if (suppressed) return suppressed;
+
         const { url, headers } = this._buildRequest(resolved.phoneId, resolved.token);
         const signal = resolved.options?.signal;
         const safeSections = sections.map(section => ({
@@ -221,6 +244,10 @@ class WhatsAppService {
 
     async sendTemplateMessage(to, templateName, languageCode = 'pt_BR', components = [], phoneId, token, options = {}) {
         const resolved = this._resolveOptions(phoneId, token, options);
+        logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (Template): "${templateName}"`);
+        const suppressed = this._checkSuppressed(to, `Template: "${templateName}"`);
+        if (suppressed) return suppressed;
+
         const { url, headers } = this._buildRequest(resolved.phoneId, resolved.token);
         const signal = resolved.options?.signal;
         return withRetry(async () => {
@@ -251,6 +278,10 @@ class WhatsAppService {
      */
     async sendCtaUrlMessage(to, bodyText, displayText, url, phoneId, token, options = {}) {
         const resolved = this._resolveOptions(phoneId, token, options);
+        logger.info('WHATSAPP_OUTGOING', `[Para: ${to}] Resposta enviada (CTA): "${displayText}" -> ${url}`);
+        const suppressed = this._checkSuppressed(to, `CTA: "${displayText}" -> ${url}`);
+        if (suppressed) return suppressed;
+
         const { url: apiUrl, headers } = this._buildRequest(resolved.phoneId, resolved.token);
         const safeBodyText = bodyText ? bodyText.substring(0, 1024) : '';
         const safeDisplayText = displayText ? displayText.substring(0, 20) : 'Abrir Link';
