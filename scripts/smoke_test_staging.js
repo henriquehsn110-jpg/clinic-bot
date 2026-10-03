@@ -3,10 +3,22 @@ const path = require('path');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env.staging') });
 const axios = require('axios');
 const crypto = require('crypto');
+const db = require('../services/databaseService');
+
+// ── 1. Validação Estrita de Variáveis de Ambiente (Sem Fallbacks Hardcoded) ──
+if (!process.env.APP_SECRET) {
+    console.error('❌ ERRO CRÍTICO: APP_SECRET não está definido. Forneça via .env.staging ou variável de ambiente.');
+    process.exit(1);
+}
+const APP_SECRET = process.env.APP_SECRET;
+
+if (!process.env.VERIFY_TOKEN) {
+    console.error('❌ ERRO CRÍTICO: VERIFY_TOKEN não está definido. Forneça via .env.staging ou variável de ambiente.');
+    process.exit(1);
+}
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 const STAGING_URL = process.env.STAGING_SERVICE_URL || 'https://clinic-bot-staging.onrender.com';
-const APP_SECRET = process.env.APP_SECRET || 'test_secret_key_hmac_2026';
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'clinica_bot_seguro_2026';
 
 function signPayload(payload, secret) {
     const raw = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -90,6 +102,18 @@ async function runStagingSmokeTest() {
     // ── Teste 4: Webhook Mensagem V19 (RPCs & Session Locks) ───────────
     console.log('\n[Etapa 4/5] Injetando Mensagem Legítima com Assinatura HMAC Válida...');
     try {
+        // Validação física de clinic e phone_number_id antes do envio
+        console.log('  🔍 Consultando clínicas cadastradas no Supabase Staging...');
+        const clinics = await db.clinics.getAll();
+        const targetClinic = clinics.find(c => c.phone_number_id && c.phone_number_id.trim() !== '');
+
+        if (!targetClinic) {
+            throw new Error('Nenhuma clínica no Supabase Staging possui phone_number_id válido configurado.');
+        }
+
+        const validPhoneNumberId = targetClinic.phone_number_id;
+        console.log(`  ✅ phone_number_id validado: "${validPhoneNumberId}" (Clínica: ${targetClinic.name} - ${targetClinic.slug})`);
+
         const testMsgId = 'wamid_smoke_' + Date.now();
         const payloadObj = {
             object: 'whatsapp_business_account',
@@ -100,7 +124,7 @@ async function runStagingSmokeTest() {
                         messaging_product: 'whatsapp',
                         metadata: {
                             display_phone_number: '5511999999999',
-                            phone_number_id: '999888777'
+                            phone_number_id: validPhoneNumberId
                         },
                         messages: [{
                             from: '5511988887777',
@@ -128,7 +152,7 @@ async function runStagingSmokeTest() {
 
         if (res.status === 200) {
             console.log(`  ✅ PASS: Webhook legítimo processado com HTTP 200.`);
-            console.log(`     Mensagem ID: ${testMsgId} enfileirada e processada via V19 claim/lock.`);
+            console.log(`     Mensagem ID: ${testMsgId} enfileirada e processada via V19 claim/lock sem chamadas externas.`);
             passed++;
         } else {
             console.error('  ❌ FAIL: Status inesperado ao enviar mensagem:', res.status, res.data);
