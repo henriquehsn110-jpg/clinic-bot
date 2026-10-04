@@ -1,15 +1,20 @@
 const crypto = require('crypto');
-const { exec } = require('child_process');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const db = require('../services/databaseService');
 const logger = require('../services/logger');
 
-// Secret isolado exclusivo para Admin JWT (Nunca reaproveitar secrets de tenant)
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'dev_admin_secret_key_change_in_production_32bytes';
+// Secret isolado exclusivo para Admin JWT (Nunca reaproveitar secrets de tenant).
+// Em ambientes gerenciados (staging/production), não existe fallback hardcoded.
+const IS_MANAGED_ENV = ['staging', 'production'].includes(process.env.NODE_ENV);
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || (IS_MANAGED_ENV ? null : 'dev_admin_secret_key_change_in_production_32bytes');
 
 // Helper para gerar Admin JWT assinado
 function generateAdminJWT(payload) {
+    if (!ADMIN_JWT_SECRET) {
+        throw new Error('ADMIN_JWT_SECRET ausente em ambiente gerenciado.');
+    }
+
     const data = JSON.stringify({ ...payload, role: 'system_admin', exp: Date.now() + 8 * 60 * 60 * 1000 }); // 8 horas
     const signature = crypto.createHmac('sha256', ADMIN_JWT_SECRET).update(data).digest('hex');
     return Buffer.from(data).toString('base64') + '.' + signature;
@@ -17,7 +22,7 @@ function generateAdminJWT(payload) {
 
 // Helper para verificar Admin JWT
 function verifyAdminJWT(tokenString) {
-    if (!tokenString) return null;
+    if (!ADMIN_JWT_SECRET || !tokenString) return null;
     const parts = tokenString.replace('Bearer ', '').split('.');
     if (parts.length !== 2) return null;
 
@@ -126,9 +131,15 @@ class AdminController {
                 validPassword = (passHash === adminRow.password_hash);
                 totpSecret = adminRow.totp_secret;
                 totpEnabled = adminRow.totp_enabled;
-            } else if (email === (process.env.ADMIN_EMAIL || 'admin@clinicabot.com.br')) {
-                // Fallback para admin inicial via ENV
-                const adminEnvPass = process.env.ADMIN_PASSWORD || 'Admin@123456';
+            } else if (process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL) {
+                // Fallback inicial somente quando credenciais administrativas foram explicitamente configuradas.
+                // Não existem defaults em staging/production.
+                const adminEnvPass = process.env.ADMIN_PASSWORD;
+                if (!adminEnvPass) {
+                    logger.error('ADMIN_CONFIG_MISSING', 'ADMIN_PASSWORD ausente para ADMIN_EMAIL configurado.');
+                    return res.status(503).json({ error: 'Autenticação administrativa indisponível por configuração incompleta.' });
+                }
+
                 validPassword = (password === adminEnvPass);
                 totpSecret = process.env.ADMIN_TOTP_SECRET || null;
                 totpEnabled = !!totpSecret;
@@ -337,63 +348,46 @@ class AdminController {
         }
     }
 
-    // 5. POST /admin/restart — Reiniciar Processo PM2 com Auditoria
+    // 5. POST /admin/restart — Operação delegada ao orquestrador
     async restart(req, res) {
         const adminEmail = req.adminUser.email;
         const ipAddress = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '';
 
-        try {
-            await logAdminAction(adminEmail, 'RESTART', ipAddress, 'SUCCESS', { app: 'clinic-bot-backend' });
+        await logAdminAction(adminEmail, 'RESTART_REQUEST_BLOCKED', ipAddress, 'DENIED', {
+            reason: 'managed_runtime_requires_orchestrator'
+        });
 
-            logger.warn('ADMIN_RESTART_TRIGGERED', `Reinício da aplicação solicitado por ${adminEmail} (IP: ${ipAddress})`);
+        logger.warn(
+            'ADMIN_RESTART_BLOCKED',
+            `Reinício via shell bloqueado para ${adminEmail} (IP: ${ipAddress}). Use o orquestrador Render.`
+        );
 
-            res.json({
-                success: true,
-                message: 'Comando de reinício enviado com sucesso. O processo será reiniciado em instantes.'
-            });
-
-            // Dispara PM2 restart assincronamente em 1 segundo
-            setTimeout(() => {
-                exec('pm2 restart clinic-bot-backend || node server.js', (err, stdout, stderr) => {
-                    if (err) {
-                        logger.error('PM2_RESTART_ERR', `Erro ao executar PM2 restart: ${err.message}`);
-                    }
-                });
-            }, 1000);
-        } catch (err) {
-            await logAdminAction(adminEmail, 'RESTART', ipAddress, 'FAILURE', { error: err.message });
-            return res.status(500).json({ error: 'Erro ao solicitar o reinício do sistema.' });
-        }
+        return res.status(501).json({
+            success: false,
+            code: 'ORCHESTRATOR_ACTION_REQUIRED',
+            error: 'Reinício local desabilitado neste runtime gerenciado. Use o mecanismo de deploy/restart do Render.'
+        });
     }
 
-    // 6. POST /admin/rollback — Git Checkout Release Anterior com Auditoria
+    // 6. POST /admin/rollback — Operação delegada ao orquestrador
     async rollback(req, res) {
         const adminEmail = req.adminUser.email;
         const ipAddress = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '';
-        const targetTag = req.body?.targetTag || 'HEAD~1';
 
-        try {
-            await logAdminAction(adminEmail, 'ROLLBACK', ipAddress, 'SUCCESS', { targetTag });
+        await logAdminAction(adminEmail, 'ROLLBACK_REQUEST_BLOCKED', ipAddress, 'DENIED', {
+            reason: 'managed_runtime_requires_orchestrator'
+        });
 
-            logger.warn('ADMIN_ROLLBACK_TRIGGERED', `Rollback para ${targetTag} solicitado por ${adminEmail} (IP: ${ipAddress})`);
+        logger.warn(
+            'ADMIN_ROLLBACK_BLOCKED',
+            `Rollback via git/shell bloqueado para ${adminEmail} (IP: ${ipAddress}). Use GitHub/Render.`
+        );
 
-            res.json({
-                success: true,
-                message: `Rollback para ${targetTag} iniciado com sucesso. A versão anterior está sendo restaurada.`
-            });
-
-            // Dispara checkout git e restart PM2
-            setTimeout(() => {
-                exec(`git checkout ${targetTag} && pm2 restart clinic-bot-backend`, (err, stdout, stderr) => {
-                    if (err) {
-                        logger.error('GIT_ROLLBACK_ERR', `Erro ao executar Rollback: ${err.message}`);
-                    }
-                });
-            }, 1000);
-        } catch (err) {
-            await logAdminAction(adminEmail, 'ROLLBACK', ipAddress, 'FAILURE', { error: err.message });
-            return res.status(500).json({ error: 'Erro ao executar a reversão de versão.' });
-        }
+        return res.status(501).json({
+            success: false,
+            code: 'ORCHESTRATOR_ACTION_REQUIRED',
+            error: 'Rollback local desabilitado neste runtime gerenciado. Promova/reverta versões pelo GitHub e Render.'
+        });
     }
 
     // 7. GET /admin/audit-log — Lista de Ações de Auditoria Administrativa
