@@ -5,9 +5,8 @@ const db = require('../services/databaseService');
 const logger = require('../services/logger');
 
 // Secret isolado exclusivo para Admin JWT (Nunca reaproveitar secrets de tenant).
-// Em ambientes gerenciados (staging/production), não existe fallback hardcoded.
-const IS_MANAGED_ENV = ['staging', 'production'].includes(process.env.NODE_ENV);
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || (IS_MANAGED_ENV ? null : 'dev_admin_secret_key_change_in_production_32bytes');
+// Fail-closed em todos os ambientes: sem secret explícito, autenticação admin protegida fica indisponível.
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || null;
 
 // Helper para gerar Admin JWT assinado
 function generateAdminJWT(payload) {
