@@ -231,7 +231,9 @@ async function runStagingSmokeTest() {
         }
 
         // 2 & 3. Exigir pelo menos o efeito esperado (effect_type = 'whatsapp_message') com status 'executed'
-        const executedWhatsAppEffects = effects.filter(e => e.effect_type === 'whatsapp_message' && e.status === 'executed');
+        const executedWhatsAppEffects = effects.filter(
+            e => e.effect_type === 'whatsapp_message' && e.status === 'executed' && e.executed_at
+        );
         if (executedWhatsAppEffects.length === 0) {
             const currentEffects = effects.map(e => `[tipo=${e.effect_type}, status=${e.status}]`).join(', ');
             throw new Error(`Efeito obrigatório de WhatsApp não foi executado com sucesso. Efeitos encontrados: ${currentEffects}`);
