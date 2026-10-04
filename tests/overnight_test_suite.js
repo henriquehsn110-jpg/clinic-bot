@@ -3,10 +3,9 @@
  * Testa isolamento de segurança, endpoints Express, dashboard frontend, sanitização XSS,
  * criptografia LGPD, timezone America/Sao_Paulo e webhook Meta.
  */
-
-require('dotenv').config();
-const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
+const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 const db = require('../services/databaseService');
@@ -46,7 +45,8 @@ async function ensureServerRunning() {
     serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
         cwd: path.join(__dirname, '..'),
         stdio: 'ignore',
-        shell: true
+        shell: true,
+        env: process.env
     });
 
     for (let i = 0; i < 60; i++) {
@@ -318,7 +318,7 @@ async function runTestSuite() {
     for (const suite of extraSuites) {
         try {
             console.log(`\n--- Executando: ${suite.name} ---`);
-            const out = execSync(suite.cmd, { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+            const out = execSync(suite.cmd, { cwd: path.join(__dirname, '..'), encoding: 'utf8', env: process.env });
             console.log(out.trim());
             assert(true, `Suíte ${suite.name} executada com 100% de sucesso!`);
         } catch (e) {

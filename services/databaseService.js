@@ -114,13 +114,17 @@ async function withRetry(operation, retries = 3, delay = 200) {
             if (
                 error.code === '23505' ||
                 error.code === 'SLOT_OCCUPIED' ||
+                error.code === 'SESSION_LOCK_LOST' ||
+                error.code === 'SESSION_LOCK_TIMEOUT' ||
                 error.code === '23503' || // foreign key violation
                 error.code === '23502' || // not null violation
                 (error.message && (
                     error.message.includes('23505') ||
                     error.message.includes('duplicate key') ||
                     error.message.includes('violates unique constraint') ||
-                    error.message.includes('SLOT_OCCUPIED')
+                    error.message.includes('SLOT_OCCUPIED') ||
+                    error.message.includes('SESSION_LOCK_LOST') ||
+                    error.message.includes('SESSION_LOCK_TIMEOUT')
                 ))
             ) {
                 throw error;
@@ -867,20 +871,139 @@ const doctors = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SESSIONS
-// Substitui o Map em memória. Mesma interface — o controller não precisa mudar.
+// SESSION LOCKS (V19)
 // ═══════════════════════════════════════════════════════════════════════════════
-// Configuração de TTL de sessão: Padrão de 24 horas (1440 min) para permitir que pacientes
-// que demorem a responder durante o dia concluam seu agendamento sem reinício de conversa.
+const sessionLocks = {
+    async acquire(phone, clinicId, lockId, ttlSeconds = 30) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em sessionLocks.acquire');
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('acquire_session_lock', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`sessionLocks.acquire: ${error.message}`);
+            return data === true;
+        });
+    },
+
+    async renew(phone, clinicId, lockId, ttlSeconds = 30) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em sessionLocks.renew');
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('renew_session_lock', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`sessionLocks.renew: ${error.message}`);
+            return data === true;
+        });
+    },
+
+    async release(phone, clinicId, lockId) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em sessionLocks.release');
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('release_session_lock', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId
+            });
+            if (error) throw new Error(`sessionLocks.release: ${error.message}`);
+            return data === true;
+        });
+    },
+
+    async withSessionLock(phone, clinicId, actionFn, { lockId, ttlSeconds = 30, maxWaitMs = 15000 } = {}) {
+        const crypto = require('crypto');
+        const activeLockId = lockId || crypto.randomUUID();
+        const startTime = Date.now();
+        let acquired = false;
+        
+        let delay = 150; // base backoff
+        
+        // 1. Adquirir lock (com backoff + jitter)
+        while (Date.now() - startTime < maxWaitMs) {
+            acquired = await this.acquire(phone, clinicId, activeLockId, ttlSeconds);
+            if (acquired) break;
+            
+            const jitter = Math.floor(Math.random() * 100) - 50; // ±50ms
+            const waitTime = Math.min(delay, 800) + jitter;
+            await new Promise(r => setTimeout(r, waitTime > 0 ? waitTime : 100));
+            delay *= 1.5;
+        }
+
+        if (!acquired) {
+            const err = new Error('SESSION_LOCK_TIMEOUT: Não foi possível adquirir o lock para o telefone ' + phone);
+            err.code = 'SESSION_LOCK_TIMEOUT';
+            throw err;
+        }
+
+        // 2. Heartbeat e monitoramento de Ownership
+        let lockLostSignal = false;
+        let heartbeatTimer = null;
+        let heartbeatStopped = false;
+
+        const stopHeartbeat = () => {
+            heartbeatStopped = true;
+            if (heartbeatTimer) clearTimeout(heartbeatTimer);
+        };
+        
+        const heartbeatFn = async () => {
+            if (lockLostSignal || heartbeatStopped) return;
+            try {
+                const renewed = await this.renew(phone, clinicId, activeLockId, ttlSeconds);
+                if (!renewed) {
+                    lockLostSignal = true;
+                    stopHeartbeat();
+                    logger.warn('SESSION_LOCK_LOST', `Perda de ownership detectada (phone: ${phone})`);
+                } else {
+                    if (!heartbeatStopped) {
+                        heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+                    }
+                }
+            } catch (err) {
+                // FAIL-CLOSED: exception in renew invalidates lock immediately and stops heartbeat
+                lockLostSignal = true;
+                stopHeartbeat();
+                logger.error('SESSION_LOCK_RENEW_ERROR', `Falha ao renovar session lock (phone: ${phone}): ${err.message}. Fail-closed ativado.`);
+            }
+        };
+        
+        heartbeatTimer = setTimeout(heartbeatFn, (ttlSeconds * 1000) / 3);
+
+        const lockContext = {
+            lockId: activeLockId,
+            isLockValid: () => !lockLostSignal,
+            assertLockValid: () => {
+                if (lockLostSignal) {
+                    const err = new Error('SESSION_LOCK_LOST: O worker atual perdeu a posse do lock.');
+                    err.code = 'SESSION_LOCK_LOST';
+                    err.isRetryable = true;
+                    throw err;
+                }
+            }
+        };
+
+        try {
+            // 3. Executar o core action (handleIncomingMessageUnlocked)
+            return await actionFn(lockContext);
+        } finally {
+            stopHeartbeat();
+            if (!lockLostSignal) {
+                await this.release(phone, clinicId, activeLockId).catch(() => {});
+            }
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SESSIONS (V19 - Atômico)
+// ═══════════════════════════════════════════════════════════════════════════════
 const SESSION_TTL_MINUTES = parseInt(process.env.SESSION_TTL_MINUTES) || 1440;
 
-// KNOWN LIMITATION: FSM session writes assume serialized processing per phone/clinic.
-// As sessões persistem histórico e draft no Supabase assumindo processamento sequencial por número de telefone.
 const sessions = {
-
-    /**
-     * Retorna o histórico da sessão ou [] se expirada/inexistente.
-     */
     async get(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.get');
         const data = await withRetry(async () => {
@@ -889,91 +1012,19 @@ const sessions = {
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
                 .maybeSingle();
-
             if (error) throw new Error(`sessions.get: ${error.message}`);
             return data;
         });
 
-        // Log de Debug (exibido apenas em ambiente de desenvolvimento)
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`🔍 [SESSION_DEBUG] get(${phone}, ${clinicId}) => found: ${!!data}, histLen: ${data?.history?.length || 0}`);
-        }
-
         if (!data) return [];
-
-        // Verifica TTL manualmente (o cron limpa, mas aqui garantimos consistência)
         const diffMs = Date.now() - new Date(data.last_activity).getTime();
         if (diffMs > SESSION_TTL_MINUTES * 60 * 1000) {
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`🔍 [SESSION_DEBUG] TTL expirado (${Math.round(diffMs/60000)} min). Deletando sessão.`);
-            }
-            await sessions.delete(phone, clinicId);
+            await this.delete(phone, clinicId);
             return [];
         }
-
         return data.history || [];
     },
 
-    /**
-     * Salva ou atualiza o histórico e renova o last_activity.
-     */
-    async set(phone, history, clinicId) {
-        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.set');
-        return withRetry(async () => {
-            const last_activity = new Date().toISOString();
-            
-            // 1. Tenta atualizar a sessão existente
-            const { data, error: updateErr } = await supabase
-                .from('sessions')
-                .update({ history, last_activity, deleted_at: null })
-                .eq('phone', phone)
-                .eq('clinic_id', clinicId)
-                .select()
-                .maybeSingle();
-
-            if (updateErr) {
-                console.error(`🔍 [SESSION_DEBUG] set UPDATE error: ${updateErr.message}`);
-                throw new Error(`sessions.set (update): ${updateErr.message}`);
-            }
-
-            // 2. Se a sessão já existia e foi atualizada, retorna
-            if (data) {
-                if (process.env.NODE_ENV !== 'production') {
-                    console.log(`🔍 [SESSION_DEBUG] set(${phone}) => UPDATE OK, histLen: ${history.length}`);
-                }
-                return data;
-            }
-
-            // 3. Se não existia, insere uma nova sessão
-            const { data: insertData, error: insertErr } = await supabase
-                .from('sessions')
-                .insert({ phone, clinic_id: clinicId, history, last_activity })
-                .select('id')
-                .single();
-
-            if (insertErr) {
-                console.error(`🔍 [SESSION_DEBUG] set INSERT error: code=${insertErr.code} msg=${insertErr.message}`);
-                // Se houve conflito de concorrência (23505), tenta update de novo
-                if (insertErr.code === '23505') {
-                    const { error: retryErr } = await supabase
-                        .from('sessions')
-                        .update({ history, last_activity, deleted_at: null })
-                        .eq('phone', phone)
-                        .eq('clinic_id', clinicId);
-                    if (!retryErr) return;
-                }
-                throw new Error(`sessions.set (insert): ${insertErr.message}`);
-            }
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`🔍 [SESSION_DEBUG] set(${phone}) => INSERT OK, id: ${insertData?.id}, histLen: ${history.length}`);
-            }
-        });
-    },
-
-    /**
-     * Retorna o rascunho de agendamento estruturado associado à sessão.
-     * Descriptografa automaticamente campos sensíveis (como cpf e dependentCpf).
-     */
     async getDraft(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.getDraft');
         return withRetry(async () => {
@@ -982,57 +1033,54 @@ const sessions = {
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId)
                 .maybeSingle();
-
             if (error) throw new Error(`sessions.getDraft: ${error.message}`);
             return (data && data.draft) ? decryptDraftFields(data.draft) : {};
         });
     },
 
-    /**
-     * Atualiza o rascunho de forma atômica no Supabase.
-     * Criptografa automaticamente campos sensíveis (como cpf e dependentCpf) via AES-256-GCM.
-     */
-    async setDraft(phone, draftPatch, clinicId) {
-        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.setDraft');
+    async persistStateIfOwned(phone, clinicId, lockId, history, draftPatch) {
+        if (!clinicId || !phone || !lockId) throw new Error('clinicId, phone e lockId são obrigatórios em persistStateIfOwned');
         return withRetry(async () => {
-            if (draftPatch === null) {
-                // Se null, reseta o rascunho via update direto
-                const { error } = await supabase
-                    .from('sessions')
-                    .update({ draft: null, last_activity: new Date().toISOString() })
-                    .eq('phone', phone)
-                    .eq('clinic_id', clinicId);
-                if (error) throw new Error(`sessions.setDraft (reset): ${error.message}`);
-                return;
+            let encryptedDraft = null;
+            if (draftPatch !== null) {
+                encryptedDraft = encryptDraftFields(draftPatch);
             }
 
-            const encryptedDraft = encryptDraftFields(draftPatch);
+            const { data, error } = await supabase.rpc('persist_session_state_if_lock_owned', {
+                p_clinic_id: clinicId,
+                p_phone: phone,
+                p_lock_id: lockId,
+                p_history: history || [],
+                p_draft: encryptedDraft
+            });
 
-            const { data: existing } = await supabase
-                .from('sessions')
-                .select('id')
-                .eq('phone', phone)
-                .eq('clinic_id', clinicId)
-                .maybeSingle();
-
-            if (!existing) {
-                const { error: insErr } = await supabase
-                    .from('sessions')
-                    .insert({ phone, clinic_id: clinicId, history: [], draft: encryptedDraft, last_activity: new Date().toISOString() });
-                if (insErr) throw new Error(`sessions.setDraft (insert new): ${insErr.message}`);
-            } else {
-                const { error } = await supabase
-                    .from('sessions')
-                    .update({ draft: encryptedDraft, last_activity: new Date().toISOString() })
-                    .eq('id', existing.id);
-                if (error) throw new Error(`sessions.setDraft (update): ${error.message}`);
+            if (error) throw new Error(`persistStateIfOwned: ${error.message}`);
+            
+            if (data === false) {
+                const err = new Error('SESSION_LOCK_LOST: Falha ao persistir pois o ownership foi perdido.');
+                err.code = 'SESSION_LOCK_LOST';
+                throw err;
             }
+            return true;
         });
     },
 
-    /**
-     * Remove a sessão (logout / nova conversa forçada).
-     */
+    async set(phone, history, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.set');
+        return sessionLocks.withSessionLock(phone, clinicId, async ({ lockId }) => {
+            const currentDraft = await sessions.getDraft(phone, clinicId);
+            return sessions.persistStateIfOwned(phone, clinicId, lockId, history, currentDraft);
+        });
+    },
+
+    async setDraft(phone, draftPatch, clinicId) {
+        if (!clinicId) throw new Error('clinicId é obrigatório em sessions.setDraft');
+        return sessionLocks.withSessionLock(phone, clinicId, async ({ lockId }) => {
+            const currentHistory = await sessions.get(phone, clinicId);
+            return sessions.persistStateIfOwned(phone, clinicId, lockId, currentHistory, draftPatch);
+        });
+    },
+
     async delete(phone, clinicId) {
         if (!clinicId) throw new Error('clinicId é obrigatório em sessions.delete');
         return withRetry(async () => {
@@ -1041,7 +1089,6 @@ const sessions = {
                 .delete()
                 .eq('phone', phone)
                 .eq('clinic_id', clinicId);
-
             if (error) throw new Error(`sessions.delete: ${error.message}`);
         });
     }
@@ -1049,8 +1096,6 @@ const sessions = {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONVERSATIONS
-// Log auditável de cada mensagem. Usado para análise e relatórios futuros.
-// ═══════════════════════════════════════════════════════════════════════════════
 const conversations = {
 
     /**
@@ -1093,14 +1138,73 @@ const conversations = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WEBHOOKS
-// Controle de idempotência de Webhook logs para evitar duplicações
+// WEBHOOKS (V19)
 // ═══════════════════════════════════════════════════════════════════════════════
 const webhooks = {
-    /**
-     * Tenta processar o ID (Idempotência - C12)
-     * Agora lança exceção em caso de falha de infraestrutura para forçar 500 HTTP.
-     */
+    async claim(messageId, clinicId, phone, processingToken, maxRetries = 3, ttlSeconds = 30) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('claim_webhook_message', {
+                p_message_id: messageId,
+                p_clinic_id: clinicId,
+                p_phone: phone || null,
+                p_processing_token: processingToken,
+                p_max_retries: maxRetries,
+                p_processing_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`webhooks.claim: ${error.message}`);
+            return data; // { status: 'CLAIMED' | 'ALREADY_COMPLETED' | 'ALREADY_FAILED' | ... }
+        });
+    },
+    
+    async renew(messageId, processingToken, ttlSeconds = 30) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('renew_webhook_claim', {
+                p_message_id: messageId,
+                p_processing_token: processingToken,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`webhooks.renew: ${error.message}`);
+            return data; // boolean
+        });
+    },
+
+    async complete(messageId, processingToken) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('complete_webhook_message', {
+                p_message_id: messageId,
+                p_processing_token: processingToken
+            });
+            if (error) throw new Error(`webhooks.complete: ${error.message}`);
+            return data;
+        });
+    },
+
+    async defer(messageId, processingToken, errorLog, backoffSeconds = 5) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('defer_webhook_message', {
+                p_message_id: messageId,
+                p_processing_token: processingToken,
+                p_error_log: errorLog,
+                p_backoff_seconds: backoffSeconds
+            });
+            if (error) throw new Error(`webhooks.defer: ${error.message}`);
+            return data;
+        });
+    },
+
+    async fail(messageId, processingToken, errorLog) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('fail_webhook_message', {
+                p_message_id: messageId,
+                p_processing_token: processingToken,
+                p_error_log: errorLog
+            });
+            if (error) throw new Error(`webhooks.fail: ${error.message}`);
+            return data;
+        });
+    },
+    
+    // Antigo / Idempotência legada e compatibilidade
     async attemptProcessing(messageId) {
         const { error } = await supabase
             .from('webhook_logs')
@@ -1114,76 +1218,106 @@ const webhooks = {
         }
         return true; // Primeira vez
     },
-
-    /**
-     * Salva payload bruto no Inbox Durável (C7)
-     */
     async addToInbox(payload) {
-        const { error } = await supabase
-            .from('webhook_inbox')
-            .insert({ payload });
-        
-        if (error) {
-            throw new Error(`Falha ao inserir no webhook_inbox: ${error.message}`);
-        }
+        const { data, error } = await supabase.from('webhook_inbox').insert({ payload }).select().single();
+        if (error) throw new Error(`Falha ao inserir no webhook_inbox: ${error.message}`);
+        return data;
     },
-
-    /**
-     * Busca os próximos itens pendentes na fila (C7) de forma atômica
-     */
     async fetchPending(limit = 10) {
         try {
             const { data, error } = await supabase.rpc('claim_webhook_inbox', { p_limit: limit });
-            if (error) {
-                logger.error('DATABASE', `Falha ao tentar usar atomic claim_webhook_inbox (Erro Supabase): ${error.message}`);
-                return [];
-            }
+            if (error) return [];
             return data || [];
         } catch (err) {
-            logger.error('DATABASE', `Falha de rede ao tentar usar atomic claim_webhook_inbox (Exception): ${err.message}`);
             return [];
         }
     },
-
-    /**
-     * Atualiza o status de um item no Inbox (C7)
-     */
     async updateInboxStatus(id, status, errorLog = null) {
         const payload = { status };
-        if (status === 'completed' || status === 'failed') {
-            payload.processed_at = new Date().toISOString();
-        }
-        if (errorLog) {
-            payload.error_log = errorLog;
-        }
-
-        const { error } = await supabase
-            .from('webhook_inbox')
-            .update(payload)
-            .eq('id', id);
-            
-        if (error) {
-            logger.error('DATABASE_WEBHOOKS', `Falha ao atualizar status do inbox ${id}: ${error.message}`);
-        }
+        if (status === 'completed' || status === 'failed') payload.processed_at = new Date().toISOString();
+        if (errorLog) payload.error_log = errorLog;
+        await supabase.from('webhook_inbox').update(payload).eq('id', id);
     },
-
-    /**
-     * Persiste o status de entrega de mensagens (Status da Meta)
-     */
     async logMessageStatus(messageId, recipientId, status, timestampStr) {
         let ts = timestampStr ? new Date(parseInt(timestampStr) * 1000).toISOString() : new Date().toISOString();
-        const { error } = await supabase
-            .from('message_statuses')
-            .insert({
-                message_id: messageId,
-                recipient_id: recipientId,
-                status: status,
-                timestamp: ts
+        await supabase.from('message_statuses').insert({ message_id: messageId, recipient_id: recipientId, status: status, timestamp: ts }).catch(()=>{});
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EFFECTS (V19)
+// ═══════════════════════════════════════════════════════════════════════════════
+const effects = {
+    async claim(messageId, effectType, effectKey, effectToken, ttlSeconds = 30, maxRetries = 3, payload = null) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('claim_message_effect', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_ttl_seconds: ttlSeconds,
+                p_max_retries: maxRetries,
+                p_payload: payload
             });
-        
-        if (error) {
-            logger.warn('DATABASE_WEBHOOKS', `Erro ao registrar status da mensagem [${messageId}]: ${error.message}`);
-        }
+            if (error) throw new Error(`effects.claim: ${error.message}`);
+            return data;
+        });
+    },
+
+    async renew(messageId, effectType, effectKey, effectToken, ttlSeconds = 30) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('renew_message_effect_claim', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error) throw new Error(`effects.renew: ${error.message}`);
+            return data;
+        });
+    },
+
+    async markExecuted(messageId, effectType, effectKey, effectToken) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('mark_effect_executed', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken
+            });
+            if (error) throw new Error(`effects.markExecuted: ${error.message}`);
+            return data;
+        });
+    },
+
+    async defer(messageId, effectType, effectKey, effectToken, errorLog, backoffSeconds = 5) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('defer_effect', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_error_log: errorLog,
+                p_backoff_seconds: backoffSeconds
+            });
+            if (error) throw new Error(`effects.defer: ${error.message}`);
+            return data;
+        });
+    },
+
+    async fail(messageId, effectType, effectKey, effectToken, errorLog) {
+        return withRetry(async () => {
+            const { data, error } = await supabase.rpc('fail_effect', {
+                p_message_id: messageId,
+                p_effect_type: effectType,
+                p_effect_key: effectKey || '',
+                p_effect_token: effectToken,
+                p_error_log: errorLog
+            });
+            if (error) throw new Error(`effects.fail: ${error.message}`);
+            return data;
+        });
     }
 };
 
@@ -1240,5 +1374,302 @@ function parseClinicSettings(cData) {
     return settings;
 }
 
+// ── Sanitização e Resiliência de Efeitos (V19) ──────────────────────────────
+/**
+ * Sanitiza o payload do efeito removendo dados pessoais sensíveis (PII/PHI)
+ * antes de persistir em message_effects.
+ */
+function sanitizeEffectPayload(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    try {
+        const copy = JSON.parse(JSON.stringify(payload));
+        const sanitizeVal = (val) => {
+            if (typeof val === 'string') {
+                return val
+                    .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, m => `${m.slice(0, 3)}.***.***-${m.slice(11)}`)
+                    .replace(/\b(?<!\d)\d{11}(?!\d)\b/g, m => `${m.slice(0, 3)}******${m.slice(9)}`);
+            }
+            if (typeof val === 'object' && val !== null) {
+                for (const k of Object.keys(val)) {
+                    val[k] = sanitizeVal(val[k]);
+                }
+            }
+            return val;
+        };
+        return sanitizeVal(copy);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Identifica se um erro de transporte/API externa é transitório (retryable)
+ * ou se é um erro terminal de negócio/formatação.
+ */
+function isRetryableTransportError(err) {
+    if (!err) return false;
+    if (err.isRetryable) return true;
+    const code = err.code || err.name;
+    // Ownership/lease loss errors are always retryable — never convert to terminal.
+    // The message should be deferred/requeued, not failed, so another worker can pick it up.
+    if (['WEBHOOK_LEASE_LOST', 'SESSION_LOCK_LOST', 'SESSION_LOCK_TIMEOUT', 'EFFECT_LEASE_LOST',
+         'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'AbortError'].includes(code)) {
+        return true;
+    }
+    const status = err.response?.status || err.status;
+    if (status === 429 || (typeof status === 'number' && status >= 500 && status < 600)) {
+        return true;
+    }
+    const msg = String(err.message || '').toLowerCase();
+    if (msg.includes('timeout') || msg.includes('network') || msg.includes('econnreset') || msg.includes('rate limit')) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Executa um efeito externo com garantia de deduplicação semântica e tolerância a falhas (V19).
+ *
+ * PROTOCOLO DE CONCORRÊNCIA E IDEMPOTÊNCIA:
+ * 1. Verifica se a lease do webhook pai ainda é válida (checkLeaseValid). Se perdida, aborta imediatamente.
+ * 2. Faz o claim na tabela message_effects usando uma chave semântica estável (ex: 'whatsapp:welcome', 'whatsapp:ask_cpf').
+ *    - Se ALREADY_EXECUTED: efeito já foi concretizado com sucesso; retorna como sucesso seguro (safe skip) sem reenviar.
+ *    - Se ALREADY_PROCESSING ou RETRY_NOT_READY: outro worker está executando ou em backoff; lança erro retryable para adiar o webhook.
+ *    - Se ALREADY_FAILED ou DEAD_LETTER: erro terminal registrado; não reexecuta.
+ *    - Se CLAIMED: obtém o token de lease do efeito.
+ * 3. Sanitiza o payload (remove PII/PHI como CPF desmascarado) antes de registrar no banco.
+ * 4. Executa a função do efeito (executeFn).
+ * 5. Se sucesso: chama markExecuted(messageId, effectType, effectKey, effectToken).
+ * 6. Se falha:
+ *    - Se transitório (rede/timeout/429/5xx): chama defer(messageId, effectType, effectKey, effectToken, err.message, backoffSeconds)
+ *      e lança erro com isRetryable = true para que o webhook pai também dê defer.
+ *    - Se terminal (4xx cliente, payload inválido, etc.): chama fail(messageId, effectType, effectKey, effectToken, err.message)
+ *      e lança o erro.
+ *
+ * NOTA DE DESIGN (JANELA AT-LEAST-ONCE):
+ * Caso o side effect externo (ex: Meta WhatsApp API) tenha sucesso, mas o processo Node.js caia
+ * ou a conexão com o Supabase falhe antes de markExecuted ser concluído, o claim expirará após ttlSeconds.
+ * Uma retentativa subsequente poderá reenviar a mensagem. Esta janela de at-least-once é inerente a sistemas
+ * distribuídos sem 2PC (Two-Phase Commit) com APIs de terceiros.
+ */
+async function executeGuardedEffect({
+    messageId,
+    effectType = 'whatsapp_message',
+    effectKey,
+    payload = null,
+    ttlSeconds = 30,
+    maxRetries = 3,
+    checkLeaseValid = null,
+    executeFn
+}) {
+    if (!executeFn || typeof executeFn !== 'function') {
+        throw new Error('executeGuardedEffect: executeFn é obrigatório');
+    }
+
+    // Se não há messageId (ex: simulação/testes CLI sem webhook), executa diretamente
+    if (!messageId) {
+        return await executeFn();
+    }
+
+    if (!effectKey) {
+        throw new Error('executeGuardedEffect: effectKey semântica é obrigatória quando messageId é fornecido');
+    }
+
+    // 1. Checagem prévia de ownership da lease do webhook pai (se fornecida)
+    if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
+        const leaseLostErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou ou foi perdida. Efeito abortado antes do claim.');
+        leaseLostErr.code = 'WEBHOOK_LEASE_LOST';
+        leaseLostErr.isRetryable = true;
+        throw leaseLostErr;
+    }
+
+    const sanitizedPayload = sanitizeEffectPayload(payload);
+    const effectToken = crypto.randomUUID();
+
+    // 2. Claim do efeito
+    const claimResult = await effects.claim(
+        messageId,
+        effectType,
+        effectKey,
+        effectToken,
+        ttlSeconds,
+        maxRetries,
+        sanitizedPayload
+    );
+
+    const claimStatus = claimResult?.status;
+
+    if (claimStatus === 'ALREADY_EXECUTED') {
+        return { status: 'ALREADY_EXECUTED', skipped: true };
+    }
+
+    if (claimStatus === 'ALREADY_PROCESSING' || claimStatus === 'RETRY_NOT_READY') {
+        const retryErr = new Error(`EFFECT_${claimStatus}: Efeito [${effectKey}] já está em processamento ou aguardando backoff.`);
+        retryErr.code = `EFFECT_${claimStatus}`;
+        retryErr.isRetryable = true;
+        throw retryErr;
+    }
+
+    if (claimStatus === 'ALREADY_FAILED' || claimStatus === 'DEAD_LETTER') {
+        const deadErr = new Error(`EFFECT_${claimStatus}: Efeito [${effectKey}] marcado como falha terminal ou dead letter.`);
+        deadErr.code = `EFFECT_${claimStatus}`;
+        deadErr.isTerminal = true;
+        throw deadErr;
+    }
+
+    if (claimStatus !== 'CLAIMED') {
+        throw new Error(`executeGuardedEffect: Status inesperado de claim [${claimStatus}]`);
+    }
+
+    // 3. Checagem novamente de lease do webhook pai antes de chamar serviço externo
+    if (typeof checkLeaseValid === 'function' && !checkLeaseValid()) {
+        await effects.defer(messageId, effectType, effectKey, effectToken, 'Parent webhook lease lost before execution', 5).catch(() => {});
+        const leaseLostErr = new Error('WEBHOOK_LEASE_LOST: Lease do webhook expirou durante o claim. Efeito cancelado.');
+        leaseLostErr.code = 'WEBHOOK_LEASE_LOST';
+        leaseLostErr.isRetryable = true;
+        throw leaseLostErr;
+    }
+
+    // 4. Executa a função do efeito COM heartbeat serializado de renovação do lease do efeito.
+    //
+    // DESIGN: A each ttlSeconds/3, we renew the effect's own lease. If renew returns false
+    // OR throws an exception, the effect ownership is uncertain/lost. We use AbortController
+    // to signal the executeFn if the transport supports AbortSignal (e.g., axios).
+    //
+    // NOTA DE DESIGN (JANELA AT-LEAST-ONCE PARA EFEITOS EXTERNOS):
+    // Se executeFn (ex: Meta WhatsApp API) retorna sucesso mas o Node.js cai antes de
+    // markExecuted, o claim expirará após ttlSeconds e uma retentativa subsequente poderá
+    // reenviar a mensagem. Isso é inerente a sistemas distribuídos sem 2PC com APIs de terceiros.
+    // O contrato é at-least-once delivery, não exactly-once.
+    let result;
+    const abortController = new AbortController();
+    let effectHeartbeatTimer = null;
+    let effectHeartbeatStopped = false;
+    let isEffectLeaseValid = true;
+
+    const scheduleEffectHeartbeat = () => {
+        if (effectHeartbeatStopped) return;
+        const intervalMs = Math.floor((ttlSeconds / 3) * 1000);
+        effectHeartbeatTimer = setTimeout(async () => {
+            if (effectHeartbeatStopped) return;
+            try {
+                const renewed = await effects.renew(messageId, effectType, effectKey, effectToken, ttlSeconds);
+                if (!renewed) {
+                    // renew returned false: another worker took over
+                    logger.warn('EFFECT_HEARTBEAT', `Perda de ownership do efeito [${effectKey}] para mensagem [${messageId}]`);
+                    isEffectLeaseValid = false;
+                    effectHeartbeatStopped = true;
+                    abortController.abort();
+                    return;
+                }
+                if (!effectHeartbeatStopped) scheduleEffectHeartbeat();
+            } catch (hbErr) {
+                // Exception in renew: ownership is uncertain — fail-closed
+                logger.warn('EFFECT_HEARTBEAT', `Exceção ao renovar efeito [${effectKey}]: ${hbErr.message}. Ownership incerto, invalidando.`);
+                isEffectLeaseValid = false;
+                effectHeartbeatStopped = true;
+                abortController.abort();
+            }
+        }, intervalMs);
+    };
+
+    const stopEffectHeartbeat = () => {
+        effectHeartbeatStopped = true;
+        if (effectHeartbeatTimer) clearTimeout(effectHeartbeatTimer);
+    };
+
+    scheduleEffectHeartbeat();
+
+    try {
+        // Pass AbortSignal to executeFn if it accepts options (e.g., for axios signal support)
+        result = await executeFn({ signal: abortController.signal });
+    } catch (execErr) {
+        stopEffectHeartbeat();
+
+        // If the abort was triggered by effect lease loss, classify as EFFECT_LEASE_LOST
+        if (!isEffectLeaseValid || abortController.signal.aborted) {
+            const deferred = await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost during execution', 5).catch(() => false);
+            if (deferred === false) {
+                logger.warn('EFFECT_DEFER_LOST', `effects.defer retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+            }
+            const lostErr = new Error(`EFFECT_LEASE_LOST: Lease do efeito [${effectKey}] perdida durante execução.`);
+            lostErr.code = 'EFFECT_LEASE_LOST';
+            lostErr.isRetryable = true;
+            throw lostErr;
+        }
+
+        const isRetryable = isRetryableTransportError(execErr);
+        if (isRetryable) {
+            const deferred = await effects.defer(messageId, effectType, effectKey, effectToken, execErr.message || 'Transient transport error', 5).catch(() => false);
+            if (deferred === false) {
+                logger.warn('EFFECT_DEFER_LOST', `effects.defer retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+            }
+            const retryErr = new Error(`EFFECT_TRANSPORT_ERROR: ${execErr.message}`);
+            retryErr.code = 'EFFECT_TRANSPORT_ERROR';
+            retryErr.isRetryable = true;
+            retryErr.originalError = execErr;
+            throw retryErr;
+        } else {
+            const failed = await effects.fail(messageId, effectType, effectKey, effectToken, execErr.message || 'Terminal error').catch(() => false);
+            if (failed === false) {
+                logger.warn('EFFECT_FAIL_LOST', `effects.fail retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+                const leaseLostErr = new Error(`EFFECT_LEASE_LOST: Ownership perdido ao registrar falha terminal do efeito [${effectKey}].`);
+                leaseLostErr.code = 'EFFECT_LEASE_LOST';
+                leaseLostErr.isRetryable = true;
+                leaseLostErr.originalError = execErr;
+                throw leaseLostErr;
+            }
+            throw execErr;
+        }
+    }
+
+    stopEffectHeartbeat();
+
+    // Check if effect lease was lost during execution (executeFn returned but heartbeat failed)
+    if (!isEffectLeaseValid) {
+        // executeFn completed but ownership was lost — the external effect (e.g., WhatsApp message)
+        // may have been sent. We cannot undo it (at-least-once). Defer for safety.
+        const deferred = await effects.defer(messageId, effectType, effectKey, effectToken, 'Effect lease lost after execution completed', 5).catch(() => false);
+        if (deferred === false) {
+            logger.warn('EFFECT_DEFER_LOST', `effects.defer retornou false para [${effectKey}]: ownership do efeito já foi perdido.`);
+        }
+        const lostErr = new Error(`EFFECT_LEASE_LOST: Lease do efeito [${effectKey}] perdida após execução.`);
+        lostErr.code = 'EFFECT_LEASE_LOST';
+        lostErr.isRetryable = true;
+        throw lostErr;
+    }
+
+    // 5. Marca como executado com sucesso
+    const marked = await effects.markExecuted(messageId, effectType, effectKey, effectToken);
+    if (!marked) {
+        logger.warn('EFFECT_LEASE_LOST', `Lease do efeito [${effectKey}] para mensagem [${messageId}] expirou ou foi perdida antes da confirmação final.`);
+        const leaseLostErr = new Error(`EFFECT_LEASE_LOST: Falha ao marcar efeito [${effectKey}] como executado (ownership expirou ou foi perdido).`);
+        leaseLostErr.code = 'EFFECT_LEASE_LOST';
+        leaseLostErr.isRetryable = true;
+        throw leaseLostErr;
+    }
+
+    return { status: 'EXECUTED', result, marked: true };
+}
+
 // ── Export ─────────────────────────────────────────────────────────────────────
-module.exports = { supabase, clinics, patients, appointments, doctors, sessions, conversations, webhooks, cleanEnvVar, parseClinicSettings, decryptData, encryptData, hashForSearch };
+module.exports = {
+    supabase,
+    clinics,
+    patients,
+    appointments,
+    doctors,
+    sessionLocks,
+    sessions,
+    conversations,
+    webhooks,
+    effects,
+    cleanEnvVar,
+    parseClinicSettings,
+    decryptData,
+    encryptData,
+    hashForSearch,
+    executeGuardedEffect,
+    sanitizeEffectPayload,
+    isRetryableTransportError
+};

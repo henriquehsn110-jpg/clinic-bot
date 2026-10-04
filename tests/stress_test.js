@@ -4,8 +4,8 @@
  * para medir latência, taxa de erros HTTP e estabilidade de conexão com o banco.
  */
 
-require('dotenv').config();
 const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
 const axios = require('axios');
 
 const BASE_URL = 'http://localhost:3000';
@@ -21,7 +21,9 @@ async function ensureServerRunning() {
         const { spawn } = require('child_process');
         serverProcess = spawn('node', [path.join(__dirname, '../server.js')], {
             cwd: path.join(__dirname, '..'),
-            stdio: 'ignore'
+            stdio: 'ignore',
+            shell: true,
+            env: process.env
         });
 
         for (let i = 0; i < 20; i++) {

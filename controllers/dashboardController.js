@@ -363,9 +363,18 @@ class DashboardController {
                 return res.status(409).json({ error: 'Este horário não está disponível para agendamento.' });
             }
 
+            let resolvedDoctorId = req.body.doctorId || null;
+            if (!resolvedDoctorId) {
+                const activeDoctors = await db.doctors.findByClinic(targetClinicId);
+                if (activeDoctors && activeDoctors.length > 0) {
+                    resolvedDoctorId = activeDoctors[0].id;
+                }
+            }
+
             const appt = await db.appointments.create({
                 patient_id: targetPatientId,
                 clinic_id: targetClinicId,
+                doctor_id: resolvedDoctorId,
                 type,
                 appointment_date: appointmentDate,
                 appointment_time: appointmentTime,
