@@ -207,17 +207,42 @@ async function runStagingSmokeTest() {
             throw new Error(`Timeout: Mensagem [${testMsgId}] não concluiu o ciclo V19 em 30s. Status final: ${logRecord?.status || 'não encontrado'}. Erro: ${logRecord?.error_log || 'nenhum'}`);
         }
 
-        // Validação adicional em message_effects
-        const { data: effectRecord } = await db.supabase
+        // Validação estrita em message_effects (V19)
+        console.log(`  🔍 Validando efeitos colaterais registrados na tabela message_effects...`);
+        const { data: effects, error: effErr } = await db.supabase
             .from('message_effects')
-            .select('effect_type, status, executed_at, error_log')
-            .eq('message_id', testMsgId)
-            .maybeSingle();
+            .select('id, effect_type, effect_key, status, executed_at, error_log')
+            .eq('message_id', testMsgId);
 
-        console.log(`  ✅ PASS: Mensagem [${testMsgId}] concluída com status '${logRecord.status}' em ${logRecord.completed_at}!`);
-        if (effectRecord) {
-            console.log(`     Efeito registrado: tipo "${effectRecord.effect_type}", status "${effectRecord.status}".`);
+        if (effErr) {
+            throw new Error(`Erro ao consultar message_effects para [${testMsgId}]: ${effErr.message}`);
         }
+
+        // 1. Deve haver efeitos registrados
+        if (!effects || effects.length === 0) {
+            throw new Error(`Falha de integridade V19: nenhum efeito colateral registrado em message_effects para [${testMsgId}].`);
+        }
+
+        // 4. Falhar se houver qualquer status failed ou dead_letter
+        const failedEffects = effects.filter(e => ['failed', 'dead_letter'].includes(e.status));
+        if (failedEffects.length > 0) {
+            const errDetails = failedEffects.map(e => `[tipo=${e.effect_type}, key=${e.effect_key}, status=${e.status}, erro=${e.error_log}]`).join(', ');
+            throw new Error(`Efeito colateral com falha detectado em message_effects: ${errDetails}`);
+        }
+
+        // 2 & 3. Exigir pelo menos o efeito esperado (effect_type = 'whatsapp_message') com status 'executed'
+        const executedWhatsAppEffects = effects.filter(e => e.effect_type === 'whatsapp_message' && e.status === 'executed');
+        if (executedWhatsAppEffects.length === 0) {
+            const currentEffects = effects.map(e => `[tipo=${e.effect_type}, status=${e.status}]`).join(', ');
+            throw new Error(`Efeito obrigatório de WhatsApp não foi executado com sucesso. Efeitos encontrados: ${currentEffects}`);
+        }
+
+        // Exibir evidência detalhada de cada efeito executado
+        for (const eff of effects) {
+            console.log(`     Efeito registrado: tipo="${eff.effect_type}", chave="${eff.effect_key}", status="${eff.status}", executado_em="${eff.executed_at}".`);
+        }
+
+        console.log(`  ✅ PASS: Mensagem [${testMsgId}] e todos os efeitos colaterais (message_effects status='executed') confirmados com sucesso!`);
         passed++;
     } catch (err) {
         console.error('  ❌ FAIL: Erro na validação de mensagem V19:', err.message);
