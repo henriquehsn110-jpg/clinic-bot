@@ -192,7 +192,7 @@ GRANT EXECUTE ON FUNCTION public.persist_session_state_if_lock_owned(uuid, text,
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE public.webhook_logs
-ADD COLUMN IF NOT EXISTS status varchar(30) NOT NULL DEFAULT 'received',
+ADD COLUMN IF NOT EXISTS status varchar(30) NOT NULL DEFAULT 'completed',
 ADD COLUMN IF NOT EXISTS clinic_id uuid REFERENCES public.clinics(id) ON DELETE CASCADE,
 ADD COLUMN IF NOT EXISTS phone text,
 ADD COLUMN IF NOT EXISTS processing_token uuid,
@@ -212,6 +212,8 @@ ON public.webhook_logs (processing_token) WHERE processing_token IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_webhook_logs_processing_expires
 ON public.webhook_logs (processing_expires_at) WHERE status = 'processing';
+
+ALTER TABLE public.webhook_logs ALTER COLUMN status SET DEFAULT 'completed';
 
 -- Preserva a semântica legada:
 -- qualquer registro existente em webhook_logs já era considerado processado.
