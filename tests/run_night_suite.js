@@ -3,9 +3,15 @@
  * Executa todos os testes de regressão, FSM, isolamento RLS e segurança HMAC.
  * Registra logs com fuso BRT em logs/night_run_YYYY-MM-DD_HH-mm.log
  */
-require('dotenv').config();
-const fs = require('fs');
 const path = require('path');
+const rootDir = path.resolve(__dirname, '..');
+const rawEnv = (process.env.DOTENV_CONFIG_PATH || '.env.staging').trim();
+const envPath = path.isAbsolute(rawEnv) ? rawEnv : path.resolve(rootDir, rawEnv);
+require('dotenv').config({ path: envPath, override: true });
+if (!process.env.SUPABASE_URL) {
+    require('dotenv').config({ path: path.resolve(rootDir, '.env'), override: true });
+}
+const fs = require('fs');
 const { execSync } = require('child_process');
 
 function getFormattedBRTDate() {
@@ -69,7 +75,8 @@ async function runNightlySuite() {
     let failedCount = 0;
     const failedSuites = [];
 
-    const envPath = process.env.DOTENV_CONFIG_PATH || '.env.staging';
+    const rawEnv = (process.env.DOTENV_CONFIG_PATH || '.env.staging').trim();
+    const envPath = path.isAbsolute(rawEnv) ? rawEnv : path.resolve(rootDir, rawEnv);
 
     for (let i = 0; i < testSuites.length; i++) {
         const suite = testSuites[i];
