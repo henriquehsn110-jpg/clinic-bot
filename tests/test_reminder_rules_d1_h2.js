@@ -43,9 +43,27 @@ async function runReminderTestSuite() {
     try {
         // 1. Obter clínica de teste
         const clinics = await db.clinics.getAll();
-        clinic = clinics[0];
-        if (!clinic) throw new Error('Nenhuma clínica encontrada no banco para testes.');
-        console.log(`🏥 Clínica selecionada: ${clinic.name} (${clinic.slug})`);
+        if (!clinics || clinics.length === 0) throw new Error('Nenhuma clínica encontrada no banco para testes.');
+        
+        let selectedClinic = clinics.find(c => c.slug === 'clinica-modelo');
+        let selectedDoctorId = null;
+        if (selectedClinic) {
+            const docs = await db.doctors.findByClinic(selectedClinic.id);
+            if (docs && docs.length > 0) selectedDoctorId = docs[0].id;
+        }
+        if (!selectedDoctorId) {
+            for (const c of clinics) {
+                const docs = await db.doctors.findByClinic(c.id);
+                if (docs && docs.length > 0) {
+                    selectedClinic = c;
+                    selectedDoctorId = docs[0].id;
+                    break;
+                }
+            }
+        }
+        clinic = selectedClinic || clinics[0];
+        const testDoctorId = selectedDoctorId;
+        console.log(`🏥 Clínica selecionada: ${clinic.name} (${clinic.slug}), Médico ID: ${testDoctorId}`);
 
         // 2. Criar ou obter paciente de teste
         patient = await db.patients.findOrCreate(testPhone, clinic.id);
@@ -64,6 +82,7 @@ async function runReminderTestSuite() {
         apptD1 = await db.appointments.create({
             patient_id: patient.id,
             clinic_id: clinic.id,
+            doctor_id: testDoctorId,
             appointment_date: tomorrowStr,
             appointment_time: '14:30:00',
             type: 'Limpeza Dental',
@@ -115,6 +134,7 @@ async function runReminderTestSuite() {
         apptH2 = await db.appointments.create({
             patient_id: patient.id,
             clinic_id: clinic.id,
+            doctor_id: testDoctorId,
             appointment_date: todayStr,
             appointment_time: h2TimeStr,
             type: 'Avaliação Geral',
@@ -125,6 +145,7 @@ async function runReminderTestSuite() {
         apptFar = await db.appointments.create({
             patient_id: patient.id,
             clinic_id: clinic.id,
+            doctor_id: testDoctorId,
             appointment_date: todayStr,
             appointment_time: farTimeStr,
             type: 'Ortodontia',

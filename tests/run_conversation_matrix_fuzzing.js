@@ -6,7 +6,11 @@
  * 2. Simulador Fuzzing Multi-Personas (Validação de resiliência e ausência de alucinações)
  * 3. Validação de Inserção Real no Banco Supabase
  */
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env.staging') });
+if (!process.env.SUPABASE_URL) {
+    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
 const conversationController = require('../controllers/conversationController');
 const db = require('../services/databaseService');
 
@@ -47,9 +51,22 @@ async function runConversationalMatrixSuite() {
         // CASO 1: Consulta de Agendamentos Ativos com Histórico Zerado
         // -------------------------------------------------------------
         await db.supabase.from('appointments').delete().eq('patient_id', patient.id);
+        const activeDocs = await db.doctors.findByClinic(clinicId);
+        let testDoctor = activeDocs && activeDocs.length > 0 ? activeDocs[0] : null;
+        if (!testDoctor) {
+            const { data: createdDoc } = await db.supabase.from('doctors').insert({
+                clinic_id: clinicId,
+                name: 'Dr. Teste Fuzzing',
+                specialties: ['Clínica Geral', 'Implante'],
+                is_active: true
+            }).select().single();
+            testDoctor = createdDoc;
+        }
+
         await db.appointments.create({
             patient_id: patient.id,
             clinic_id: clinicId,
+            doctor_id: testDoctor.id,
             appointment_date: '2028-10-20',
             appointment_time: '10:00',
             type: 'Implante',

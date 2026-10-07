@@ -83,7 +83,7 @@ class BillingService {
             }
 
             const limit = clinic.monthly_booking_limit || PLANS[clinic.plan_type || 'pro']?.bookingLimit || 1000;
-            const count = clinic.monthly_booking_count || 0;
+            const count = await this.getMonthlyBookingCount(clinicId);
 
             if (count >= limit) {
                 logger.warn('BILLING_QUOTA_EXCEEDED', `Cota de agendamentos excedida para a clínica [${clinicId}]: ${count}/${limit}`);
@@ -94,6 +94,44 @@ class BillingService {
         } catch (err) {
             logger.error('BILLING_CHECK_ERR', `Erro ao verificar assinatura da clínica [${clinicId}]: ${err.message}`);
             return { allowed: true, reason: 'fallback_error' }; // Fail-open para não travar clínicas em oscilação de banco
+        }
+    }
+
+    /**
+     * Deriva a utilização mensal de agendamentos diretamente da tabela appointments (fonte canônica da verdade).
+     * Respeita o fuso horário oficial BRT (America/Sao_Paulo).
+     */
+    async getMonthlyBookingCount(clinicId, referenceDate = new Date()) {
+        if (!clinicId) return 0;
+        try {
+            const brtString = new Date(referenceDate).toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+            const nowBRT = new Date(brtString);
+            const year = nowBRT.getFullYear();
+            const month = String(nowBRT.getMonth() + 1).padStart(2, '0');
+            const startOfMonth = `${year}-${month}-01T00:00:00-03:00`;
+
+            const nextYear = nowBRT.getMonth() === 11 ? year + 1 : year;
+            const nextMonth = String((nowBRT.getMonth() + 1) % 12 + 1).padStart(2, '0');
+            const startOfNextMonth = `${nextYear}-${nextMonth}-01T00:00:00-03:00`;
+
+            const { count, error } = await db.supabase
+                .from('appointments')
+                .select('id', { count: 'exact', head: true })
+                .eq('clinic_id', clinicId)
+                .gte('created_at', startOfMonth)
+                .lt('created_at', startOfNextMonth)
+                .is('deleted_at', null);
+
+            if (!error && count !== null && count !== undefined) {
+                return count;
+            }
+
+            const clinic = await db.clinics.findById(clinicId);
+            return clinic?.monthly_booking_count || 0;
+        } catch (err) {
+            logger.error('BILLING_COUNT_ERR', `Erro ao derivar uso mensal diretamente de appointments [${clinicId}]: ${err.message}`);
+            const clinic = await db.clinics.findById(clinicId);
+            return clinic?.monthly_booking_count || 0;
         }
     }
 
@@ -172,16 +210,52 @@ class BillingService {
         return { status: 'processed', eventType: type };
     }
 
-    async incrementMonthlyBooking(clinicId) {
-        if (!clinicId) return;
+    async incrementMonthlyBooking(clinicId, appointmentId) {
+        if (!clinicId) return false;
+        if (!appointmentId) {
+            logger.warn('BILLING_INCREMENT_NO_APPT', `incrementMonthlyBooking invocado sem appointmentId para clínica [${clinicId}]. Ignorando para garantir idempotência.`);
+            return false;
+        }
+
         try {
-            const clinic = await db.clinics.findById(clinicId);
-            if (clinic) {
-                const newCount = (clinic.monthly_booking_count || 0) + 1;
-                await db.supabase.from('clinics').update({ monthly_booking_count: newCount }).eq('id', clinicId);
+            // 1. Tenta inserir marker de idempotência persistente em message_effects (chave única por appointment_id)
+            const effectKey = String(clinicId);
+            const { error: markerError } = await db.supabase
+                .from('message_effects')
+                .insert({
+                    message_id: String(appointmentId),
+                    effect_type: 'billing_booking',
+                    effect_key: effectKey,
+                    status: 'executed',
+                    executed_at: new Date().toISOString()
+                });
+
+            const isDuplicateMarker = markerError && markerError.code === '23505';
+
+            // 2. Fonte canônica: deriva contagem real diretamente de appointments
+            // Previne lost update entre appointments concorrentes e perda de billing pós-crash
+            const apptsCount = await this.getMonthlyBookingCount(clinicId);
+
+            // 3. Sincroniza contador na tabela clinics para paridade com a fonte da verdade
+            await db.supabase
+                .from('clinics')
+                .update({ monthly_booking_count: apptsCount })
+                .eq('id', clinicId);
+
+            if (isDuplicateMarker) {
+                logger.info('BILLING_ALREADY_INCREMENTED', `Agendamento [${appointmentId}] já contabilizado para faturamento da clínica [${clinicId}]. Replay sincronizado com segurança.`);
+                return false;
             }
+
+            if (markerError) {
+                logger.error('BILLING_EFFECT_ERR', `Erro ao registrar efeito de billing para [${appointmentId}]: ${markerError.message}`);
+                return false;
+            }
+
+            return true;
         } catch (err) {
             logger.error('BILLING_INCREMENT_ERR', `Erro ao incrementar cota mensal [${clinicId}]: ${err.message}`);
+            return false;
         }
     }
 }

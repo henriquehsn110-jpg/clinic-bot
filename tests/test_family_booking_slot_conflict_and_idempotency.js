@@ -7,7 +7,11 @@
  * 3. Idempotência real: reentrega da confirmação pelo mesmo paciente/dependente.
  */
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env.staging') });
+if (!process.env.SUPABASE_URL) {
+    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
 const assert = require('assert');
 const conversationController = require('../controllers/conversationController');
 const calendarService = require('../services/calendarService');
@@ -59,31 +63,60 @@ async function runTest() {
         }
 
         // ── 1. Setup: Criar Titular e Consulta no Horário de Conflito ─────────
-        console.log('1. Criando paciente titular e consulta em 2027-09-15 08:00 (doctor_id: null)...');
+        const activeDocs = await db.doctors.findByClinic(clinicId);
+        const docJuliana = activeDocs.find(d => d.name.includes('Juliana')) || activeDocs[0];
+        const docCarlos = activeDocs.find(d => d.id !== docJuliana.id) || activeDocs[1];
+        const docJulianaId = docJuliana.id;
+
+        console.log(`1. Criando paciente titular e consulta em ${TEST_DATE} ${TEST_TIME_CONFLICT} com ${docJuliana.name}...`);
         const titular = await db.patients.findOrCreate(TEST_PHONE, clinicId);
         createdCleanups.patients.push(titular.id);
         await db.patients.updateName(TEST_PHONE, TITULAR_NAME, clinicId);
         await db.patients.updateCpf(TEST_PHONE, TITULAR_CPF, clinicId);
 
+        // Validação da constraint chk_appointments_active_doctor_not_null (V18)
+        let constraintTriggered = false;
+        try {
+            await db.appointments.create({
+                patient_id: titular.id,
+                clinic_id: clinicId,
+                doctor_id: null,
+                appointment_date: '2028-12-31',
+                appointment_time: '12:00',
+                type: 'Consulta geral'
+            });
+        } catch (err) {
+            if (err.message?.includes('chk_appointments_active_doctor_not_null') || err.code === '23514') {
+                constraintTriggered = true;
+            }
+        }
+        assert.strictEqual(constraintTriggered, true, 'Constraint chk_appointments_active_doctor_not_null deve impedir appointment ativo sem doctor_id');
+        console.log('   ✅ PASS: Constraint chk_appointments_active_doctor_not_null validada com sucesso (rejeitou doctor_id: null)!');
+
         const titularAppt = await db.appointments.create({
             patient_id: titular.id,
             clinic_id: clinicId,
-            doctor_id: null,
+            doctor_id: docJulianaId,
             appointment_date: TEST_DATE,
             appointment_time: TEST_TIME_CONFLICT,
             type: 'Consulta geral'
         });
         createdCleanups.appointments.push(titularAppt.id);
-        console.log(`   ✅ Consulta do Titular criada: ID=${titularAppt.id} [${TEST_DATE} ${TEST_TIME_CONFLICT}] (doctor_id: null)`);
+        console.log(`   ✅ Consulta do Titular criada: ID=${titularAppt.id} [${TEST_DATE} ${TEST_TIME_CONFLICT}] (doctor_id: ${docJulianaId})`);
 
         // ── 2. Cenário 1: getAvailableSlots para Dra. Juliana Mendes no mesmo dia
-        console.log('\n2. Verificando getAvailableSlots para Dra. Juliana Mendes em 2027-09-15...');
-        const docJulianaId = 'be0fbdfa-49d2-4a64-84ba-ab57e205f89e';
+        console.log(`\n2. Verificando getAvailableSlots para ${docJuliana.name} em ${TEST_DATE}...`);
         const availableSlots = await calendarService.getAvailableSlots(TEST_DATE, clinicId, docJulianaId, 'Consulta geral');
-        console.log(`   - Vagas retornadas para Dra. Juliana:`, availableSlots.slice(0, 6));
+        console.log(`   - Vagas retornadas para ${docJuliana.name}:`, availableSlots.slice(0, 6));
 
-        assert(!availableSlots.includes(TEST_TIME_CONFLICT), `O horário ocupado ${TEST_TIME_CONFLICT} NÃO deve aparecer nas vagas livres da Dra. Juliana`);
-        console.log(`   ✅ PASS: Horário ${TEST_TIME_CONFLICT} devidamente filtrado da grade da Dra. Juliana Mendes!`);
+        assert(!availableSlots.includes(TEST_TIME_CONFLICT), `O horário ocupado ${TEST_TIME_CONFLICT} NÃO deve aparecer nas vagas livres de ${docJuliana.name}`);
+        console.log(`   ✅ PASS: Horário ${TEST_TIME_CONFLICT} devidamente filtrado da grade de ${docJuliana.name}!`);
+
+        if (docCarlos) {
+            const availableSlotsDocB = await calendarService.getAvailableSlots(TEST_DATE, clinicId, docCarlos.id, 'Consulta geral');
+            assert(availableSlotsDocB.includes(TEST_TIME_CONFLICT), `O horário ${TEST_TIME_CONFLICT} DEVE estar livre para o outro médico (${docCarlos.name})`);
+            console.log(`   ✅ PASS: Horário ${TEST_TIME_CONFLICT} permanece disponível para o outro médico (${docCarlos.name})!`);
+        }
 
         // ── 3. Cenário 2: Dependente tenta confirmar no horário ocupado pelo titular
         console.log('\n3. Dependente tenta confirmar consulta no horário ocupado (2027-09-15 08:00)...');

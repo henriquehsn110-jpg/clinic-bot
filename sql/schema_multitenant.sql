@@ -69,10 +69,16 @@ UPDATE public.sessions
 SET clinic_id = (SELECT id FROM public.clinics WHERE slug = 'clinica-modelo' LIMIT 1)
 WHERE clinic_id IS NULL;
 
--- 4. ÍNDICES DE PERFORMANCE MULTI-TENANT
+-- 4. ÍNDICES DE PERFORMANCE E UNICIDADE MULTI-TENANT
 CREATE INDEX IF NOT EXISTS idx_patients_clinic_id ON public.patients(clinic_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_clinic_id ON public.appointments(clinic_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_clinic_id ON public.sessions(clinic_id);
+
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE public.sessions DROP CONSTRAINT IF EXISTS sessions_phone_key;
+DROP INDEX IF EXISTS public.sessions_phone_key;
+ALTER TABLE public.sessions ALTER COLUMN clinic_id SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sessions_clinic_phone ON public.sessions (clinic_id, phone);
 
 -- 5. POLÍTICAS DE ROW LEVEL SECURITY (RLS) MULTI-TENANT
 -- Ativa RLS para isolamento de dados por clínica (Defesa em profundidade para service_role)

@@ -157,8 +157,15 @@ async function runDashboardFullLifecycleTest() {
         // ================================================================
         // ETAPA 4: Criação e Gestão de Consulta (Confirmar & Cancelar)
         // ================================================================
-        console.log('\n--- [ETAPA 4] Gestão de Consulta (Criar, Confirmar, Cancelar) ---');
-        const createDate = reminderService.getTodayBrtDateStr(2); // 2 dias à frente
+        // Garante que a data de agendamento seja sempre um dia útil com expediente (segunda a sexta)
+        let dayOffset = 1;
+        let createDate = reminderService.getTodayBrtDateStr(dayOffset);
+        let dayOfWeek = new Date(createDate + 'T12:00:00Z').getUTCDay();
+        while (dayOfWeek === 0 || dayOfWeek === 6) {
+            dayOffset++;
+            createDate = reminderService.getTodayBrtDateStr(dayOffset);
+            dayOfWeek = new Date(createDate + 'T12:00:00Z').getUTCDay();
+        }
         const createApptRes = await makeRequest(testPort, 'POST', '/api/dashboard/appointments', authHeaders, {
             patientId: createdPatientId,
             appointmentDate: createDate,

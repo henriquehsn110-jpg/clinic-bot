@@ -5,7 +5,11 @@
  * "É para mim mesmo, Henrique Silva do Nascimento"
  */
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env.staging') });
+if (!process.env.SUPABASE_URL) {
+    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
 const assert = require('assert');
 const conversationController = require('../controllers/conversationController');
 const db = require('../services/databaseService');
@@ -53,7 +57,7 @@ async function runTest() {
         const res1 = await conversationController.handleIncomingMessage({
             phone: TEST_PHONE,
             text: 'Agendar p/ Outro',
-            isSimulation: false,
+            isSimulation: true,
             clinicId: clinicId
         });
         console.log('   - Resposta do bot:', res1.text);
@@ -63,7 +67,7 @@ async function runTest() {
         const res2 = await conversationController.handleIncomingMessage({
             phone: TEST_PHONE,
             text: `A consulta é para mim mesmo, ${NEW_NAME}`,
-            isSimulation: false,
+            isSimulation: true,
             clinicId: clinicId
         });
         console.log('   - Resposta do bot:', res2.text);
@@ -84,7 +88,7 @@ async function runTest() {
         const res3 = await conversationController.handleIncomingMessage({
             phone: TEST_PHONE,
             text: 'Limpeza',
-            isSimulation: false,
+            isSimulation: true,
             clinicId: clinicId
         });
         console.log('   - Resposta do bot (mostra calendário):', res3.showCalendar);
@@ -94,7 +98,7 @@ async function runTest() {
         const res4 = await conversationController.handleIncomingMessage({
             phone: TEST_PHONE,
             text: 'Selecionei a data: 2026-11-25',
-            isSimulation: false,
+            isSimulation: true,
             clinicId: clinicId
         });
         console.log('   - Resposta do bot (mostra horários):', res4.showTimeSlots);
@@ -104,7 +108,7 @@ async function runTest() {
         const res5 = await conversationController.handleIncomingMessage({
             phone: TEST_PHONE,
             text: '09:00',
-            isSimulation: false,
+            isSimulation: true,
             clinicId: clinicId
         });
         console.log('   - Resposta do bot (Confirmação):', res5.text);

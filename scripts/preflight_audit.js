@@ -8,8 +8,8 @@
  *   npm run preflight
  *   node scripts/preflight_audit.js --slug clinica-modelo
  */
-
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
 const db = require('../services/databaseService');
 const calendarService = require('../services/calendarService');
 const aiService = require('../services/aiService');
