@@ -64,6 +64,15 @@ function formatDoctorNameForAppointment(appt) {
     return raw;
 }
 
+function clearDraftObject(draft) {
+    if (draft && typeof draft === 'object') {
+        for (const key of Object.keys(draft)) {
+            delete draft[key];
+        }
+    }
+    return draft;
+}
+
 /**
  * Normaliza um texto para comparação (minúsculas, sem acentos, sem pontuação).
  */
@@ -768,8 +777,7 @@ class ConversationController {
                         await db.appointments.updateStatus(targetApptId, 'cancelled', clinicId);
                         logger.info('CANCEL_BOOKING_SUCCESS', `Consulta ${targetApptId} cancelada com sucesso via botão autorizado (nonce: ${nonce}).`);
 
-                        draft.pending_cancel_action = null;
-                        draft.pending_cancel_selection = false;
+                        clearDraftObject(draft);
                         await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                         const dateFmt = targetAppt.appointment_date ? targetAppt.appointment_date.split('-').reverse().join('/') : '';
@@ -779,7 +787,7 @@ class ConversationController {
 
                         history.push({ role: 'user', parts: [{ text: "Sim, cancelar" }] });
                         history.push({ role: 'model', parts: [{ text: cancelText }] });
-                        await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
+                        await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                         if (!isSimulation) {
                     await sendGuarded('whatsapp:cancel_success', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken, { signal }));
@@ -855,27 +863,13 @@ class ConversationController {
             const isExplicitHumanRequest = !isNegatedHandoff && /\b(falar\s+com\s+(?:(um|uma|a|o)\s+)?(atendente|atendete|humano|humana|recepção|recepcao|secretária|secretaria|pessoa|alguém)|atendimento\s+humano|preciso\s+falar\s+com\s+(alguém|atendente|atendete|secretária|secretaria|recepção|recepcao))\b/i.test(sanitizedText);
             if (isExplicitHumanRequest) {
                 logger.info('HUMAN_HANDOFF_REQUESTED', `Paciente [${phone}] solicitou atendimento humano.`);
-                draft.is_family_booking = false;
-                draft.dependentName = null;
-                draft.dependentCpf = null;
-                draft.cpf = null;
-                draft.name = null;
-                draft.type = null;
-                draft.date = null;
-                draft.time = null;
-                draft.doctor_id = null;
-                draft.doctor_name = null;
-                draft.needs_doctor = null;
-                draft.available_doctors = null;
-                draft.pending_cancel_selection = false;
-                draft.pending_cancel_action = null;
-                draft.ambiguous_procedures = null;
+                clearDraftObject(draft);
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                 const handoffText = "Com certeza! Estou transferindo seu atendimento para a nossa recepção humano. Em breve um atendente irá responder você aqui pelo WhatsApp! 😊\n\n[SISTEMA: conversa transferida para atendente humano]";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: handoffText }] });
-                await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
+                await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                 if (!isSimulation) {
                     await sendGuarded('whatsapp:handoff_requested', ({ signal }) => whatsappService.sendTextMessage(phone, "Com certeza! Estou transferindo seu atendimento para a nossa recepção. Em breve um atendente irá responder você! 😊", phoneId, clinicToken, { signal }));
@@ -1422,26 +1416,11 @@ class ConversationController {
                 // Extrai o nome caso o usuário tenha informado junto (ex: "É para mim mesmo, Henrique Silva do Nascimento")
                 const extractedPersonalName = extractCleanName(sanitizedText);
 
+                clearDraftObject(draft);
                 draft.is_family_booking = false;
-                draft.dependentName = null;
-                draft.dependentCpf = null;
-                draft.dependent_id = null;
-                draft.is_minor_without_cpf = false;
-                draft.guardian_cpf = null;
-                draft.cpf = null;
-                draft.confirmation_token = null;
-                draft.step = null;
-                draft.name = extractedPersonalName || null;
-                draft.type = null;
-                draft.date = null;
-                draft.time = null;
-                draft.doctor_id = null;
-                draft.doctor_name = null;
-                draft.needs_doctor = null;
-                draft.available_doctors = null;
-                draft.pending_cancel_selection = false;
-                draft.pending_cancel_action = null;
-                draft.ambiguous_procedures = null;
+                if (extractedPersonalName) {
+                    draft.name = extractedPersonalName;
+                }
 
                 if (extractedPersonalName) {
                     logger.info('PATIENT_NAME_UPDATED', `Nome do titular [${phone}] atualizado para [${extractedPersonalName}] via atalho pessoal.`);
@@ -1719,27 +1698,13 @@ class ConversationController {
                     lockContext.assertLockValid();
                 }
                 logger.info('RESCHEDULE_BOOKING', `Paciente [${phone}] iniciou reagendamento de consulta.`);
-                draft.is_family_booking = false;
-                draft.dependentName = null;
-                draft.dependentCpf = null;
-                draft.cpf = null;
-                draft.name = null;
-                draft.type = null;
-                draft.date = null;
-                draft.time = null;
-                draft.doctor_id = null;
-                draft.doctor_name = null;
-                draft.needs_doctor = null;
-                draft.available_doctors = null;
-                draft.pending_cancel_selection = false;
-                draft.pending_cancel_action = null;
-                draft.ambiguous_procedures = null;
+                clearDraftObject(draft);
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                 const procText = "Com certeza! Vamos agendar seu novo horário. Escolha abaixo qual especialidade ou procedimento você gostaria de agendar:";
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: `${procText}\n[SISTEMA: procedimentos exibidos, aguardando escolha]` }] });
-                await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
+                await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                 if (!isSimulation) {
                     const sections = [{
@@ -1763,21 +1728,7 @@ class ConversationController {
             }
 
             if (sanitizedText.toLowerCase() === 'remarcar/cancelar') {
-                draft.is_family_booking = false;
-                draft.dependentName = null;
-                draft.dependentCpf = null;
-                draft.cpf = null;
-                draft.name = null;
-                draft.type = null;
-                draft.date = null;
-                draft.time = null;
-                draft.doctor_id = null;
-                draft.doctor_name = null;
-                draft.needs_doctor = null;
-                draft.available_doctors = null;
-                draft.pending_cancel_selection = false;
-                draft.pending_cancel_action = null;
-                draft.ambiguous_procedures = null;
+                clearDraftObject(draft);
                 await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                 const rcText = "Sem problemas! Você prefere remarcar para uma nova data ou cancelar seu agendamento atual?";
@@ -1785,7 +1736,7 @@ class ConversationController {
                 
                 history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                 history.push({ role: 'model', parts: [{ text: rcText }] });
-                await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
+                await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                 if (!isSimulation) {
                         await sendGuarded('whatsapp:reschedule_cancel_options', ({ signal }) => whatsappService.sendButtonMessage(phone, rcText, rcButtons, phoneId, clinicToken, { signal }));
@@ -1827,20 +1778,7 @@ class ConversationController {
 
                 // 1. Caso sem NENHUMA consulta futura agendada
                 if (upcomingAppts.length === 0) {
-                    draft.is_family_booking = false;
-                    draft.dependentName = null;
-                    draft.dependentCpf = null;
-                    draft.cpf = null;
-                    draft.name = null;
-                    draft.type = null;
-                    draft.date = null;
-                    draft.time = null;
-                    draft.doctor_id = null;
-                    draft.doctor_name = null;
-                    draft.needs_doctor = null;
-                    draft.available_doctors = null;
-                    draft.pending_cancel_selection = false;
-                    draft.ambiguous_procedures = null;
+                    clearDraftObject(draft);
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                     const cancelText = "Você não possui nenhuma consulta futura agendada no momento. Se quiser escolher um novo horário, basta clicar no botão abaixo para agendar:";
@@ -1848,7 +1786,7 @@ class ConversationController {
 
                     history.push({ role: 'user', parts: [{ text: sanitizedText }] });
                     history.push({ role: 'model', parts: [{ text: cancelText }] });
-                    await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
+                    await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                     if (!isSimulation) {
                         await sendGuarded('whatsapp:cancel_no_appointments', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelText, cancelButtons, phoneId, clinicToken, { signal }));
@@ -2419,13 +2357,13 @@ class ConversationController {
                     const cancelFamilyText = "Sem problemas! Cancelei o agendamento para o familiar. Como você gostaria de prosseguir?";
                     const escapeButtons = ["Agendar para mim", "Falar com atendente", "Cancelar agendamento"];
 
-                    draft = {};
+                    clearDraftObject(draft);
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                     history.push({ role: 'user', parts: [{ text: processedText }] });
                     history.push({ role: 'model', parts: [{ text: `${cancelFamilyText}\n[SISTEMA: Agendamento familiar cancelado pelo paciente.]` }] });
                     if (history.length > 20) history = history.slice(-20);
-                    await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
+                    await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                     if (!isSimulation) {
                             await sendGuarded('whatsapp:gate1_cancel_family', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken, { signal }));
@@ -2499,7 +2437,7 @@ class ConversationController {
             if (draft.is_family_booking && draft.dependentName && !draft.dependentCpf) {
                 const isRefusal = /não quero|nao quero|não vou|nao vou|desisti|prefiro não|prefiro nao|deixa pra lá|deixa pra la|mudei de ideia|voltar|menu|não informar|nao informar|não passar|nao passar|cancelar|cancelar agendamento|cancelamento|cancelar consulta/i.test(sanitizedText);
                 if (isRefusal || personalKeywords.test(sanitizedText)) {
-                    draft = {};
+                    clearDraftObject(draft);
                     await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                     const cancelFamilyText = "Sem problemas! Cancelei o agendamento para o familiar. Como você gostaria de prosseguir?";
@@ -2508,7 +2446,7 @@ class ConversationController {
                     history.push({ role: 'user', parts: [{ text: processedText }] });
                     history.push({ role: 'model', parts: [{ text: `${cancelFamilyText}\n[SISTEMA: Agendamento familiar cancelado pelo paciente.]` }] });
                     if (history.length > 20) history = history.slice(-20);
-                    await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, draft);
+                    await db.sessions.persistStateIfOwned(phone, clinicId, lockContext.lockId, history, null);
 
                     if (!isSimulation) {
                             await sendGuarded('whatsapp:gate2_cancel_family', ({ signal }) => whatsappService.sendButtonMessage(phone, cancelFamilyText, escapeButtons, phoneId, clinicToken, { signal }));

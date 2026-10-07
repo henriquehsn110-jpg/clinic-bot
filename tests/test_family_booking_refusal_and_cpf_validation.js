@@ -7,7 +7,11 @@
  * 2. Informar o próprio CPF de titular durante agendamento familiar é REJEITADO (Regra 17) pedindo o CPF específico do dependente.
  * 3. Informar um CPF pertencente a outro telefone aciona o Handoff Humano de Segurança LGPD (CPF_CONFLICT / transferToHuman: true).
  */
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env.staging') });
+if (!process.env.SUPABASE_URL) {
+    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
 const assert = require('assert');
 const conversationController = require('../controllers/conversationController');
 const db = require('../services/databaseService');

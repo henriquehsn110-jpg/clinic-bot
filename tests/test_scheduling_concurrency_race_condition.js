@@ -9,7 +9,10 @@
 
 const assert = require('assert');
 const path = require('path');
-require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
+require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env.staging') });
+if (!process.env.SUPABASE_URL) {
+    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
 
 const db = require('../services/databaseService');
 const calendarService = require('../services/calendarService');
@@ -77,7 +80,7 @@ async function testConcurrency() {
         // Validação no Supabase (SELECT direto)
         const { data: dbAppts } = await db.supabase
             .from('appointments')
-            .select('id, patient_id, appointment_date, appointment_time, status')
+            .select('id, patient_id, appointment_date, appointment_time, doctor_id, status')
             .eq('clinic_id', clinicIdA)
             .eq('appointment_date', testDate)
             .in('status', ['pending', 'confirmed']);
@@ -96,6 +99,13 @@ async function testConcurrency() {
             whatsappToken: `token_b_${runId}`,
             address: 'Rua B, 500'
         });
+
+        const { data: docB } = await db.supabase.from('doctors').insert({
+            clinic_id: clinicB.id,
+            name: 'Dr. Concurrency B',
+            specialties: ['Avaliação', 'Clínica Geral'],
+            is_active: true
+        }).select().single();
 
         const sameDate = '2028-11-20';
         const sameTime = '10:00';
@@ -139,15 +149,19 @@ async function testConcurrency() {
             console.log('  ✅ PASS: Isolamento Multi-Tenant garantido em nível de schema e aplicação (2/2 Sucessos)!\n');
         } finally {
             await db.supabase.from('appointments').delete().eq('appointment_date', sameDate);
+            if (docB && docB.id) {
+                await db.supabase.from('doctors').delete().eq('id', docB.id);
+            }
             await db.supabase.from('clinics').delete().eq('id', clinicB.id);
         }
 
         // ── 3. Teste de UX na Máquina de Estados (conversationController) ──
-        console.log('[Cenário 3] Testando tratamento de UX do conversationController quando o slot já está preenchido...');
+        const bookedDoctorId = dbAppts && dbAppts.length > 0 ? dbAppts[0].doctor_id : null;
         await db.sessions.setDraft(phonePatient3, {
             date: testDate,
             time: testTime,
             type: 'Limpeza',
+            doctor_id: bookedDoctorId,
             name: 'Paciente UX Conflito',
             cpf: '529.982.247-25'
         }, clinicIdA);
