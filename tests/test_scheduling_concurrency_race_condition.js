@@ -2,8 +2,8 @@
  * test_scheduling_concurrency_race_condition.js
  * 
  * Validação de Prevenção de Concorrência e Double-Booking (BACKLOG-FSM-01):
- * 1. Teste de Corrida Determinístico: 2 pacientes simultâneos no mesmo slot -> exatamente 1 sucesso e 1 SLOT_OCCUPIED.
- * 2. Teste Multi-Tenant no Mesmo Slot: Demonstração empírica de colisão no PostgreSQL por constraint legada global sem clinic_id.
+ * 1. Teste de Corrida Determinístico: 2 pacientes simultâneos no mesmo slot E mesmo médico -> exatamente 1 sucesso e 1 SLOT_OCCUPIED.
+ * 2. Teste Multi-Tenant no Mesmo Slot: clínicas distintas podem agendar no mesmo dia/horário sem colisão indevida.
  * 3. Teste de Resolução de UX na FSM: Tratamento de SLOT_OCCUPIED reabrindo opções com mensagem amigável.
  */
 
@@ -42,8 +42,15 @@ async function testConcurrency() {
     await db.sessions.delete(phonePatient3, clinicIdA).catch(() => {});
 
     try {
-        // ── 1. Teste de Corrida Determinístico no Mesmo Slot (Mesma Clínica) ──
-        console.log('\n[Cenário 1] Disparando 2 agendamentos concorrentes via Promise.all para o MESMO horário e clínica...');
+        // ── 1. Teste de Corrida Determinístico no Mesmo Slot E Mesmo Médico ──
+        // No modelo V18 multi-médico, dois pacientes no mesmo horário podem ser válidos
+        // se forem atribuídos a profissionais diferentes. Para testar double-booking real,
+        // ambos devem disputar explicitamente o MESMO doctor_id.
+        const activeDoctorsA = await db.doctors.findByClinic(clinicIdA);
+        assert.ok(activeDoctorsA && activeDoctorsA.length > 0, 'Clínica de teste deve possuir ao menos 1 médico ativo');
+        const raceDoctor = activeDoctorsA[0];
+
+        console.log(`\n[Cenário 1] Disparando 2 agendamentos concorrentes para o MESMO horário, clínica e médico (${raceDoctor.name || raceDoctor.id})...`);
         
         const results = await Promise.allSettled([
             calendarService.scheduleAppointment({
@@ -52,7 +59,8 @@ async function testConcurrency() {
                 name: 'Paciente Um Concorrente',
                 date: testDate,
                 time: testTime,
-                type: 'Limpeza'
+                type: 'Limpeza',
+                doctor_id: raceDoctor.id
             }),
             calendarService.scheduleAppointment({
                 clinicId: clinicIdA,
@@ -60,7 +68,8 @@ async function testConcurrency() {
                 name: 'Paciente Dois Concorrente',
                 date: testDate,
                 time: testTime,
-                type: 'Clareamento'
+                type: 'Clareamento',
+                doctor_id: raceDoctor.id
             })
         ]);
 
@@ -76,6 +85,7 @@ async function testConcurrency() {
         assert.strictEqual(fulfilled.length, 1, 'Exatamente 1 agendamento concorrente deve suceder');
         assert.strictEqual(rejected.length, 1, 'Exatamente 1 agendamento concorrente deve ser rejeitado');
         assert.strictEqual(rejected[0].reason.code, 'SLOT_OCCUPIED', 'O erro deve ter código SLOT_OCCUPIED');
+        assert.strictEqual(fulfilled[0].value.doctor_id, raceDoctor.id, 'O agendamento vencedor deve permanecer vinculado ao médico disputado');
 
         // Validação no Supabase (SELECT direto)
         const { data: dbAppts } = await db.supabase
@@ -87,6 +97,7 @@ async function testConcurrency() {
 
         console.log('  📊 DUMP BANCO DE AGENDAMENTOS PARA O SLOT:', JSON.stringify(dbAppts, null, 2));
         assert.strictEqual(dbAppts.length, 1, 'Banco de dados deve conter exatamente 1 agendamento ativo (zero double-booking)');
+        assert.strictEqual(dbAppts[0].doctor_id, raceDoctor.id, 'O registro persistido deve usar o mesmo médico disputado');
         console.log('  ✅ PASS: Cenário 1 aprovado com exatamente 1 sucesso e 1 rejeição por SLOT_OCCUPIED!\n');
 
         // ── 2. Teste Multi-Tenant: Clínicas Diferentes no MESMO Slot Exato ──
