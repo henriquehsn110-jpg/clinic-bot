@@ -7,7 +7,7 @@ class AIService {
         // P5: Modelos ativos e de menor custo da API Gemini
         this.candidateModels = [
             process.env.GEMINI_MODEL || 'gemini-3.6-flash',
-            'gemini-3.6-flash'
+            'gemini-3.5-flash'
         ].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicatas
         this.modelIndex = 0;
 
