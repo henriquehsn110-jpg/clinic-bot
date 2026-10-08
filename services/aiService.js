@@ -40,7 +40,7 @@ class AIService {
     }
 
     initModel() {
-        const modelName = this.candidateModels[this.modelIndex] || 'gemini-2.0-flash';
+        const modelName = this.candidateModels[this.modelIndex] || 'gemini-3.6-flash';
         this.model = this.genAI.getGenerativeModel({ 
             model: modelName,
             safetySettings: [
