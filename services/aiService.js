@@ -393,7 +393,6 @@ Texto: "Entendo que você está com dor. Um de nossos atendentes vai te atender 
                     },
                     generationConfig: {
                         responseMimeType: 'application/json',
-                        temperature: 0.3,
                         maxOutputTokens: 1024, // Garante orçamento de tokens suficiente para respostas completas sem truncamento
                         responseSchema: {
                             type: 'object',
