@@ -13,25 +13,15 @@ function cleanEnvVar(val) {
     return str;
 }
 
+// ── Proteção Centralizada Fail-Closed contra Mutações em Produção ────────────────
+const { wrapClientWithMutationGuard } = require('../tests/helpers/testEnvironmentGuard');
+
 // ── Conexão ────────────────────────────────────────────────────────────────────
 const supabaseUrl = cleanEnvVar(process.env.SUPABASE_URL) || 'https://placeholder.supabase.co';
 const supabaseKey = cleanEnvVar(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDA0OTYwMDAsImV4cCI6MjAxNjA3MjAwMH0.placeholder';
 
-let supabase = createClient(supabaseUrl, supabaseKey);
-
-// ── Proteção Defensiva em Contexto de Testes (Anti-Mutação em Produção) ────────────────
-const isTestContext = process.env.NODE_ENV === 'test' ||
-    process.argv.some(arg => /tests?[\\/]|\btests?\b/i.test(arg)) ||
-    (require.main && /tests?[\\/]|\btests?\b/i.test(require.main.filename || ''));
-
-if (isTestContext) {
-    try {
-        const { wrapClientWithMutationGuard } = require('../tests/helpers/testEnvironmentGuard');
-        supabase = wrapClientWithMutationGuard(supabase, supabaseUrl);
-    } catch {
-        // Nenhuma ação necessária se o helper não estiver presente
-    }
-}
+const rawSupabase = createClient(supabaseUrl, supabaseKey);
+const supabase = wrapClientWithMutationGuard(rawSupabase, supabaseUrl);
 
 const crypto = require('crypto');
 
