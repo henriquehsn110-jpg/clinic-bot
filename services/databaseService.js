@@ -13,15 +13,11 @@ function cleanEnvVar(val) {
     return str;
 }
 
-// ── Proteção Centralizada Fail-Closed contra Mutações em Produção ────────────────
-const { wrapClientWithMutationGuard } = require('../tests/helpers/testEnvironmentGuard');
-
 // ── Conexão ────────────────────────────────────────────────────────────────────
 const supabaseUrl = cleanEnvVar(process.env.SUPABASE_URL) || 'https://placeholder.supabase.co';
 const supabaseKey = cleanEnvVar(process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDA0OTYwMDAsImV4cCI6MjAxNjA3MjAwMH0.placeholder';
 
-const rawSupabase = createClient(supabaseUrl, supabaseKey);
-const supabase = wrapClientWithMutationGuard(rawSupabase, supabaseUrl);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const crypto = require('crypto');
 

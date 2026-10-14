@@ -18,10 +18,11 @@
  *    - SupabaseClient.prototype.from: bloqueia 'insert', 'update', 'delete', 'upsert' antes do envio HTTP.
  *    - SupabaseClient.prototype.rpc: bloqueia funções mutantes antes do envio HTTP.
  *    - GoTrueAdminApi.prototype: bloqueia mutações Auth Admin ('createUser', 'deleteUser', etc.).
- * 4. Interceptação de Chamadas HTTP Diretas (globalThis.fetch):
- *    - Intercepta métodos POST, PATCH, PUT, DELETE direcionados ao hostname de produção.
- * 5. Preload Automático nos Test Runners:
- *    - package.json, run_night_suite.js e overnight_test_suite.js pré-carregam este módulo.
+ * 4. Isolamento Completo do Runtime de Produção (Preload via -r):
+ *    - Executado EXCLUSIVAMENTE via `node -r ./tests/helpers/testEnvironmentGuard.js` em scripts de teste.
+ *    - services/databaseService.js e server.js permanecem sem qualquer dependência deste módulo.
+ * 5. Preservação de APIs Externas (Zero fetch Monkey-Patching):
+ *    - globalThis.fetch permanece intacto, garantindo funcionamento inalterado de Meta WhatsApp, Gemini e Sentry.
  * 6. Sem Bypass Frágil:
  *    - Em ambiente de testes, NUNCA é permitido mutar produção sob nenhuma flag ou argumento.
  */
@@ -212,14 +213,16 @@ function wrapBuilderWithMutationGuard(builder, table, safety) {
 }
 
 /**
- * Instalação de Interceptação Global no Driver @supabase/supabase-js e globalThis.fetch
- * Protege qualquer cliente instanciado diretamente por scripts de teste
+ * Instalação de Interceptação Global no Driver @supabase/supabase-js
+ * Protege qualquer cliente instanciado durante processos de teste precarregados com -r
+ * NOTA: globalThis.fetch NÃO É INTERCEPTADO para preservar integridade de chamadas externas (Meta, Gemini, Sentry).
  */
 function installGlobalDriverInterception() {
     if (globalThis.__CLINICABOT_GUARD_INSTALLED__) {
         return;
     }
     globalThis.__CLINICABOT_GUARD_INSTALLED__ = true;
+    globalThis.__CLINICABOT_TEST_RUNNER_ACTIVE__ = true;
 
     try {
         const sbModule = require('@supabase/supabase-js');
@@ -286,35 +289,6 @@ function installGlobalDriverInterception() {
     } catch (err) {
         throw new Error(`[TEST_ENVIRONMENT_GUARD_FATAL] Falha crítica ao instalar interceptação no driver @supabase/supabase-js: ${err.message}`);
     }
-
-    // 4. Interceptação no globalThis.fetch para chamadas HTTP diretas
-    if (typeof globalThis.fetch === 'function') {
-        const originalFetch = globalThis.fetch;
-        globalThis.fetch = function guardedFetch(input, init) {
-            const urlString = typeof input === 'string' ? input : input?.url || '';
-            const method = (init?.method || (typeof input === 'object' ? input.method : 'GET') || 'GET').toUpperCase();
-
-            if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
-                const hostname = extractExactHostname(urlString);
-                if (hostname) {
-                    const safety = evaluateDestinationSafety(urlString);
-                    if (!safety.safe) {
-                        const err = new Error(
-                            `[PROD_MUTATION_GUARD_BLOCKED] Chamada HTTP direta '${method}' interceptada e bloqueada contra o destino '${urlString}'.\n` +
-                            `Motivo: ${safety.message}\n` +
-                            `Testes automatizados estão estritamente proibidos de enviar requisições mutantes HTTP para produção ou destinos não homologados.`
-                        );
-                        err.code = 'PROD_MUTATION_GUARD_BLOCKED';
-                        err.httpMethod = method;
-                        err.targetUrl = urlString;
-                        return Promise.reject(err);
-                    }
-                }
-            }
-
-            return originalFetch.call(this, input, init);
-        };
-    }
 }
 
 // Função utilitária mantida para compatibilidade de interface
@@ -323,8 +297,21 @@ function wrapClientWithMutationGuard(client, url) {
     return client;
 }
 
-// Auto-instalação da interceptação global no carregamento do módulo
+// Auto-instalação da interceptação no driver para o processo de teste que carrega este módulo
 installGlobalDriverInterception();
+
+// Preflight de inicialização: se variáveis de ambiente já apontarem para produção no startup, aborta imediatamente
+if (process.env.SUPABASE_URL) {
+    const startupSafety = evaluateDestinationSafety(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY
+    );
+    if (!startupSafety.safe && startupSafety.reason.includes('PRODUCTION')) {
+        console.error(`\n🚨 [FATAL_TEST_GUARD] Processo de teste abortado fail-closed no startup:`);
+        console.error(`   ${startupSafety.message} (Motivo: ${startupSafety.reason})\n`);
+        process.exit(1);
+    }
+}
 
 module.exports = {
     BLOCKED_PROD_PROJECT_ID,

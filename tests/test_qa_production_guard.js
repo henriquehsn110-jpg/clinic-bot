@@ -220,35 +220,26 @@ async function runGuardTests() {
     passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 7. TESTE DE BLOQUEIO DE REQUISIÇÕES HTTP DIRETAS VIA FETCH
+    // 7. TESTE DE PRESERVAÇÃO DE FETCH GLOBAL (ZERO MONKEY-PATCHING)
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n7. Testando bloqueio de requisições HTTP diretas via fetch...');
+    console.log('\n7. Testando preservação de fetch global (zero interceptação/monkey-patching)...');
 
-    try {
-        await fetch(`${prodUrl}/rest/v1/patients`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'Direct HTTP Patient' })
-        });
-        assert.fail('Deveria ter rejeitado requisição POST direta para produção');
-    } catch (err) {
-        assert.strictEqual(err.code, 'PROD_MUTATION_GUARD_BLOCKED');
-        assert.strictEqual(err.httpMethod, 'POST');
-        console.log('   ✅ PASS: HTTP POST direto para produção bloqueado pelo interceptor fetch');
+    // Verifica que fetch não foi substituído por guardedFetch
+    if (typeof globalThis.fetch === 'function') {
+        assert.notStrictEqual(globalThis.fetch.name, 'guardedFetch', 'globalThis.fetch não deve ser monkey-patched por guardedFetch');
+        console.log('   ✅ PASS: globalThis.fetch não foi modificado (APIs Gemini/Meta/Sentry preservadas)');
+        passedChecks++;
+    } else {
+        console.log('   ℹ️ INFO: globalThis.fetch não presente neste runtime');
         passedChecks++;
     }
 
-    try {
-        await fetch(`${prodUrl}/rest/v1/appointments?id=eq.123`, {
-            method: 'DELETE'
-        });
-        assert.fail('Deveria ter rejeitado requisição DELETE direta para produção');
-    } catch (err) {
-        assert.strictEqual(err.code, 'PROD_MUTATION_GUARD_BLOCKED');
-        assert.strictEqual(err.httpMethod, 'DELETE');
-        console.log('   ✅ PASS: HTTP DELETE direto para produção bloqueado pelo interceptor fetch');
-        passedChecks++;
-    }
+    // Valida que evaluateDestinationSafety detecta e classifica endpoints PostgREST / REST
+    const directRestEval = evaluateDestinationSafety(`${prodUrl}/rest/v1/patients`);
+    assert.strictEqual(directRestEval.safe, false);
+    assert.strictEqual(directRestEval.reason, 'PRODUCTION_TARGET_DETECTED');
+    console.log('   ✅ PASS: URL PostgREST direta classificada corretamente como PRODUÇÃO');
+    passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
     // 8. TESTE DE TRANSPARÊNCIA EM STAGING HOMOLOGADO
