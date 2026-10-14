@@ -86,7 +86,8 @@ async function runRlsValidation() {
         clinic_hours: [],
         clinic_holidays: [],
         audit_logs: [],
-        reminder_logs: []
+        reminder_logs: [],
+        appointments: []
     };
 
     let checksTotal = 0;
@@ -419,11 +420,31 @@ async function runRlsValidation() {
             recordResult(`backend grava em audit_logs`, false, audErr.message);
         }
 
-        // 7.3 reminderService / reminder_logs (pré-limpeza e data dinâmica conforme Regra 25)
+        // 7.3 reminderService / reminder_logs (registro sintético dedicado conforme Regra 25)
         try {
+            const { data: refAppt } = await sbAdmin.from('appointments').select('patient_id, doctor_id').limit(1).maybeSingle();
+            let step7ApptId = testApptId;
+
+            if (refAppt?.patient_id && refAppt?.doctor_id) {
+                const { data: synAppt, error: synApptErr } = await sbAdmin.from('appointments').insert({
+                    clinic_id: testClinicId,
+                    patient_id: refAppt.patient_id,
+                    doctor_id: refAppt.doctor_id,
+                    appointment_date: '2099-12-31',
+                    appointment_time: '18:00:00',
+                    type: 'QA_RLS_REGRESSION',
+                    status: 'pending'
+                }).select().single();
+
+                if (!synApptErr && synAppt) {
+                    step7ApptId = synAppt.id;
+                    syntheticRecords.appointments.push(synAppt.id);
+                }
+            }
+
             const randSentDate = `2097-${String(Math.floor(Math.random() * 11) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 27) + 1).padStart(2, '0')}T10:00:00Z`;
             const { data: regReminder, error: regRemErr } = await sbAdmin.from('reminder_logs').insert({
-                appointment_id: testApptId,
+                appointment_id: step7ApptId,
                 clinic_id: testClinicId,
                 sent_at: randSentDate
             }).select().single();
