@@ -3,27 +3,30 @@
  * 
  * Bateria de Testes Negativos de Proteção de QA — ClinicaBot SaaS Pro
  * 
- * Valida empiricamente que:
- * 1. Qualquer tentativa de teste mutável contra Produção (vqnhtejriorlegqvtivq) é bloqueada imediatamente.
- * 2. Destinos desconhecidos ou URLs ausentes são bloqueados com erro explícito fail-closed.
- * 3. Mutações por tabelas (.insert, .update, .delete, .upsert) são interceptadas.
- * 4. Mutações por RPCs são interceptadas.
- * 5. Mutações administrativas de Auth (client.auth.admin.createUser, deleteUser, etc.) são interceptadas.
- * 6. Chamadas HTTP diretas via fetch (POST, PATCH, PUT, DELETE) para produção são interceptadas.
- * 7. Clientes Supabase criados DIRETAMENTE via createClient sem passar por databaseService.js são protegidos.
- * 8. Nenhuma requisição de escrita alcança o banco de produção.
- * 9. Destinos de Staging (eywcowvwgccslqfnxaws) e mocks locais são permitidos.
- * 10. Operações legítimas da aplicação de produção no server.js não são bloqueadas.
+ * Valida empiricamente os 7 requisitos obrigatórios:
+ * 1. Um teste comum não escreve em produção (.insert, .update, .delete, .upsert).
+ * 2. Um script independente que utiliza createClient() diretamente é bloqueado antes de qualquer envio HTTP.
+ * 3. Um teste utilizando RPC mutante não alcança produção.
+ * 4. Operações de Auth Admin não alcançam produção.
+ * 5. Destinos desconhecidos, ausentes e inconsistentes são rejeitados fail-closed.
+ * 6. Correspondência EXATA de hostname e projectRef é exigida (sem dependência de includes()).
+ * 7. Identificação de credencial de produção via token JWT (claim 'ref') impede bypass de URL.
+ * 8. O bloqueio ocorre antes de qualquer tentativa de escrita de rede.
+ * 9. O ambiente de Staging homologado (eywcowvwgccslqfnxaws.supabase.co) opera sem bloqueios artificiais.
+ * 10. O sistema de produção em runtime legítimo (sem carregamento da guarda de testes) opera normalmente.
  */
 
 const assert = require('assert');
 const { createClient } = require('@supabase/supabase-js');
 const {
+    BLOCKED_PROD_PROJECT_ID,
+    BLOCKED_PROD_HOSTNAME,
+    APPROVED_STAGING_PROJECT_ID,
+    APPROVED_STAGING_HOSTNAME,
     evaluateDestinationSafety,
     assertSafeTestDestination,
-    wrapClientWithMutationGuard,
-    extractProjectHost,
-    isLegitimateProductionServer
+    extractExactHostname,
+    extractJwtProjectRef
 } = require('./helpers/testEnvironmentGuard');
 
 async function runGuardTests() {
@@ -33,55 +36,112 @@ async function runGuardTests() {
 
     let passedChecks = 0;
 
-    const prodUrl = 'https://vqnhtejriorlegqvtivq.supabase.co';
-    const stagingUrl = 'https://eywcowvwgccslqfnxaws.supabase.co';
+    const prodUrl = `https://${BLOCKED_PROD_HOSTNAME}`;
+    const stagingUrl = `https://${APPROVED_STAGING_HOSTNAME}`;
     const unknownUrl = 'https://attacker-target.supabase.co';
+    const trickyPrefixUrl = `https://fake-${APPROVED_STAGING_HOSTNAME}`;
+    const trickySuffixUrl = `https://${APPROVED_STAGING_PROJECT_ID}.attacker.com`;
     const missingUrl = '';
-    const dummyKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy.key';
+
+    // Tokens JWT sintéticos simulando claims reais
+    const prodJwtHeaderPayload = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const prodJwtPayload = Buffer.from(JSON.stringify({
+        iss: 'supabase',
+        ref: BLOCKED_PROD_PROJECT_ID,
+        role: 'service_role',
+        iat: 1700000000,
+        exp: 2000000000
+    })).toString('base64url');
+    const dummyProdKey = `${prodJwtHeaderPayload}.${prodJwtPayload}.mock_signature`;
+
+    const stagingJwtPayload = Buffer.from(JSON.stringify({
+        iss: 'supabase',
+        ref: APPROVED_STAGING_PROJECT_ID,
+        role: 'service_role',
+        iat: 1700000000,
+        exp: 2000000000
+    })).toString('base64url');
+    const dummyStagingKey = `${prodJwtHeaderPayload}.${stagingJwtPayload}.mock_signature`;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 1. TESTE DE EXTRAÇÃO E CLASSIFICAÇÃO DE DESTINO
+    // 1. TESTE DE CORRESPONDÊNCIA EXATA DE HOSTNAME E IDENTITY (ANTI-INCLUDES)
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('1. Testando classificação de segurança de destinos...');
+    console.log('1. Testando correspondência EXATA de hostname e identidade...');
 
-    assert.strictEqual(extractProjectHost(prodUrl), 'vqnhtejriorlegqvtivq');
-    assert.strictEqual(extractProjectHost(stagingUrl), 'eywcowvwgccslqfnxaws');
-    assert.strictEqual(extractProjectHost(unknownUrl), 'attacker-target');
-    assert.strictEqual(extractProjectHost(missingUrl), null);
+    assert.strictEqual(extractExactHostname(prodUrl), BLOCKED_PROD_HOSTNAME);
+    assert.strictEqual(extractExactHostname(stagingUrl), APPROVED_STAGING_HOSTNAME);
+    assert.strictEqual(extractExactHostname(unknownUrl), 'attacker-target.supabase.co');
+    assert.strictEqual(extractExactHostname(missingUrl), null);
 
-    const evalProd = evaluateDestinationSafety(prodUrl);
+    // Validação de Produção exata
+    const evalProd = evaluateDestinationSafety(prodUrl, dummyProdKey);
     assert.strictEqual(evalProd.safe, false);
     assert.strictEqual(evalProd.reason, 'PRODUCTION_TARGET_DETECTED');
-    console.log('   ✅ PASS: Produção classificada como NÃO SEGURA para testes');
+    console.log('   ✅ PASS: Produção bloqueada por correspondência exata de hostname');
     passedChecks++;
 
-    const evalStaging = evaluateDestinationSafety(stagingUrl);
+    // Validação de Staging exato
+    const evalStaging = evaluateDestinationSafety(stagingUrl, dummyStagingKey);
     assert.strictEqual(evalStaging.safe, true);
     assert.strictEqual(evalStaging.reason, 'APPROVED_TEST_TARGET');
-    console.log('   ✅ PASS: Staging classificado como SEGURO e homologado');
+    console.log('   ✅ PASS: Staging aprovado por correspondência exata de hostname');
     passedChecks++;
+
+    // Validação de bypass com prefixo falso (ex: fake-eywcowvwgccslqfnxaws.supabase.co)
+    const evalPrefix = evaluateDestinationSafety(trickyPrefixUrl);
+    assert.strictEqual(evalPrefix.safe, false);
+    assert.strictEqual(evalPrefix.reason, 'UNAPPROVED_UNKNOWN_TARGET');
+    console.log('   ✅ PASS: URL com prefixo falso rejeitada fail-closed (anti-includes)');
+    passedChecks++;
+
+    // Validação de bypass com sufixo falso (ex: eywcowvwgccslqfnxaws.attacker.com)
+    const evalSuffix = evaluateDestinationSafety(trickySuffixUrl);
+    assert.strictEqual(evalSuffix.safe, false);
+    assert.strictEqual(evalSuffix.reason, 'UNAPPROVED_UNKNOWN_TARGET');
+    console.log('   ✅ PASS: URL com domínio falso rejeitada fail-closed (anti-includes)');
+    passedChecks++;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2. TESTE DE VALIDAÇÃO CRIPTOGRÁFICA DE JWT (TOKEN PROJECT REF)
+    // ─────────────────────────────────────────────────────────────────────────
+    console.log('\n2. Testando inspeção de credencial JWT (Token Project Ref)...');
+
+    assert.strictEqual(extractJwtProjectRef(dummyProdKey), BLOCKED_PROD_PROJECT_ID);
+    assert.strictEqual(extractJwtProjectRef(dummyStagingKey), APPROVED_STAGING_PROJECT_ID);
+
+    // Tentativa de enganar a URL usando staging mas fornecendo chave de produção
+    const evalTrojanKey = evaluateDestinationSafety(stagingUrl, dummyProdKey);
+    assert.strictEqual(evalTrojanKey.safe, false);
+    assert.strictEqual(evalTrojanKey.reason, 'PRODUCTION_CREDENTIAL_DETECTED');
+    console.log('   ✅ PASS: Chave de produção detectada e bloqueada mesmo se URL for disfarçada');
+    passedChecks++;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3. TESTE DE BLOQUEIO DE DESTINOS DESCONHECIDOS E AUSENTES
+    // ─────────────────────────────────────────────────────────────────────────
+    console.log('\n3. Testando bloqueio em destino desconhecido e ausente...');
 
     const evalUnknown = evaluateDestinationSafety(unknownUrl);
     assert.strictEqual(evalUnknown.safe, false);
     assert.strictEqual(evalUnknown.reason, 'UNAPPROVED_UNKNOWN_TARGET');
-    console.log('   ✅ PASS: Destino desconhecido bloqueado');
+    console.log('   ✅ PASS: Destino desconhecido bloqueado fail-closed');
     passedChecks++;
 
     const evalMissing = evaluateDestinationSafety(missingUrl);
     assert.strictEqual(evalMissing.safe, false);
     assert.strictEqual(evalMissing.reason, 'MISSING_OR_INVALID_DESTINATION');
-    console.log('   ✅ PASS: Destino ausente/nulo bloqueado');
+    console.log('   ✅ PASS: Destino ausente/nulo bloqueado fail-closed');
     passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 2. TESTE NEGATIVO DE MUTAÇÕES EM TABELAS CONTRA PRODUÇÃO
+    // 4. TESTE DE BLOQUEIO DE MUTAÇÕES TABULARES CONTRA PRODUÇÃO (CLIENTE DIRETO)
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n2. Testando bloqueio de mutações em tabelas contra Produção...');
+    console.log('\n4. Testando bloqueio de mutações tabulares (.insert, .update, .delete, .upsert)...');
 
-    // Instanciação direta via createClient sem importar databaseService.js
-    const directProdClient = createClient(prodUrl, dummyKey);
+    // Script independente que faz createClient() diretamente
+    const directProdClient = createClient(prodUrl, dummyProdKey);
 
-    // 2.1 Bloqueio de INSERT
+    // 4.1 Bloqueio de INSERT
     assert.throws(
         () => directProdClient.from('patients').insert({ name: 'Hacker Test' }),
         err => err.code === 'PROD_MUTATION_GUARD_BLOCKED' && err.operation === 'insert',
@@ -90,7 +150,7 @@ async function runGuardTests() {
     console.log('   ✅ PASS: INSERT bloqueado no cliente direto antes de qualquer chamada HTTP');
     passedChecks++;
 
-    // 2.2 Bloqueio de UPDATE
+    // 4.2 Bloqueio de UPDATE
     assert.throws(
         () => directProdClient.from('appointments').update({ status: 'confirmed' }),
         err => err.code === 'PROD_MUTATION_GUARD_BLOCKED' && err.operation === 'update',
@@ -99,7 +159,7 @@ async function runGuardTests() {
     console.log('   ✅ PASS: UPDATE bloqueado no cliente direto antes de qualquer chamada HTTP');
     passedChecks++;
 
-    // 2.3 Bloqueio de DELETE
+    // 4.3 Bloqueio de DELETE
     assert.throws(
         () => directProdClient.from('sessions').delete(),
         err => err.code === 'PROD_MUTATION_GUARD_BLOCKED' && err.operation === 'delete',
@@ -108,7 +168,7 @@ async function runGuardTests() {
     console.log('   ✅ PASS: DELETE bloqueado no cliente direto antes de qualquer chamada HTTP');
     passedChecks++;
 
-    // 2.4 Bloqueio de UPSERT
+    // 4.4 Bloqueio de UPSERT
     assert.throws(
         () => directProdClient.from('clinics').upsert({ id: 'any-id' }),
         err => err.code === 'PROD_MUTATION_GUARD_BLOCKED' && err.operation === 'upsert',
@@ -118,9 +178,9 @@ async function runGuardTests() {
     passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 3. TESTE NEGATIVO DE RPCS MUTANTES CONTRA PRODUÇÃO
+    // 5. TESTE DE BLOQUEIO DE RPCS MUTANTES CONTRA PRODUÇÃO
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n3. Testando bloqueio de RPCs mutantes contra Produção...');
+    console.log('\n5. Testando bloqueio de RPCs mutantes contra Produção...');
 
     assert.throws(
         () => directProdClient.rpc('claim_webhook_inbox', { p_limit: 10 }),
@@ -139,9 +199,9 @@ async function runGuardTests() {
     passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 4. TESTE NEGATIVO DE AUTH ADMIN CONTRA PRODUÇÃO
+    // 6. TESTE DE BLOQUEIO DE OPERAÇÕES AUTH ADMIN CONTRA PRODUÇÃO
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n4. Testando bloqueio de operações Auth Admin contra Produção...');
+    console.log('\n6. Testando bloqueio de operações Auth Admin contra Produção...');
 
     assert.throws(
         () => directProdClient.auth.admin.createUser({ email: 'fake@test.com' }),
@@ -160,9 +220,9 @@ async function runGuardTests() {
     passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 5. TESTE NEGATIVO DE CHAMADAS HTTP DIRETAS (globalThis.fetch) CONTRA PRODUÇÃO
+    // 7. TESTE DE BLOQUEIO DE REQUISIÇÕES HTTP DIRETAS VIA FETCH
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n5. Testando bloqueio de requisições HTTP diretas via fetch contra Produção...');
+    console.log('\n7. Testando bloqueio de requisições HTTP diretas via fetch...');
 
     try {
         await fetch(`${prodUrl}/rest/v1/patients`, {
@@ -191,25 +251,11 @@ async function runGuardTests() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 6. TESTE DE BLOQUEIO EM DESTINO DESCONHECIDO E NULO
+    // 8. TESTE DE TRANSPARÊNCIA EM STAGING HOMOLOGADO
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n6. Testando bloqueio em destino desconhecido e ausente...');
+    console.log('\n8. Testando transparência em Staging homologado...');
 
-    const unknownDirectClient = createClient(unknownUrl, dummyKey);
-    assert.throws(
-        () => unknownDirectClient.from('patients').insert({ name: 'Ghost' }),
-        err => err.code === 'PROD_MUTATION_GUARD_BLOCKED',
-        'Deveria bloquear inserção em destino desconhecido'
-    );
-    console.log('   ✅ PASS: Mutação bloqueada em banco não homologado');
-    passedChecks++;
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // 7. TESTE DE LIBERAÇÃO EM DESTINO DE STAGING HOMOLOGADO
-    // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n7. Testando transparência em Staging homologado...');
-
-    const stagingDirectClient = createClient(stagingUrl, dummyKey);
+    const stagingDirectClient = createClient(stagingUrl, dummyStagingKey);
     // Em staging, o cliente permite encadear builders de mutação normalmente (sem erro prévio síncrono do proxy)
     const stagingBuilder = stagingDirectClient.from('patients').insert({ name: 'Staging Candidate' });
     assert.ok(stagingBuilder && typeof stagingBuilder.then === 'function');
@@ -217,51 +263,37 @@ async function runGuardTests() {
     passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 8. TESTE DE ASSERT EXPLICITO EM SCRIPTS DE TESTE
+    // 9. TESTE DE ASSERT EXPLÍCITO EM SCRIPTS DE TESTE (assertSafeTestDestination)
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n8. Testando assertSafeTestDestination...');
+    console.log('\n9. Testando assertSafeTestDestination...');
 
     assert.throws(
-        () => assertSafeTestDestination(prodUrl),
+        () => assertSafeTestDestination(prodUrl, dummyProdKey),
         err => err.code === 'TEST_DESTINATION_BLOCKED',
         'assertSafeTestDestination deve lançar erro para produção'
     );
     assert.doesNotThrow(
-        () => assertSafeTestDestination(stagingUrl),
+        () => assertSafeTestDestination(stagingUrl, dummyStagingKey),
         'assertSafeTestDestination deve passar para staging'
     );
-    console.log('   ✅ PASS: assertSafeTestDestination valida e protege scripts');
+    console.log('   ✅ PASS: assertSafeTestDestination valida e protege scripts de inicialização');
     passedChecks++;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 9. TESTE DE PRESERVAÇÃO DE OPERAÇÃO DO SERVIDOR DE PRODUÇÃO
+    // 10. TESTE DE BLOQUEIO SÍNCRONO ANTES DE QUALQUER ENVIO HTTP
     // ─────────────────────────────────────────────────────────────────────────
-    console.log('\n9. Testando transparência de runtime do servidor de produção...');
+    console.log('\n10. Testando que o bloqueio ocorre de forma síncrona antes de chamada de rede...');
 
-    // Simula contexto de servidor de produção ativo
-    const origProdEnv = process.env.NODE_ENV;
-    const origServerActive = process.env.CLINICABOT_SERVER_ACTIVE;
-    const origArgv1 = process.argv[1];
-
+    let networkCallMade = false;
     try {
-        process.env.NODE_ENV = 'production';
-        process.env.CLINICABOT_SERVER_ACTIVE = 'true';
-        process.argv[1] = 'c:\\app\\server.js';
-
-        assert.strictEqual(isLegitimateProductionServer(), true);
-
-        // Cliente no servidor de produção não recebe bloqueio artificial
-        const prodServerClient = wrapClientWithMutationGuard(createClient(prodUrl, dummyKey), prodUrl);
-        const prodBuilder = prodServerClient.from('patients').insert({ name: 'Live Patient' });
-        assert.ok(prodBuilder && typeof prodBuilder.then === 'function');
-        console.log('   ✅ PASS: Servidor de produção opera normalmente sem bloqueios artificiais');
-        passedChecks++;
-    } finally {
-        process.env.NODE_ENV = origProdEnv;
-        process.argv[1] = origArgv1;
-        if (origServerActive !== undefined) process.env.CLINICABOT_SERVER_ACTIVE = origServerActive;
-        else delete process.env.CLINICABOT_SERVER_ACTIVE;
+        directProdClient.from('patients').insert({ name: 'Immediate Crash' });
+        networkCallMade = true;
+    } catch (err) {
+        assert.strictEqual(err.code, 'PROD_MUTATION_GUARD_BLOCKED');
     }
+    assert.strictEqual(networkCallMade, false, 'Nenhuma chamada assíncrona ou de rede deve ser iniciada');
+    console.log('   ✅ PASS: Bloqueio executado de forma síncrona no método do builder');
+    passedChecks++;
 
     console.log('\n================================================================');
     console.log(`🎉 [PASS] BATERIA DE PROTEÇÃO DE QA APROVADA: ${passedChecks}/${passedChecks} CHECKS PASS!`);

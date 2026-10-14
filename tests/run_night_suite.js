@@ -13,6 +13,10 @@ if (!process.env.SUPABASE_URL) {
 }
 const fs = require('fs');
 const { execSync } = require('child_process');
+const { assertSafeTestDestination } = require('./helpers/testEnvironmentGuard');
+
+// Preflight de segurança: impede execução da suíte contra destinos não autorizados
+assertSafeTestDestination(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 function getFormattedBRTDate() {
     const now = new Date();
@@ -84,7 +88,7 @@ async function runNightlySuite() {
         log('----------------------------------------------------------------');
 
         try {
-            const output = execSync(`node -r dotenv/config ${suite.script}`, {
+            const output = execSync(`node -r dotenv/config -r ./tests/helpers/testEnvironmentGuard.js ${suite.script}`, {
                 cwd: rootDir,
                 encoding: 'utf8',
                 env: {

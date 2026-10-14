@@ -5,6 +5,8 @@
  */
 const path = require('path');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '../.env') });
+const { assertSafeTestDestination } = require('./helpers/testEnvironmentGuard');
+assertSafeTestDestination(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');

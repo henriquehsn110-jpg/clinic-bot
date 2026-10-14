@@ -1,5 +1,4 @@
 // CLINICABOT SAAS PRO — SERVIDOR EXPRESS (v1.0.1)
-process.env.CLINICABOT_SERVER_ACTIVE = 'true';
 const Sentry = require('./instrument');
 const path = require('path');
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || path.resolve(__dirname, '.env') });
