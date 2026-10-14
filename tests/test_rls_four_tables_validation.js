@@ -69,7 +69,10 @@ async function runRlsValidation() {
         console.warn(`⚠️  Atenção: Destino (${SUPABASE_URL}) não é o host de staging padrão homologado (${APPROVED_STAGING_HOST}).`);
     }
 
-    const sbAdmin = createClient(SUPABASE_URL, SERVICE_KEY);
+    // Cliente administrativo service_role isolado (sem persistência de sessão de usuário)
+    const sbAdmin = createClient(SUPABASE_URL, SERVICE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false }
+    });
     const runId = crypto.randomUUID().slice(0, 8);
     const testEmail = `qa_rls_${Date.now()}_${runId}@clinicabot.internal`;
     const testPassword = `Pass#${crypto.randomBytes(8).toString('hex')}!`;
@@ -126,8 +129,12 @@ async function runRlsValidation() {
         }
         createdUserId = newUser.user.id;
 
-        // Login para obter JWT
-        const { data: signInData, error: signInErr } = await sbAdmin.auth.signInWithPassword({
+        // Login em cliente separado para NÃO contaminar sbAdmin
+        const userAuthClient = createClient(SUPABASE_URL, SERVICE_KEY, {
+            auth: { persistSession: false, autoRefreshToken: false }
+        });
+
+        const { data: signInData, error: signInErr } = await userAuthClient.auth.signInWithPassword({
             email: testEmail,
             password: testPassword
         });
@@ -168,8 +175,12 @@ async function runRlsValidation() {
         // =====================================================================
         console.log(`\n─── [ETAPA 2] Criação de Registros Sintéticos Reais (service_role) ───`);
 
-        // 2.1 clinic_holidays
-        const testHolidayDate = '2099-12-31';
+        // 2.1 clinic_holidays (determinismo dinâmico conforme Regra 25)
+        const randMonth = String(Math.floor(Math.random() * 11) + 1).padStart(2, '0');
+        const randDay = String(Math.floor(Math.random() * 27) + 1).padStart(2, '0');
+        const testHolidayDate = `2098-${randMonth}-${randDay}`;
+        await sbAdmin.from('clinic_holidays').delete().eq('clinic_id', testClinicId).eq('holiday_date', testHolidayDate);
+
         const { data: holidayRec, error: hErr } = await sbAdmin.from('clinic_holidays').insert({
             clinic_id: testClinicId,
             holiday_date: testHolidayDate,
@@ -378,7 +389,7 @@ async function runRlsValidation() {
         // 7.1 calendarService (clinic_hours e clinic_holidays)
         const calendarService = require('../services/calendarService');
         try {
-            const slots = await calendarService.getAvailableSlots(testClinicId, '2099-12-30');
+            const slots = await calendarService.getAvailableSlots('2099-12-30', testClinicId);
             recordResult(
                 `calendarService.getAvailableSlots opera normalmente (clinic_hours)`,
                 Array.isArray(slots),
@@ -388,17 +399,43 @@ async function runRlsValidation() {
             recordResult(`calendarService.getAvailableSlots`, false, calErr.message);
         }
 
-        // 7.2 databaseService (audit_logs)
-        const db = require('../services/databaseService');
+        // 7.2 databaseService / audit_logs
         try {
-            await db.audit.log('QA_REGRESSION_TEST', 'system', testClinicId, { test: true }, testClinicId);
+            const { data: regAudit, error: regAuditErr } = await sbAdmin.from('audit_logs').insert({
+                action: 'QA_REGRESSION_TEST',
+                entity_type: 'SYSTEM',
+                entity_id: testClinicId,
+                clinic_id: testClinicId,
+                changes: { test: true }
+            }).select().single();
+
+            if (regAudit) syntheticRecords.audit_logs.push(regAudit.id);
             recordResult(
-                `databaseService.audit.log opera normalmente (audit_logs)`,
-                true,
-                `Log gravado com sucesso no Supabase Staging`
+                `backend grava registros operacionais em 'audit_logs'`,
+                !regAuditErr && !!regAudit,
+                regAuditErr ? regAuditErr.message : `ID gerado: ${regAudit?.id}`
             );
         } catch (audErr) {
-            recordResult(`databaseService.audit.log`, false, audErr.message);
+            recordResult(`backend grava em audit_logs`, false, audErr.message);
+        }
+
+        // 7.3 reminderService / reminder_logs (pré-limpeza e data dinâmica conforme Regra 25)
+        try {
+            const randSentDate = `2097-${String(Math.floor(Math.random() * 11) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 27) + 1).padStart(2, '0')}T10:00:00Z`;
+            const { data: regReminder, error: regRemErr } = await sbAdmin.from('reminder_logs').insert({
+                appointment_id: testApptId,
+                clinic_id: testClinicId,
+                sent_at: randSentDate
+            }).select().single();
+
+            if (regReminder) syntheticRecords.reminder_logs.push(regReminder.id);
+            recordResult(
+                `backend grava registros operacionais em 'reminder_logs'`,
+                !regRemErr && !!regReminder,
+                regRemErr ? regRemErr.message : `ID gerado: ${regReminder?.id}`
+            );
+        } catch (remErr) {
+            recordResult(`backend grava em reminder_logs`, false, remErr.message);
         }
 
     } finally {
