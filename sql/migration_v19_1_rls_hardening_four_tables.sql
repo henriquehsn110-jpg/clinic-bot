@@ -27,6 +27,8 @@
 --    WITH CHECK (auth.role() = 'service_role');
 -- ─────────────────────────────────────────────────────────────────────────────
 
+BEGIN;
+
 -- 1. public.audit_logs
 REVOKE ALL ON TABLE public.audit_logs FROM anon, authenticated, public;
 GRANT ALL ON TABLE public.audit_logs TO service_role;
@@ -93,3 +95,5 @@ CREATE POLICY "service_role_all_access_reminder_logs" ON public.reminder_logs
 
 -- Recarregar cache de schema do PostgREST
 NOTIFY pgrst, 'reload schema';
+
+COMMIT;

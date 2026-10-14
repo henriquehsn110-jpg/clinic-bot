@@ -9,6 +9,8 @@
 -- - NÃO concede privilégios amplos desnecessários para anon ou authenticated
 -- ─────────────────────────────────────────────────────────────────────────────
 
+BEGIN;
+
 -- 1. public.audit_logs
 DROP POLICY IF EXISTS "service_role_all_access_audit_logs" ON public.audit_logs;
 ALTER TABLE public.audit_logs NO FORCE ROW LEVEL SECURITY;
@@ -43,3 +45,5 @@ GRANT ALL ON TABLE public.reminder_logs TO service_role;
 
 -- Recarregar cache de schema do PostgREST
 NOTIFY pgrst, 'reload schema';
+
+COMMIT;
